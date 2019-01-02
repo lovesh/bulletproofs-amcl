@@ -22,6 +22,9 @@ use crate::bls381::big::BIG;
 use crate::bls381::fp::FP;
 use crate::bls381::rom;
 
+use std::fmt;
+
+#[derive(Debug)]
 pub struct ECP {
     x: FP,
     y: FP,
@@ -46,6 +49,12 @@ pub const SIGN_OF_X:usize=NEGATIVEX;
 
 pub const HASH_TYPE:usize=32;
 pub const AESKEY:usize=16;
+
+impl fmt::Display for ECP {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &self.tostring())
+    }
+}
 
 #[allow(non_snake_case)]
 impl ECP {

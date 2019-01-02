@@ -181,7 +181,7 @@ macro_rules! field_elem_vector {
                 v.push(BigNum::new_int(1));
                 let k = BigNum::new_int($elem);
                 let mut current = BigNum::new_int($elem);
-                for i in 1..$size {
+                for _ in 1..$size {
                     v.push(current.clone());
                     current = field_elements_multiplication(&current, &k)
                 }
@@ -191,7 +191,7 @@ macro_rules! field_elem_vector {
     };
 }
 
-// TODO: Add macro to add any number of
+// TODO: Add macros to add any number of
 // 1. field elements
 // 2. group elements
 

@@ -6,15 +6,15 @@ use super::utils::{scalar_point_inner_product, scalar_point_multiplication,
                    scale_group_element_vector, group_elements_hadamard_product,
                    field_elements_multiplication, field_element_square};
 
-struct InnerProductArgument<'a> {
-    g: &'a [GroupG1],
-    h: &'a [GroupG1],
+pub struct InnerProductArgument<'a> {
+    G: &'a [GroupG1],
+    H: &'a [GroupG1],
     u: &'a GroupG1,
     P: &'a GroupG1,
     size: usize
 }
 
-struct InnerProductArgumentProof {
+pub struct InnerProductArgumentProof {
     pub L: Vec<GroupG1>,
     pub R: Vec<GroupG1>,
     pub a: BigNum,
@@ -30,76 +30,34 @@ impl<'a> InnerProductArgument<'a> {
         if !g.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(g.len()))
         }
-        Ok(InnerProductArgument { g, h, u, P, size:  g.len()})
+        Ok(InnerProductArgument { G: g, H: h, u, P, size:  g.len()})
     }
 
     pub fn gen_proof(&self, a: &[BigNum], b: &[BigNum]) -> Result<InnerProductArgumentProof, ValueError> {
-        let mut L: Vec<GroupG1> = vec![];
-        let mut R: Vec<GroupG1> = vec![];
+        let L: Vec<GroupG1> = vec![];
+        let R: Vec<GroupG1> = vec![];
         if a.len() != b.len() {
             return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
         }
         let mut state: Vec<u8> = vec![];
-        self._gen_proof(self.g, self.h, a, b,L, R, &mut state)
+        self._gen_proof(self.G, self.H, a, b, L, R, &mut state)
+
+        // Uncomment next line and comment above line for debugging
+        //self._gen_proof(self.g, self.h, a, b,L, R, &mut state, &self.P)
     }
 
-    pub fn verify_proof_recursive(&self, proof: &InnerProductArgumentProof) -> Result<bool, ValueError> {
+    pub fn verify_proof_recursively(&self, proof: &InnerProductArgumentProof) -> Result<bool, ValueError> {
         if proof.L.len() != proof.R.len() {
             return Err(ValueError::UnequalSizeVectors(proof.L.len(), proof.R.len()))
         }
         let mut state: Vec<u8> = vec![];
-        self._verify_proof_recursive(&self.g, &self.h, &proof.L, &proof.R, &proof.a, &proof.b, &self.P, &mut state)
-    }
-
-    // TODO: Add verification using multi-exponentiation
-
-    fn _verify_proof_recursive(&self, g: &[GroupG1], h: &[GroupG1], L: &[GroupG1], R: &[GroupG1],
-                               a: &BigNum, b: &BigNum, P: &GroupG1, mut state: &mut Vec<u8>) -> Result<bool, ValueError> {
-
-        match g.len() {
-            1 => {
-                let g_a = scalar_point_multiplication(&a, &g[0]);
-                let h_b = scalar_point_multiplication(&b, &h[0]);
-                let c = field_elements_multiplication(&a, &b);
-                let u_c = scalar_point_multiplication(&c, &self.u);
-                let mut sum = GroupG1::new();
-                sum.add(&g_a);
-                sum.add(&h_b);
-                sum.add(&u_c);
-                let mut _P = GroupG1::new();
-                _P.copy(&self.P);
-                Ok(sum.equals(&mut _P))
-            },
-            n => {
-                let _L = &L[0];
-                let _R = &R[0];
-                let x = Self::gen_challenge(_L, _R, &self.P, state);
-                let x_sqr = field_element_square(&x);
-                let x_inv = field_element_inverse(&x);
-                let x_inv_sqr = field_element_square(&x_inv);
-
-                let _P1 = scalar_point_multiplication(&x_sqr, _L);
-                let _P2 = scalar_point_multiplication(&x_inv_sqr, _R);
-                let mut _P = GroupG1::new();
-                _P.add(&P);
-                _P.add(&_P1);
-                _P.add(&_P2);
-
-                let n_prime = n / 2;
-                let (g1, g2) = g.split_at(n_prime);
-                let (h1, h2) = h.split_at(n_prime);
-
-                let g_prime = Self::calculate_new_g(g1, g2, &x, &x_inv)?;
-                let h_prime = Self::calculate_new_h(h1, h2, &x, &x_inv)?;
-
-                self._verify_proof_recursive(&g_prime, &h_prime, L.split_at(1).1,
-                                             R.split_at(1).1, a, b, &P, state)
-            }
-        }
+        self._verify_proof_recursively(&self.G, &self.H, &proof.L, &proof.R, &proof.a, &proof.b, &self.P, &mut state)
     }
 
     fn _gen_proof(&self, g: &[GroupG1], h: &[GroupG1], a: &[BigNum], b: &[BigNum], mut L: Vec<GroupG1>,
-                  mut R: Vec<GroupG1>, mut state: &mut Vec<u8>) -> Result<InnerProductArgumentProof, ValueError> {
+                  mut R: Vec<GroupG1>, state: &mut Vec<u8>) -> Result<InnerProductArgumentProof, ValueError> {
+                // Uncomment next line and comment above line for debugging
+                  //mut R: Vec<GroupG1>, state: &mut Vec<u8>, P: &GroupG1) -> Result<InnerProductArgumentProof, ValueError> {
         match a.len() {
             1 => {
                 Ok(InnerProductArgumentProof {
@@ -140,6 +98,12 @@ impl<'a> InnerProductArgument<'a> {
                 let x = Self::gen_challenge(&_L, &_R, &self.P, state);
                 let x_inv = field_element_inverse(&x);
 
+                // Next lines only for debugging
+                /*let x_sqr = field_element_square(&x);
+                let x_inv_sqr = field_element_square(&x_inv);
+                let P_prime = Self::calulate_new_P(P, &x_sqr, &x_inv_sqr, &_L, &_R);
+                println!("During proving, for n {}, challenge is {}, new P is {}", &n, &x, &P_prime);*/
+
                 L.push(_L);
                 R.push(_R);
 
@@ -156,8 +120,59 @@ impl<'a> InnerProductArgument<'a> {
                 let g_prime = Self::calculate_new_g(g1, g2, &x, &x_inv)?;
                 let h_prime = Self::calculate_new_h(h1, h2, &x, &x_inv)?;
 
+                /*println!("During proving, for n {}, new g is {:?}", &n, &g_prime);
+                println!("During proving, for n {}, new h is {:?}", &n, &h_prime);*/
+
                 self._gen_proof(&g_prime, &h_prime, &a_prime, &b_prime,
                                  L, R, state)
+                            // Uncomment next line and comment above line for debugging
+                                 //L, R, state, &P_prime)
+            }
+        }
+    }
+
+    // TODO: Add verification using multi-exponentiation
+
+    fn _verify_proof_recursively(&self, g: &[GroupG1], h: &[GroupG1], L: &[GroupG1], R: &[GroupG1],
+                                 a: &BigNum, b: &BigNum, P: &GroupG1, state: &mut Vec<u8>) -> Result<bool, ValueError> {
+        match g.len() {
+            1 => {
+                let g_a = scalar_point_multiplication(&a, &g[0]);
+                let h_b = scalar_point_multiplication(&b, &h[0]);
+                let c = field_elements_multiplication(&a, &b);
+                let u_c = scalar_point_multiplication(&c, &self.u);
+                let mut sum = GroupG1::new();
+                sum.add(&g_a);
+                sum.add(&h_b);
+                sum.add(&u_c);
+                let mut _P = GroupG1::new();
+                _P.copy(&P);
+                Ok(sum.equals(&mut _P))
+            },
+            n => {
+                let _L = &L[0];
+                let _R = &R[0];
+                let x = Self::gen_challenge(_L, _R, &self.P, state);
+                let x_sqr = field_element_square(&x);
+                let x_inv = field_element_inverse(&x);
+                let x_inv_sqr = field_element_square(&x_inv);
+
+                let P_prime = Self::calculate_new_P(&P, &x_sqr, &x_inv_sqr, &_L, &_R);
+
+                /*println!("During verification, for n {}, challenge is {}, new P is {}", &n, &x, &P_prime);*/
+
+                let n_prime = n / 2;
+                let (g1, g2) = g.split_at(n_prime);
+                let (h1, h2) = h.split_at(n_prime);
+
+                let g_prime = Self::calculate_new_g(g1, g2, &x, &x_inv)?;
+                let h_prime = Self::calculate_new_h(h1, h2, &x, &x_inv)?;
+
+                /*println!("During verification, for n {}, new g is {:?}", &n, &g_prime);
+                println!("During verification, for n {}, new h is {:?}", &n, &h_prime);*/
+
+                self._verify_proof_recursively(&g_prime, &h_prime, L.split_at(1).1,
+                                               R.split_at(1).1, a, b, &P_prime, state)
             }
         }
     }
@@ -210,8 +225,8 @@ impl<'a> InnerProductArgument<'a> {
     // Generate challenge. Takes input group elements and a mutable reference to current state.
     // Apart from generating the challenge, updates the mutable state
     fn gen_challenge(L: &GroupG1, R: &GroupG1, P: &GroupG1, state: &mut Vec<u8>) -> BigNum {
-        state.extend_from_slice(&get_bytes_for_G1_point(&L));
-        state.extend_from_slice(&get_bytes_for_G1_point(&R));
+        state.extend_from_slice(&get_bytes_for_G1_point(L));
+        state.extend_from_slice(&get_bytes_for_G1_point(R));
         state.extend_from_slice(&get_bytes_for_G1_point(P));
         hash_as_BigNum(&state)
     }
@@ -231,6 +246,17 @@ impl<'a> InnerProductArgument<'a> {
         let h_prime_2 = scale_group_element_vector(&x_inv, &h2);
         group_elements_hadamard_product(&h_prime_1, &h_prime_2)
     }
+
+    // P = L^x^2.P.R^x^-2
+    fn calculate_new_P(old_P: &GroupG1, x_sqr: &BigNum, x_inv_sqr: &BigNum, L: &GroupG1, R: &GroupG1) -> GroupG1 {
+        let _P1 = scalar_point_multiplication(x_sqr, L);
+        let _P2 = scalar_point_multiplication(x_inv_sqr, R);
+        let mut P_prime = GroupG1::new();
+        P_prime.add(old_P);
+        P_prime.add(&_P1);
+        P_prime.add(&_P2);
+        P_prime
+    }
 }
 
 #[cfg(test)]
@@ -242,9 +268,54 @@ mod test {
     fn test_inner_product_argument() {
         let g: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
         let h: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let u = hash_on_GroupG1("u".as_bytes());
         let a: Vec<BigNum> = vec![1, 2, 3, 4].iter().map(| i | BigNum::new_int(*i as isize)).collect();
         let b: Vec<BigNum> = vec![5, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
-        // TODO: Finish incomplete test
+
+        let g_a = scalar_point_inner_product(&a, &g).unwrap();
+        let h_b = scalar_point_inner_product(&b, &h).unwrap();
+        let c = field_elements_inner_product(&a, &b).unwrap();
+        let u_c = scalar_point_multiplication(&c, &u);
+
+        let mut P = GroupG1::new();
+        P.add(&g_a);
+        P.add(&h_b);
+        P.add(&u_c);
+
+        // Correct proof
+        let ipa = InnerProductArgument::new(&g, &h, &u, &P).unwrap();
+        let proof = ipa.gen_proof(&a, &b).unwrap();
+        let res = ipa.verify_proof_recursively(&proof);
+        assert!(res.is_ok());
+        let r = res.unwrap();
+        assert!(r);
+
+        // Incorrect proof
+        let d: Vec<BigNum> = vec![6, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+        let incorrect_proof = ipa.gen_proof(&a, &d).unwrap();
+        let res1 = ipa.verify_proof_recursively(&incorrect_proof).unwrap();
+        assert!(!res1);
     }
 
+    #[test]
+    fn test_input_validation() {
+        let g: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let h: Vec<GroupG1> = vec!["h1", "h2"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let u = hash_on_GroupG1("u".as_bytes());
+        let a: Vec<BigNum> = vec![1, 2, 3, 4].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+        let b: Vec<BigNum> = vec![5, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+
+        let g_a = scalar_point_inner_product(&a, &g).unwrap();
+        let g_b = scalar_point_inner_product(&b, &g).unwrap();
+        let c = field_elements_inner_product(&a, &b).unwrap();
+        let u_c = scalar_point_multiplication(&c, &u);
+
+        let mut P = GroupG1::new();
+        P.add(&g_a);
+        P.add(&g_b);
+        P.add(&u_c);
+
+        let ipc = InnerProductArgument::new(&g, &h, &u, &P);
+        assert!(ipc.is_err());
+    }
 }

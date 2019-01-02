@@ -25,6 +25,7 @@ use crate::bls381::dbig::DBIG;
 use crate::bls381::rom;
 
 #[derive(Copy, Clone)]
+#[derive(Debug)]
 pub struct FP {
     pub x: BIG,
     pub xes: i32,
