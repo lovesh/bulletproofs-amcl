@@ -3,7 +3,8 @@ use super::errors::ValueError;
 use super::utils::{scalar_point_inner_product, scalar_point_multiplication,
                    get_bytes_for_G1_point, hash_as_BigNum, field_elements_inner_product,
                    field_element_inverse, scale_field_element_vector, add_field_element_vectors,
-                   scale_group_element_vector, group_elements_hadamard_product};
+                   scale_group_element_vector, group_elements_hadamard_product,
+                   field_elements_multiplication, field_element_square};
 
 struct InnerProductArgument<'a> {
     g: &'a [GroupG1],
@@ -47,15 +48,54 @@ impl<'a> InnerProductArgument<'a> {
             return Err(ValueError::UnequalSizeVectors(proof.L.len(), proof.R.len()))
         }
         let mut state: Vec<u8> = vec![];
-        self._verify_proof_recursive(&self.g, &self.h, &proof.L, &proof.R, &self.P, &mut state)
+        self._verify_proof_recursive(&self.g, &self.h, &proof.L, &proof.R, &proof.a, &proof.b, &self.P, &mut state)
     }
 
     // TODO: Add verification using multi-exponentiation
 
     fn _verify_proof_recursive(&self, g: &[GroupG1], h: &[GroupG1], L: &[GroupG1], R: &[GroupG1],
-                               P: &GroupG1, mut state: &mut Vec<u8>) -> Result<bool, ValueError> {
+                               a: &BigNum, b: &BigNum, P: &GroupG1, mut state: &mut Vec<u8>) -> Result<bool, ValueError> {
 
-        unimplemented!()
+        match g.len() {
+            1 => {
+                let g_a = scalar_point_multiplication(&a, &g[0]);
+                let h_b = scalar_point_multiplication(&b, &h[0]);
+                let c = field_elements_multiplication(&a, &b);
+                let u_c = scalar_point_multiplication(&c, &self.u);
+                let mut sum = GroupG1::new();
+                sum.add(&g_a);
+                sum.add(&h_b);
+                sum.add(&u_c);
+                let mut _P = GroupG1::new();
+                _P.copy(&self.P);
+                Ok(sum.equals(&mut _P))
+            },
+            n => {
+                let _L = &L[0];
+                let _R = &R[0];
+                let x = Self::gen_challenge(_L, _R, &self.P, state);
+                let x_sqr = field_element_square(&x);
+                let x_inv = field_element_inverse(&x);
+                let x_inv_sqr = field_element_square(&x_inv);
+
+                let _P1 = scalar_point_multiplication(&x_sqr, _L);
+                let _P2 = scalar_point_multiplication(&x_inv_sqr, _R);
+                let mut _P = GroupG1::new();
+                _P.add(&P);
+                _P.add(&_P1);
+                _P.add(&_P2);
+
+                let n_prime = n / 2;
+                let (g1, g2) = g.split_at(n_prime);
+                let (h1, h2) = h.split_at(n_prime);
+
+                let g_prime = Self::calculate_new_g(g1, g2, &x, &x_inv)?;
+                let h_prime = Self::calculate_new_h(h1, h2, &x, &x_inv)?;
+
+                self._verify_proof_recursive(&g_prime, &h_prime, L.split_at(1).1,
+                                             R.split_at(1).1, a, b, &P, state)
+            }
+        }
     }
 
     fn _gen_proof(&self, g: &[GroupG1], h: &[GroupG1], a: &[BigNum], b: &[BigNum], mut L: Vec<GroupG1>,
@@ -96,12 +136,12 @@ impl<'a> InnerProductArgument<'a> {
                 _R.add(&b1_h2);
                 _R.add(&a2_b1_u);
 
+                // The challenge should include the transcript till now, i.e including current `L` and `R`
+                let x = Self::gen_challenge(&_L, &_R, &self.P, state);
+                let x_inv = field_element_inverse(&x);
+
                 L.push(_L);
                 R.push(_R);
-
-                // The challenge should include the transcript till now, i.e including current `L` and `R`
-                let x = Self::gen_challenge(&L, &R, &self.P, state);
-                let x_inv = field_element_inverse(&x);
 
                 // a' = x.a1 + x^-1.a2
                 let a_prime_1 = scale_field_element_vector(&x, &a1);
@@ -113,15 +153,8 @@ impl<'a> InnerProductArgument<'a> {
                 let b_prime_2 = scale_field_element_vector(&x, &b2);
                 let b_prime = add_field_element_vectors(&b_prime_1, &b_prime_2)?;
 
-                // g' = (x^-1.g1 o x.g2)
-                let g_prime_1 = scale_group_element_vector(&x_inv, &g1);
-                let g_prime_2 = scale_group_element_vector(&x, &g2);
-                let g_prime = group_elements_hadamard_product(&g_prime_1, &g_prime_2)?;
-
-                // h' = (x.h1 o x^-1.h2)
-                let h_prime_1 = scale_group_element_vector(&x, &h1);
-                let h_prime_2 = scale_group_element_vector(&x_inv, &h2);
-                let h_prime = group_elements_hadamard_product(&h_prime_1, &h_prime_2)?;
+                let g_prime = Self::calculate_new_g(g1, g2, &x, &x_inv)?;
+                let h_prime = Self::calculate_new_h(h1, h2, &x, &x_inv)?;
 
                 self._gen_proof(&g_prime, &h_prime, &a_prime, &b_prime,
                                  L, R, state)
@@ -176,14 +209,42 @@ impl<'a> InnerProductArgument<'a> {
 
     // Generate challenge. Takes input group elements and a mutable reference to current state.
     // Apart from generating the challenge, updates the mutable state
-    fn gen_challenge(L: &[GroupG1], R: &[GroupG1], P: &GroupG1, state: &mut Vec<u8>) -> BigNum {
-        for i in 0..L.len() {
-            state.extend_from_slice(&get_bytes_for_G1_point(&L[i]));
-        }
-        for i in 0..R.len() {
-            state.extend_from_slice(&get_bytes_for_G1_point(&R[i]));
-        }
+    fn gen_challenge(L: &GroupG1, R: &GroupG1, P: &GroupG1, state: &mut Vec<u8>) -> BigNum {
+        state.extend_from_slice(&get_bytes_for_G1_point(&L));
+        state.extend_from_slice(&get_bytes_for_G1_point(&R));
         state.extend_from_slice(&get_bytes_for_G1_point(P));
         hash_as_BigNum(&state)
     }
+
+    // g' = (x^-1.g1 o x.g2)
+    fn calculate_new_g(g1: &[GroupG1], g2: &[GroupG1], x: &BigNum,
+                       x_inv: &BigNum) -> Result<Vec<GroupG1>, ValueError> {
+        let g_prime_1 = scale_group_element_vector(x_inv, &g1);
+        let g_prime_2 = scale_group_element_vector(x, &g2);
+        group_elements_hadamard_product(&g_prime_1, &g_prime_2)
+    }
+
+    // h' = (x.h1 o x^-1.h2)
+    fn calculate_new_h(h1: &[GroupG1], h2: &[GroupG1], x: &BigNum,
+                       x_inv: &BigNum) -> Result<Vec<GroupG1>, ValueError> {
+        let h_prime_1 = scale_group_element_vector(&x, &h1);
+        let h_prime_2 = scale_group_element_vector(&x_inv, &h2);
+        group_elements_hadamard_product(&h_prime_1, &h_prime_2)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use super::super::utils::hash_on_GroupG1;
+
+    #[test]
+    fn test_inner_product_argument() {
+        let g: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let h: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let a: Vec<BigNum> = vec![1, 2, 3, 4].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+        let b: Vec<BigNum> = vec![5, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+        // TODO: Finish incomplete test
+    }
+
 }

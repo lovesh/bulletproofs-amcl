@@ -61,10 +61,16 @@ pub fn field_elements_multiplication(a: &BigNum, b: &BigNum) -> BigNum {
     BigNum::modmul(a, b, &CurveOrder)
 }
 
+// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`
 pub fn field_element_inverse(a: &BigNum) -> BigNum {
     let mut inv = a.clone();
     inv.invmodp(&CurveOrder);
     inv
+}
+
+// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
+pub fn field_element_square(a: &BigNum) -> BigNum {
+    BigNum::modsqr(a, &CurveOrder)
 }
 
 // Multiply point on the curve (element of group G1) with a scalar.
