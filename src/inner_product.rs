@@ -4,7 +4,7 @@ use super::utils::{scalar_point_inner_product, scalar_point_multiplication,
                    get_bytes_for_G1_point, hash_as_BigNum, field_elements_inner_product,
                    field_element_inverse, scale_field_element_vector, add_field_element_vectors,
                    scale_group_element_vector, group_elements_hadamard_product,
-                   field_elements_multiplication, field_element_square};
+                   field_elements_multiplication, field_element_square, commit_to_field_element_vectors, gen_challenges};
 
 pub struct InnerProductArgument<'a> {
     G: &'a [GroupG1],
@@ -33,6 +33,7 @@ impl<'a> InnerProductArgument<'a> {
         Ok(InnerProductArgument { G: g, H: h, u, P, size:  g.len()})
     }
 
+    // Generate proof of knowledge of vectors `a` and `b`
     pub fn gen_proof(&self, a: &[BigNum], b: &[BigNum]) -> Result<InnerProductArgumentProof, ValueError> {
         let L: Vec<GroupG1> = vec![];
         let R: Vec<GroupG1> = vec![];
@@ -45,6 +46,8 @@ impl<'a> InnerProductArgument<'a> {
         // Uncomment next line and comment above line for debugging
         //self._gen_proof(self.g, self.h, a, b,L, R, &mut state, &self.P)
     }
+
+    // TODO: Add verification using multi-exponentiation
 
     pub fn verify_proof_recursively(&self, proof: &InnerProductArgumentProof) -> Result<bool, ValueError> {
         if proof.L.len() != proof.R.len() {
@@ -75,27 +78,15 @@ impl<'a> InnerProductArgument<'a> {
                 let (b1, b2) = b.split_at(n_prime);
 
                 // H(0^n_prime, a1, b2, 0^n_prime, <a1, b2>), not using `hash` to avoid working on 0^n_prime
-                let a1_g2 = scalar_point_inner_product(&a1, &g2)?;
-                let b2_h1 = scalar_point_inner_product(&b2, &h1)?;
                 let a1_b2= field_elements_inner_product(&a1, &b2)?;
-                let a1_b2_u = scalar_point_multiplication(&a1_b2, &self.u);
-                let mut _L = GroupG1::new();
-                _L.add(&a1_g2);
-                _L.add(&b2_h1);
-                _L.add(&a1_b2_u);
+                let _L = commit_to_field_element_vectors(&g2, &h1, &self.u, &a1, &b2, &a1_b2)?;
 
                 // H(a2, 0^n_prime, 0^n_prime, b1, <a2, b1>), not using `hash` to avoid working on 0^n_prime
-                let a2_g1 = scalar_point_inner_product(&a2, &g1)?;
-                let b1_h2 = scalar_point_inner_product(&b1, &h2)?;
                 let a2_b1= field_elements_inner_product(&a2, &b1)?;
-                let a2_b1_u = scalar_point_multiplication(&a2_b1, &self.u);
-                let mut _R = GroupG1::new();
-                _R.add(&a2_g1);
-                _R.add(&b1_h2);
-                _R.add(&a2_b1_u);
+                let _R = commit_to_field_element_vectors(&g1, &h2, &self.u, &a2, &b1, &a2_b1)?;
 
                 // The challenge should include the transcript till now, i.e including current `L` and `R`
-                let x = Self::gen_challenge(&_L, &_R, &self.P, state);
+                let x = gen_challenges(&[&_L, &_R, &self.P], state, 1)[0];
                 let x_inv = field_element_inverse(&x);
 
                 // Next lines only for debugging
@@ -131,8 +122,6 @@ impl<'a> InnerProductArgument<'a> {
         }
     }
 
-    // TODO: Add verification using multi-exponentiation
-
     fn _verify_proof_recursively(&self, g: &[GroupG1], h: &[GroupG1], L: &[GroupG1], R: &[GroupG1],
                                  a: &BigNum, b: &BigNum, P: &GroupG1, state: &mut Vec<u8>) -> Result<bool, ValueError> {
         match g.len() {
@@ -141,10 +130,7 @@ impl<'a> InnerProductArgument<'a> {
                 let h_b = scalar_point_multiplication(&b, &h[0]);
                 let c = field_elements_multiplication(&a, &b);
                 let u_c = scalar_point_multiplication(&c, &self.u);
-                let mut sum = GroupG1::new();
-                sum.add(&g_a);
-                sum.add(&h_b);
-                sum.add(&u_c);
+                let mut sum = add_group_elements!(&g_a, &h_b, &u_c);
                 let mut _P = GroupG1::new();
                 _P.copy(&P);
                 Ok(sum.equals(&mut _P))
@@ -152,7 +138,7 @@ impl<'a> InnerProductArgument<'a> {
             n => {
                 let _L = &L[0];
                 let _R = &R[0];
-                let x = Self::gen_challenge(_L, _R, &self.P, state);
+                let x = gen_challenges(&[&_L, &_R, &self.P], state, 1)[0];
                 let x_sqr = field_element_square(&x);
                 let x_inv = field_element_inverse(&x);
                 let x_inv_sqr = field_element_square(&x_inv);
@@ -207,28 +193,13 @@ impl<'a> InnerProductArgument<'a> {
         let (g1, g2) = g.split_at(n_prime);
         let (h1, h2) = h.split_at(n_prime);
 
-        let mut accum = GroupG1::new();
         let a1_g1 = scalar_point_inner_product(a1, g1)?;
-        accum.add(&a1_g1);
         let a2_prime_g2 = scalar_point_inner_product(a2_prime, g2)?;
-        accum.add(&a2_prime_g2);
         let b1_h1 = scalar_point_inner_product(b1, h1)?;
-        accum.add(&b1_h1);
         let b2_prime_h2 = scalar_point_inner_product(b2_prime, h2)?;
-        accum.add(&b2_prime_h2);
         let c_u = scalar_point_multiplication(c, u);
-        accum.add(&c_u);
 
-        Ok(accum)
-    }
-
-    // Generate challenge. Takes input group elements and a mutable reference to current state.
-    // Apart from generating the challenge, updates the mutable state
-    fn gen_challenge(L: &GroupG1, R: &GroupG1, P: &GroupG1, state: &mut Vec<u8>) -> BigNum {
-        state.extend_from_slice(&get_bytes_for_G1_point(L));
-        state.extend_from_slice(&get_bytes_for_G1_point(R));
-        state.extend_from_slice(&get_bytes_for_G1_point(P));
-        hash_as_BigNum(&state)
+        Ok(add_group_elements!(&a1_g1, &a2_prime_g2, &b1_h1, &b2_prime_h2))
     }
 
     // g' = (x^-1.g1 o x.g2)
@@ -251,11 +222,7 @@ impl<'a> InnerProductArgument<'a> {
     fn calculate_new_P(old_P: &GroupG1, x_sqr: &BigNum, x_inv_sqr: &BigNum, L: &GroupG1, R: &GroupG1) -> GroupG1 {
         let _P1 = scalar_point_multiplication(x_sqr, L);
         let _P2 = scalar_point_multiplication(x_inv_sqr, R);
-        let mut P_prime = GroupG1::new();
-        P_prime.add(old_P);
-        P_prime.add(&_P1);
-        P_prime.add(&_P2);
-        P_prime
+        add_group_elements!(old_P, &_P1, &_P2)
     }
 }
 
@@ -277,10 +244,7 @@ mod test {
         let c = field_elements_inner_product(&a, &b).unwrap();
         let u_c = scalar_point_multiplication(&c, &u);
 
-        let mut P = GroupG1::new();
-        P.add(&g_a);
-        P.add(&h_b);
-        P.add(&u_c);
+        let P = add_group_elements!(&g_a, &h_b, &u_c);
 
         // Correct proof
         let ipa = InnerProductArgument::new(&g, &h, &u, &P).unwrap();
@@ -310,10 +274,7 @@ mod test {
         let c = field_elements_inner_product(&a, &b).unwrap();
         let u_c = scalar_point_multiplication(&c, &u);
 
-        let mut P = GroupG1::new();
-        P.add(&g_a);
-        P.add(&g_b);
-        P.add(&u_c);
+        let P = add_group_elements!(&g_a, &g_b, &u_c);
 
         let ipc = InnerProductArgument::new(&g, &h, &u, &P);
         assert!(ipc.is_err());

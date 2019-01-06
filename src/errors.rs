@@ -2,7 +2,8 @@
 pub enum ValueError {
     UnequalSizeVectors(usize, usize),
     IncorrectSize(usize),
-    NonPowerOf2(usize)
+    NonPowerOf2(usize),
+    OutOfRange(usize)
 }
 
 /*macro_rules! check_vector_size_for_equality {
