@@ -113,7 +113,7 @@ impl<'a> RangeProofProtocol<'a> {
         // Quadratic coefficient of polynomial t(X), `t2`
         let t2 = field_elements_inner_product(
             &s_L,
-            &field_elements_hadamard_product(&y_power_vector, &s_R)?
+            &r_X_linear
         )?;
 
         // Commit to `t1` and `t2`, as `T1` and `T2`
@@ -135,6 +135,13 @@ impl<'a> RangeProofProtocol<'a> {
 
         let x_sqr = field_element_square(&x);
 
+        // For debugging only, comment in production
+        let t0 = field_elements_inner_product(&l_X_const, &r_X_const)?;
+        let t: BigNum = add_field_elements!(&t0, &field_elements_multiplication(&x, &t1), &field_elements_multiplication(&x_sqr, &t2));
+        if !are_field_elements_equal(&t, &t_hat) {
+            panic!("Polynomial evaluation not satisfied")
+        }
+
         // Blinding value for t_hat
         let tau2_x_sqr = field_elements_multiplication(&tau2, &x_sqr);
         let tau1_x = field_elements_multiplication(&tau1, &x);
@@ -155,19 +162,13 @@ impl<'a> RangeProofProtocol<'a> {
 
         let g_l = scalar_point_inner_product(&l, &self.G).unwrap();
         let h_r = scalar_point_inner_product(&r, &self.H).unwrap();
-        let c = field_elements_inner_product(&l, &r).unwrap();
-        let u_c = scalar_point_multiplication(&c, &u);
+        let u_t_hat = scalar_point_multiplication(&t_hat, &u);
 
-        let P = add_group_elements!(&g_l, &h_r, &u_c);
+        let P = add_group_elements!(&g_l, &h_r, &u_t_hat);
         let ipa = InnerProductArgument::new(&self.G, &self.H, &u, &P).unwrap();
         let proof = ipa.gen_proof(&l, &r).unwrap();
 
-        // For debugging only
-        let t0 = field_elements_inner_product(&l_X_const, &r_X_const)?;
-        let t: BigNum = add_field_elements!(&t0, &field_elements_multiplication(&x, &t1), &field_elements_multiplication(&x_sqr, &t2));
-        if !are_field_elements_equal(&t, &c) {
-            panic!("Polynomial evaluation not satisfied")
-        }
+        // For debugging only, comment in production
         let v_z_sqr = field_elements_multiplication(v, &z_sqr);
         let t00: BigNum =  add_field_elements!(&v_z_sqr, &self.calc_delta_y_z(&y, &z)?);
         if !are_field_elements_equal(&t0, &t00) {
