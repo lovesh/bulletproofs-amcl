@@ -51,7 +51,9 @@ pub fn hash_on_GroupG1(msg: &[u8]) -> GroupG1 {
 pub fn hash_as_BigNum(msg: &[u8]) -> BigNum {
     let mut h: [u8; MODBYTES] = [0; MODBYTES];
     hash_id(SHA384, msg, &mut h);
-    BigNum::frombytes(&h)
+    let mut n = BigNum::frombytes(&h);
+    n.rmod(&CurveOrder);
+    n
 }
 
 pub fn get_bytes_for_G1_point(point: &GroupG1) -> Vec<u8> {
@@ -174,11 +176,7 @@ pub fn group_elements_hadamard_product(a: &[GroupG1], b: &[GroupG1]) -> Result<V
     }
     let mut hadamard_product: Vec<GroupG1> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
-        let mut sum = GroupG1::new();
-        // use copy instead of new
-        sum.add(&a[i]);
-        sum.add(&b[i]);
-        hadamard_product.push(sum)
+        hadamard_product.push(add_group_elements!(&a[i], &b[i]))
     }
     Ok(hadamard_product)
 }

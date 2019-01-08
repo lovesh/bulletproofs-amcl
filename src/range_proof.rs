@@ -70,6 +70,16 @@ impl<'a> RangeProofProtocol<'a> {
         let a_L: Vec<BigNum> = _a_L.iter().map(| a | BigNum::new_int(*a as isize)).collect();
         let a_R = subtract_field_element_vectors(&a_L, &one_power_vector)?;
 
+        // For debugging only, comment in production
+        let pr = field_elements_inner_product(&a_L, &two_power_vector)?;
+        if !are_field_elements_equal(&v, &pr) {
+            println!("a_L is {:?}", &a_L);
+            println!("2n is {:?}", &two_power_vector);
+            println!("inner product is {:?}", &pr);
+            println!("v is {:?}", &v);
+            panic!("value wrongly decomposed to bitvector")
+        }
+
         // Commit to vectors `a_L` and `a_R`
         let alpha = random_field_element(None);
         let A = commit_to_field_element_vectors(&self.G, &self.H, &self.h, &a_L, &a_R, &alpha)?;
@@ -85,18 +95,32 @@ impl<'a> RangeProofProtocol<'a> {
 
         let challenges = gen_challenges(&[&A, &S], &mut state, 2);
         let y = challenges[0];
-        let z = challenges[1];
+        let z = BigNum::new_int(1);//challenges[1];
 
         let z_one = vec![z.clone(); self.size];
+        let z_sqr = field_element_square(&z);
+        let z_sqr_two = scale_field_element_vector(&z_sqr, &two_power_vector);
+        let y_power_vector = field_elem_power_vector(&y, self.size);
+
+        // For debugging only, comment in production
+        let ar_yn = field_elements_hadamard_product(&a_R, &y_power_vector)?;
+        let ip = field_elements_inner_product(&a_L, &ar_yn)?;
+        if !BigNum::iszilch(&ip) {
+            panic!("ip is {:?}", &ip);
+        }
+        let a_L_minus1 = subtract_field_element_vectors(&a_L, &one_power_vector)?;
+        let a_L_minus1_minus_a_R = subtract_field_element_vectors(&a_L_minus1, &a_R)?;
+        let ip1 = field_elements_inner_product(&a_L_minus1_minus_a_R,
+                                               &y_power_vector)?;
+        if !BigNum::iszilch(&ip1) {
+            panic!("ip1 is {:?}", &ip1);
+        }
 
         // Calculate coefficients of l(X), r(X) and t(X)
         // Constant coefficient of polynomial l(X)
         let l_X_const = subtract_field_element_vectors(&a_L, &z_one)?;
 
-        let z_sqr = field_element_square(&z);
-        let z_sqr_two = scale_field_element_vector(&z_sqr, &two_power_vector);
         let a_R_plus_z_one = add_field_element_vectors(&a_R, &z_one)?;
-        let y_power_vector = field_elem_power_vector(&y, self.size);
         // Constant coefficient of polynomial r(X)
         let r_X_const = add_field_element_vectors(
             &field_elements_hadamard_product(&y_power_vector, &a_R_plus_z_one)?,
@@ -104,6 +128,20 @@ impl<'a> RangeProofProtocol<'a> {
         )?;
         // Linear coefficient of polynomial r(X)
         let r_X_linear = &field_elements_hadamard_product(&y_power_vector, &s_R)?;
+
+        // For debugging only, comment in production
+        let v_z_sqr = field_elements_multiplication(v, &z_sqr);
+        let p1 = field_elements_multiplication(&z_sqr, &pr);
+        let p2 = field_elements_multiplication(&z, &ip1);
+        if !are_field_elements_equal(&add_field_elements!(&p1, &p2, &ip), &v_z_sqr) {
+            panic!("v_z_sqr {:?}", &v_z_sqr);
+        }
+        let t0 = field_elements_inner_product(&l_X_const, &r_X_const)?;
+        let delta = self.calc_delta_y_z(&y, &z)?;
+        let t00: BigNum =  add_field_elements!(&v_z_sqr, &delta);
+        if !are_field_elements_equal(&t0, &t00) {
+            panic!("t0 not equal to v.z^2 + delta(y, z)")
+        }
 
         // Linear coefficient of polynomial t(X), `t1`
         let t1_1 = field_elements_inner_product(&l_X_const, &r_X_linear)?;
@@ -136,7 +174,6 @@ impl<'a> RangeProofProtocol<'a> {
         let x_sqr = field_element_square(&x);
 
         // For debugging only, comment in production
-        let t0 = field_elements_inner_product(&l_X_const, &r_X_const)?;
         let t: BigNum = add_field_elements!(&t0, &field_elements_multiplication(&x, &t1), &field_elements_multiplication(&x_sqr, &t2));
         if !are_field_elements_equal(&t, &t_hat) {
             panic!("Polynomial evaluation not satisfied")
@@ -169,11 +206,6 @@ impl<'a> RangeProofProtocol<'a> {
         let proof = ipa.gen_proof(&l, &r).unwrap();
 
         // For debugging only, comment in production
-        let v_z_sqr = field_elements_multiplication(v, &z_sqr);
-        let t00: BigNum =  add_field_elements!(&v_z_sqr, &self.calc_delta_y_z(&y, &z)?);
-        if !are_field_elements_equal(&t0, &t00) {
-            panic!("t0 not equal to v.z^2 + delta(y, z)")
-        }
         let res = ipa.verify_proof_recursively(&proof)?;
         if !res {
             panic!("Inner product argument proof not verified")
@@ -196,16 +228,18 @@ impl<'a> RangeProofProtocol<'a> {
         // These can be stored in the struct avoiding computing everytime
         let one_power_vector = field_elem_power_vector(&BigNum::new_int(1), self.size);
         let two_power_vector = field_elem_power_vector(&BigNum::new_int(2), self.size);
+        // `one_two_inner_product` is same as sum of elements of `two_power_vector`
         let one_two_inner_product = field_elements_inner_product(&one_power_vector, &two_power_vector)?;
 
         let y_power_vector = field_elem_power_vector(&y, self.size);
+        // `one_y_inner_product` is same as sum of elements of `y_power_vector`
         let one_y_inner_product = field_elements_inner_product(&one_power_vector, &y_power_vector)?;
 
         let mut z_minus_z_sqr = z.clone();
         z_minus_z_sqr.sub(&z_sqr);
         z_minus_z_sqr.rmod(&CurveOrder);
 
-        let mut _1 = field_elements_multiplication(&z_minus_z_sqr, &&one_y_inner_product);
+        let mut _1 = field_elements_multiplication(&z_minus_z_sqr, &one_y_inner_product);
         let _2 = field_elements_multiplication(&z_cube, &one_two_inner_product);
         _1.sub(&_2);
         _1.rmod(&CurveOrder);
@@ -225,7 +259,7 @@ mod test {
         let H: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
         let g = hash_on_GroupG1("g".as_bytes());
         let h = hash_on_GroupG1("h".as_bytes());
-        let v = BigNum::new_int(9);
+        let v = BigNum::new_int(10);
         let lambda = random_field_element(None);
         let V = commit_to_field_element(&g, &h, &v, &lambda);
 
