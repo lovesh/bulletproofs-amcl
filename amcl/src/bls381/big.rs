@@ -52,8 +52,12 @@ impl Clone for BIG {
 
 impl fmt::Display for BIG {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut c = self.clone();
-        write!(f, "{}", c.tostring())
+        /*let mut c = self.clone();
+        write!(f, "{}", c.tostring())*/
+        for i in 0..NLEN-1 {
+            write!(f, "{} ", self.w[i]);
+        }
+        write!(f, "{}", self.w[NLEN-1])
     }
 }
 

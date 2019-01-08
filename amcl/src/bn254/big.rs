@@ -25,6 +25,8 @@ use crate::arch::DChunk;
 use crate::rand::RAND;
 use crate::bn254::dbig::DBIG;
 
+use std::fmt;
+
 pub const MODBYTES: usize = 32;
 pub const BASEBITS: usize = 56;
 
@@ -37,6 +39,7 @@ pub const NEXCESS: isize = (1 << ((arch::CHUNK) - BASEBITS - 1));
 pub const BIGBITS: usize = (MODBYTES * 8);
 
 #[derive(Copy)]
+#[derive(Debug)]
 pub struct BIG {
     pub w: [Chunk; NLEN],
 }
@@ -44,6 +47,13 @@ pub struct BIG {
 impl Clone for BIG {
     fn clone(&self) -> BIG {
         *self
+    }
+}
+
+impl fmt::Display for BIG {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut c = self.clone();
+        write!(f, "{}", c.tostring())
     }
 }
 
@@ -125,7 +135,7 @@ impl BIG {
 
     /* Test for equal to one */
     pub fn isunity(&self) -> bool {
-        for i in 0..NLEN {
+        for i in 1..NLEN {
             if self.w[i] != 0 {
                 return false;
             }

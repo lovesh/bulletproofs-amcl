@@ -11,7 +11,7 @@ use self::amcl::rand::{RAND};
 use self::amcl::arch::Chunk;
 use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN};
 use super::types::{BigNum, GroupG1};
-use self::amcl::bls381::mpin::{SHA384, hash_id};
+use super::BLSCurve::mpin::{SHA384, hash_id};
 use super::errors::ValueError;
 
 
@@ -27,18 +27,18 @@ pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
 }
 
 // Get a random field element of the curve order. Avoid 0.
-pub fn random_field_element(order: Option<&[Chunk]>) -> BigNum {
+pub fn random_field_element(order: Option<&BigNum>) -> BigNum {
     // initialise from at least 128 byte string of raw random entropy
     let entropy_size = 256;
     let mut r = get_seeded_RNG(entropy_size);
     let n = match order {
-        Some(o) => BigNum::randomnum(&BigNum::new_ints(o), &mut r),
+        Some(o) => BigNum::randomnum(&o, &mut r),
         None => BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r)
     };
     if n.iszilch() { random_field_element(order) } else { n }
 }
 
-pub fn random_field_vector(size: usize, order: Option<&[Chunk]>) -> Vec<BigNum> {
+pub fn random_field_vector(size: usize, order: Option<&BigNum>) -> Vec<BigNum> {
     (0..size).map( | _ | random_field_element(order)).collect::<Vec<BigNum>>()
 }
 
@@ -97,7 +97,8 @@ pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum
     let mut accum = BigNum::new();
     for i in 0..a.len() {
         // Question: What if the next line overflows?
-        accum.add(&field_elements_multiplication(&a[i], &b[i]));
+        let _m = field_elements_multiplication(&a[i], &b[i]);
+        accum.add(&_m);
         // The modulo can be avoided if result of addition of above is greater than operands. Should benchmark
         accum.rmod(&CurveOrder)
     }
@@ -204,7 +205,7 @@ pub fn field_elem_power_vector(elem: &BigNum, size: usize) -> Vec<BigNum> {
     } else if BigNum::isunity(elem) {
         vec![BigNum::new_int(1); size]
     } else {
-        let mut v: Vec<BigNum> = vec![];
+        let mut v: Vec<BigNum> = Vec::with_capacity(size);
         v.push(BigNum::new_int(1));
         let mut current = elem.clone();
         for _ in 1..size {
@@ -369,6 +370,8 @@ mod test {
 
     #[test]
     fn test_some() {
+        use crate::BLSCurve::big::{HMASK, BMASK};
+
         let mut z = BigNum::new_int(0);
         let mut o = BigNum::new_int(1);
         let mut n = BigNum::new_int(-1);
@@ -382,5 +385,32 @@ mod test {
         println!("{}", &c);
         z.norm();
         println!("{}", &z);
+        println!("HMASK: {}", &HMASK);
+        println!("BMASK: {}", &BMASK);
+
+        let mut one = BigNum::new_int(1);
+        let mut neg_one = BigNum::new_int(-1);
+        neg_one.rmod(&CurveOrder);
+        println!("1 is: {}", &one);
+        println!("-1 is: {}", &neg_one);
+        let mut sum = BigNum::new();
+        sum.add(&one);
+        sum.add(&neg_one);
+        sum.rmod(&CurveOrder);
+        println!("sum of 1 and -1 is {}, is 0? {}", &sum, sum.iszilch());
+
+        sum.sub(&one);
+        sum.rmod(&CurveOrder);
+        println!("subtraction of 0 and 1 is {}", &sum);
+
+        sum.add(&one);
+        sum.rmod(&CurveOrder);
+        println!("sum of 1 and -1 is {}, is 0? {}", &sum, sum.iszilch());
+
+        // Multiplication with -1 seems wrong.
+        let mut pr = BigNum::modmul(&one, &neg_one, &CurveOrder);
+        println!("product of 1 and -1 is {}", &pr);
+        pr.rmod(&CurveOrder);
+        println!("product of 1 and -1 is {}", &pr);
     }
 }

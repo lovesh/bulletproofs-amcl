@@ -24,6 +24,8 @@ use crate::bls381::big::BIG;
 use crate::bls381::dbig::DBIG;
 use crate::bls381::rom;
 
+use std::fmt;
+
 #[derive(Copy, Clone)]
 #[derive(Debug)]
 pub struct FP {
@@ -44,6 +46,13 @@ pub const FEXCESS:i32 = (((1 as i32)<<25)-1);
 pub const OMASK: Chunk = (-1) << (MODBITS % big::BASEBITS);
 pub const TBITS: usize = MODBITS % big::BASEBITS; // Number of active bits in top word
 pub const TMASK: Chunk = (1 << TBITS) - 1;
+
+impl fmt::Display for FP {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut c = self.clone();
+        write!(f, "{}", c.tostring())
+    }
+}
 
 impl FP {
     /* Constructors */

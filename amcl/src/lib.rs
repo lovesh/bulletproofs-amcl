@@ -10,3 +10,4 @@ pub mod nhs;
 
 pub mod bn254;
 pub mod bls381;
+pub mod secp256k1;
