@@ -181,6 +181,16 @@ pub fn sum_group_elem_vector(a: &[GroupG1]) -> GroupG1 {
     accum
 }
 
+// Compute sum of all group elements of a vector
+pub fn sum_field_elem_vector(a: &[BigNum]) -> BigNum {
+    let mut accum = BigNum::new();
+    for i in 0..a.len() {
+        accum.add(&a[i]);
+        accum.rmod(&CurveOrder)
+    }
+    accum
+}
+
 // Calculates Hadamard product of 2 group element vectors.
 // Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
 // Here `o` denotes group operation, which in elliptic curve is point addition

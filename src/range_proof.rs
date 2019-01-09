@@ -1,23 +1,9 @@
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
-use super::utils::{to_bitvectors, subtract_field_element_vectors, random_field_element,
-                   scalar_point_inner_product, scalar_point_multiplication, random_field_vector, gen_challenges};
+use super::utils::*;
 use crate::utils::commit_to_field_element_vectors;
 use crate::inner_product::{InnerProductArgument, InnerProductArgumentProof};
 use crate::constants::{GeneratorG1, CurveOrder};
-use crate::utils::field_element_square;
-use crate::utils::field_elements_multiplication;
-use crate::utils::field_elements_inner_product;
-use crate::utils::field_elem_power_vector;
-use crate::utils::scale_field_element_vector;
-use crate::utils::add_field_element_vectors;
-use crate::utils::field_elements_hadamard_product;
-use crate::utils::commit_to_field_element;
-use crate::utils::subtract_field_elements;
-use crate::utils::field_element_inverse;
-use crate::utils::scale_group_element_vector;
-use crate::utils::sum_group_elem_vector;
-
 
 pub struct RangeProofProtocol<'a> {
     G: &'a [GroupG1],
@@ -25,7 +11,9 @@ pub struct RangeProofProtocol<'a> {
     g: &'a GroupG1,
     h: &'a GroupG1,
     V: &'a GroupG1,
-    size: usize
+    size: usize,
+    one_pow_vec: Vec<BigNum>,
+    two_pow_vec: Vec<BigNum>
 }
 
 pub struct RangeProof {
@@ -51,7 +39,12 @@ impl<'a> RangeProofProtocol<'a> {
         if !G.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(G.len()))
         }
-        Ok(RangeProofProtocol { G, H, g, h, V, size: G.len() })
+
+        let size = G.len();
+        let one_pow_vec = field_elem_power_vector(&BigNum::new_int(1), size);
+        let two_pow_vec = field_elem_power_vector(&BigNum::new_int(2), size);
+
+        Ok(RangeProofProtocol { G, H, g, h, V, size, one_pow_vec, two_pow_vec})
     }
 
     // Generate a range proof of `v` for randomness `lambda`
@@ -71,18 +64,14 @@ impl<'a> RangeProofProtocol<'a> {
 
         let mut state: Vec<u8> = vec![];
 
-        // These can be stored in the struct avoiding computation everytime
-        let one_power_vector = field_elem_power_vector(&BigNum::new_int(1), self.size);
-        let two_power_vector = field_elem_power_vector(&BigNum::new_int(2), self.size);
-
         let a_L: Vec<BigNum> = _a_L.iter().map(| a | BigNum::new_int(*a as isize)).collect();
-        let a_R = subtract_field_element_vectors(&a_L, &one_power_vector)?;
+        let a_R = subtract_field_element_vectors(&a_L, &self.one_pow_vec)?;
 
         // For debugging only, comment in production
-        /*let pr = field_elements_inner_product(&a_L, &two_power_vector)?;
+        /*let pr = field_elements_inner_product(&a_L, &self.two_pow_vec)?;
         if !are_field_elements_equal(&v, &pr) {
             println!("a_L is {:?}", &a_L);
-            println!("2n is {:?}", &two_power_vector);
+            println!("2n is {:?}", &self.two_pow_vec);
             println!("inner product is {:?}", &pr);
             println!("v is {:?}", &v);
             panic!("value wrongly decomposed to bitvector")
@@ -107,7 +96,7 @@ impl<'a> RangeProofProtocol<'a> {
 
         let z_one = vec![z.clone(); self.size];
         let z_sqr = field_element_square(&z);
-        let z_sqr_two = scale_field_element_vector(&z_sqr, &two_power_vector);
+        let z_sqr_two = scale_field_element_vector(&z_sqr, &self.two_pow_vec);
         let y_power_vector = field_elem_power_vector(&y, self.size);
 
         // For debugging only, comment in production
@@ -116,7 +105,7 @@ impl<'a> RangeProofProtocol<'a> {
         if !BigNum::iszilch(&ip) {
             panic!("ip is {:?}", &ip);
         }
-        let a_L_minus1 = subtract_field_element_vectors(&a_L, &one_power_vector)?;
+        let a_L_minus1 = subtract_field_element_vectors(&a_L, &self.one_pow_vec)?;
         let a_L_minus1_minus_a_R = subtract_field_element_vectors(&a_L_minus1, &a_R)?;
         let ip1 = field_elements_inner_product(&a_L_minus1_minus_a_R,
                                                &y_power_vector)?;
@@ -277,8 +266,7 @@ impl<'a> RangeProofProtocol<'a> {
         let y_power_vector = field_elem_power_vector(&y, self.size);
         let z_y_n = scale_field_element_vector(&z, &y_power_vector);
         let z_sqr = field_element_square(&z);
-        let two_power_vector = field_elem_power_vector(&BigNum::new_int(2), self.size);
-        let z_sqr_two = scale_field_element_vector(&z_sqr, &two_power_vector);
+        let z_sqr_two = scale_field_element_vector(&z_sqr, &self.two_pow_vec);
         let exp = add_field_element_vectors(&z_y_n, &z_sqr_two)?;
 
         let H_prime_exp = scalar_point_inner_product(&exp, &H_prime)?;
@@ -336,15 +324,14 @@ impl<'a> RangeProofProtocol<'a> {
         let z_sqr = field_element_square(&z);
         let z_cube = field_elements_multiplication(&z, &z_sqr);
 
-        // These can be stored in the struct avoiding computing everytime
-        let one_power_vector = field_elem_power_vector(&BigNum::new_int(1), self.size);
-        let two_power_vector = field_elem_power_vector(&BigNum::new_int(2), self.size);
         // `one_two_inner_product` is same as sum of elements of `two_power_vector`
-        let one_two_inner_product = field_elements_inner_product(&one_power_vector, &two_power_vector)?;
+        //let one_two_inner_product = field_elements_inner_product(&self.one_pow_vec, &self.two_pow_vec)?;
+        let one_two_inner_product = sum_field_elem_vector(&self.two_pow_vec);
 
         let y_power_vector = field_elem_power_vector(&y, self.size);
         // `one_y_inner_product` is same as sum of elements of `y_power_vector`
-        let one_y_inner_product = field_elements_inner_product(&one_power_vector, &y_power_vector)?;
+        //let one_y_inner_product = field_elements_inner_product(&self.one_pow_vec, &y_power_vector)?;
+        let one_y_inner_product = sum_field_elem_vector(&y_power_vector);
 
         let z_minus_z_sqr = subtract_field_elements(&z, &z_sqr);
 

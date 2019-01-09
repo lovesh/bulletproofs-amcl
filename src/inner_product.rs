@@ -1,10 +1,6 @@
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
-use super::utils::{scalar_point_inner_product, scalar_point_multiplication,
-                   field_elements_inner_product,
-                   field_element_inverse, scale_field_element_vector, add_field_element_vectors,
-                   scale_group_element_vector, group_elements_hadamard_product,
-                   field_elements_multiplication, field_element_square, commit_to_field_element_vectors, gen_challenges};
+use super::utils::*;
 
 pub struct InnerProductArgument<'a> {
     G: &'a [GroupG1],
