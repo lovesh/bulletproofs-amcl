@@ -1,9 +1,12 @@
+use super::types::BigNum;
+
 #[derive(Debug, Clone, Copy)]
 pub enum ValueError {
     UnequalSizeVectors(usize, usize),
     IncorrectSize(usize),
     NonPowerOf2(usize),
-    OutOfRange(usize)
+    OutOfRange(usize),
+    NegativeValue(BigNum)
 }
 
 /*macro_rules! check_vector_size_for_equality {

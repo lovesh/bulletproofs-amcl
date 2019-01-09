@@ -52,6 +52,10 @@ impl<'a> RangeProofProtocol<'a> {
 
     // Generate a range proof of `v` for randomness `lambda`
     pub fn gen_proof(&self, v: &BigNum, lambda: &BigNum) -> Result<RangeProof, ValueError> {
+        if BigNum::comp(v, &BigNum::new()) == -1 {
+            return Err(ValueError::NegativeValue(*v));
+        }
+
         let mut _bitvectors = to_bitvectors(v);
         let mut _a_L = match _bitvectors.len() {
             0 => vec![0],
