@@ -82,6 +82,15 @@ pub fn field_element_square(a: &BigNum) -> BigNum {
     BigNum::modsqr(a, &CurveOrder)
 }
 
+// Calculate a-b
+pub fn subtract_field_elements(a: &BigNum, b: &BigNum) -> BigNum {
+    let mut sum = a.clone();
+    let neg_b = BigNum::modneg(&b, &CurveOrder);
+    sum.add(&neg_b);
+    sum.rmod(&CurveOrder);
+    sum
+}
+
 // Multiply point on the curve (element of group G1) with a scalar.
 // field_element_a * group_element_b
 pub fn scalar_point_multiplication(a: &BigNum, b: &GroupG1) -> GroupG1 {
@@ -148,10 +157,10 @@ pub fn subtract_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec
     let mut diff_vector: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         // Use new_copy or new_big instead of new
-        let mut diff = BigNum::new();
-        diff.add(&a[i]);
+        let diff = subtract_field_elements(&a[i], &b[i]);
+        /*diff.add(&a[i]);
         diff.sub(&b[i]);
-        diff.rmod(&CurveOrder);
+        diff.rmod(&CurveOrder);*/
         diff_vector.push(diff)
     }
     Ok(diff_vector)
@@ -371,6 +380,13 @@ mod test {
     #[test]
     fn test_some() {
         use crate::BLSCurve::big::{HMASK, BMASK};
+        use crate::BLSCurve::rom::{MODULUS, CURVE_ORDER};
+
+        let curve_modulus: BigNum = BigNum::new_ints(&MODULUS);
+        let curve_order: BigNum = BigNum::new_ints(&CURVE_ORDER);
+
+        println!("curve order is {}", &curve_order);
+        println!("curve modulus is {}", &curve_modulus);
 
         let mut z = BigNum::new_int(0);
         let mut o = BigNum::new_int(1);
@@ -409,8 +425,36 @@ mod test {
 
         // Multiplication with -1 seems wrong.
         let mut pr = BigNum::modmul(&one, &neg_one, &CurveOrder);
-        println!("product of 1 and -1 is {}", &pr);
+        println!("product of 1 and -1 modulo curve order is {}", &pr);
         pr.rmod(&CurveOrder);
-        println!("product of 1 and -1 is {}", &pr);
+        println!("product of 1 and -1 modulo curve order again reduced modulo curve order is {}", &pr);
+
+        let mut pr1 = BigNum::modmul(&one, &neg_one, &curve_modulus);
+        println!("product of 1 and -1 modulo curve modulus is {}", &pr1);
+        pr1.rmod(&curve_modulus);
+        println!("product of 1 and -1 modulo curve modulus again reduced modulo curve modulus is {}", &pr1);
+
+        let mut pr2 = BigNum::modmul(&neg_one, &neg_one, &CurveOrder);
+        println!("product of -1 and -1 modulo curve order is {}", &pr2);
+        pr2.rmod(&CurveOrder);
+        println!("product of -1 and -1 modulo curve order again reduced modulo curve order is {}", &pr2);
+
+        let mut zero = BigNum::new_int(0);
+//        zero.sub(&one);
+//        zero.rmod(&CurveOrder);
+        let neg = BigNum::modneg(&one, &CurveOrder);
+        println!("Negative 1 is {}", &neg);
+        zero.add(&neg);
+        zero.rmod(&CurveOrder);
+        println!("subtraction of 0 and 1 is {}", &zero);
+        let mut pr = BigNum::modmul(&one, &zero, &CurveOrder);
+        println!("product of 1 and -1 modulo curve order is {}", &pr);
+
+        let mut co = CurveOrder.clone();
+        co.sub(&one);
+        co.rmod(&CurveOrder);
+        println!("subtraction of curve order and 1 is {}", &co);
+
+
     }
 }

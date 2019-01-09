@@ -14,6 +14,7 @@ use crate::utils::add_field_element_vectors;
 use crate::utils::field_elements_hadamard_product;
 use crate::utils::commit_to_field_element;
 use crate::utils::are_field_elements_equal;
+use crate::utils::subtract_field_elements;
 
 
 pub struct RangeProofProtocol<'a> {
@@ -236,15 +237,17 @@ impl<'a> RangeProofProtocol<'a> {
         // `one_y_inner_product` is same as sum of elements of `y_power_vector`
         let one_y_inner_product = field_elements_inner_product(&one_power_vector, &y_power_vector)?;
 
-        let mut z_minus_z_sqr = z.clone();
+        /*let mut z_minus_z_sqr = z.clone();
         z_minus_z_sqr.sub(&z_sqr);
-        z_minus_z_sqr.rmod(&CurveOrder);
+        z_minus_z_sqr.rmod(&CurveOrder);*/
+        let z_minus_z_sqr = subtract_field_elements(&z, &z_sqr);
 
-        let mut _1 = field_elements_multiplication(&z_minus_z_sqr, &one_y_inner_product);
+        let _1 = field_elements_multiplication(&z_minus_z_sqr, &one_y_inner_product);
         let _2 = field_elements_multiplication(&z_cube, &one_two_inner_product);
-        _1.sub(&_2);
-        _1.rmod(&CurveOrder);
-        Ok(_1)
+        /*_1.sub(&_2);
+        _1.rmod(&CurveOrder);*/
+        let delta = subtract_field_elements(&_1, &_2);
+        Ok(delta)
     }
 }
 
