@@ -5,6 +5,9 @@ use crate::utils::commit_to_field_element_vectors;
 use crate::inner_product::{InnerProductArgument, InnerProductArgumentProof};
 use crate::constants::{GeneratorG1, CurveOrder};
 
+// TODO: Sidechannel resistance. Make sure that range proof for a value with 1 bit set
+// takes same time and memory as a value with all bits set.
+
 pub struct RangeProofProtocol<'a> {
     G: &'a [GroupG1],
     H: &'a [GroupG1],
