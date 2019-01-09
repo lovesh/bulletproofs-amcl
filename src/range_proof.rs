@@ -95,8 +95,8 @@ impl<'a> RangeProofProtocol<'a> {
                                                 &s_L, &s_R, &rho)?;
 
         let challenges = gen_challenges(&[&A, &S], &mut state, 2);
-        let y = BigNum::new_int(0);//challenges[0];
-        let z = BigNum::new_int(1);//challenges[1];
+        let y = challenges[0];
+        let z = challenges[1];
 
         let z_one = vec![z.clone(); self.size];
         let z_sqr = field_element_square(&z);
