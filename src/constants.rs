@@ -1,6 +1,5 @@
 extern crate amcl;
 
-use self::amcl::arch::Chunk;
 use super::BLSCurve::rom;
 use super::BLSCurve::big::{NLEN as curve_NLEN, MODBYTES as curve_MODBYTES, BASEBITS as curve_BASEBITS};
 use super::types::{BigNum, GroupG1};

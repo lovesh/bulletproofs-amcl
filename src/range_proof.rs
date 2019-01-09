@@ -13,7 +13,6 @@ use crate::utils::scale_field_element_vector;
 use crate::utils::add_field_element_vectors;
 use crate::utils::field_elements_hadamard_product;
 use crate::utils::commit_to_field_element;
-use crate::utils::are_field_elements_equal;
 use crate::utils::subtract_field_elements;
 use crate::utils::field_element_inverse;
 use crate::utils::scale_group_element_vector;
@@ -296,7 +295,7 @@ impl<'a> RangeProofProtocol<'a> {
         }*/
 
         // Compute P.h^-mu
-        let mut neg_mu = BigNum::modneg(&proof.mu, &CurveOrder);
+        let neg_mu = BigNum::modneg(&proof.mu, &CurveOrder);
         let h_neg_mu = scalar_point_multiplication(&neg_mu, &self.h);
         let mut newP = add_group_elements!(&P, &h_neg_mu);
 
@@ -362,7 +361,7 @@ mod test {
     use crate::utils::hash_on_GroupG1;
 
     #[test]
-    fn test_range_proof() {
+    fn test_range_proof_4() {
         let n = 4;
         let G: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
         let H: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
@@ -370,6 +369,31 @@ mod test {
         let h = hash_on_GroupG1("h".as_bytes());
 
         for i in 0..15 {
+            let v = BigNum::new_int(i);
+            let lambda = random_field_element(None);
+            let V = commit_to_field_element(&g, &h, &v, &lambda);
+
+            let rpp = RangeProofProtocol::new(G.as_slice(), H.as_slice(), &g, &h, &V).unwrap();
+            println!("Generate range proof for {}", i);
+            let proof = rpp.gen_proof(&v, &lambda).unwrap();
+            println!("Proof generated");
+
+            println!("Verify range proof for {}", i);
+            assert!(rpp.verify_proof(&proof).unwrap());
+            println!("Proof successfully verified");
+        }
+    }
+
+    // TODO: Refactor test, remove code duplication
+    #[test]
+    fn test_range_proof_8() {
+        let n = 8;
+        let G: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let H: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(| s | hash_on_GroupG1(s.as_bytes())).collect();
+        let g = hash_on_GroupG1("g".as_bytes());
+        let h = hash_on_GroupG1("h".as_bytes());
+
+        for i in 0..127 {
             let v = BigNum::new_int(i);
             let lambda = random_field_element(None);
             let V = commit_to_field_element(&g, &h, &v, &lambda);

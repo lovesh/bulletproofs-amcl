@@ -7,8 +7,7 @@ pub mod macros;
 use rand::RngCore;
 use rand::rngs::EntropyRng;
 
-use self::amcl::rand::{RAND};
-use self::amcl::arch::Chunk;
+use self::amcl::rand::RAND;
 use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN};
 use super::types::{BigNum, GroupG1};
 use super::BLSCurve::mpin::{SHA384, hash_id};
@@ -301,7 +300,7 @@ pub fn gen_challenges(input: &[&GroupG1], state: &mut Vec<u8>, n: usize) -> Vec<
     }
     r.push(hash_as_BigNum(&state));
 
-    for i in 1..n {
+    for _ in 1..n {
         let _p = GeneratorG1.mul(&r.last().unwrap());
         state.extend_from_slice(&get_bytes_for_G1_point(&_p));
         r.push(hash_as_BigNum(&state));

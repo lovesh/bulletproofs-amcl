@@ -1,7 +1,7 @@
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use super::utils::{scalar_point_inner_product, scalar_point_multiplication,
-                   get_bytes_for_G1_point, hash_as_BigNum, field_elements_inner_product,
+                   field_elements_inner_product,
                    field_element_inverse, scale_field_element_vector, add_field_element_vectors,
                    scale_group_element_vector, group_elements_hadamard_product,
                    field_elements_multiplication, field_element_square, commit_to_field_element_vectors, gen_challenges};
@@ -197,7 +197,6 @@ impl<'a> InnerProductArgument<'a> {
         let a2_prime_g2 = scalar_point_inner_product(a2_prime, g2)?;
         let b1_h1 = scalar_point_inner_product(b1, h1)?;
         let b2_prime_h2 = scalar_point_inner_product(b2_prime, h2)?;
-        let c_u = scalar_point_multiplication(c, u);
 
         Ok(add_group_elements!(&a1_g1, &a2_prime_g2, &b1_h1, &b2_prime_h2))
     }

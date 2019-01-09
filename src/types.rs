@@ -1,6 +1,5 @@
 extern crate amcl;
 
-use std::fmt;
 use super::BLSCurve::big::BIG;
 use super::BLSCurve::fp::FP;
 use super::BLSCurve::ecp::ECP;
