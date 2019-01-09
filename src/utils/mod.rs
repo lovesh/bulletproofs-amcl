@@ -158,14 +158,10 @@ pub fn subtract_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec
     for i in 0..a.len() {
         // Use new_copy or new_big instead of new
         let diff = subtract_field_elements(&a[i], &b[i]);
-        /*diff.add(&a[i]);
-        diff.sub(&b[i]);
-        diff.rmod(&CurveOrder);*/
         diff_vector.push(diff)
     }
     Ok(diff_vector)
 }
-
 
 // Multiply each group element of the given vector `v` with the given field
 // element `n` (scale the vector `v`)
@@ -175,6 +171,15 @@ pub fn scale_group_element_vector(n: &BigNum, v: &[GroupG1]) -> Vec<GroupG1> {
         scaled.push(scalar_point_multiplication(n, &v[i]))
     }
     scaled
+}
+
+// Compute sum of all group elements of a vector
+pub fn sum_group_elem_vector(a: &[GroupG1]) -> GroupG1 {
+    let mut accum = GroupG1::new();
+    for i in 0..a.len() {
+        accum.add(&a[i])
+    }
+    accum
 }
 
 // Calculates Hadamard product of 2 group element vectors.

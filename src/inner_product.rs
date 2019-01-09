@@ -92,7 +92,7 @@ impl<'a> InnerProductArgument<'a> {
                 // Next lines only for debugging
                 /*let x_sqr = field_element_square(&x);
                 let x_inv_sqr = field_element_square(&x_inv);
-                let P_prime = Self::calulate_new_P(P, &x_sqr, &x_inv_sqr, &_L, &_R);
+                let P_prime = Self::calculate_new_P(P, &x_sqr, &x_inv_sqr, &_L, &_R);
                 println!("During proving, for n {}, challenge is {}, new P is {}", &n, &x, &P_prime);*/
 
                 L.push(_L);
@@ -145,7 +145,7 @@ impl<'a> InnerProductArgument<'a> {
 
                 let P_prime = Self::calculate_new_P(&P, &x_sqr, &x_inv_sqr, &_L, &_R);
 
-                /*println!("During verification, for n {}, challenge is {}, new P is {}", &n, &x, &P_prime);*/
+//                println!("During verification, for n {}, challenge is {}, new P is {}, L R {} {}", &n, &x, &self.P, &_L, &_R);
 
                 let n_prime = n / 2;
                 let (g1, g2) = g.split_at(n_prime);
