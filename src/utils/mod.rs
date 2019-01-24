@@ -10,8 +10,9 @@ use rand::rngs::EntropyRng;
 use self::amcl::rand::RAND;
 use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN};
 use super::types::{BigNum, GroupG1};
-use super::BLSCurve::mpin::{SHA384, hash_id};
+//use super::BLSCurve::mpin::{SHA256, SHA384, hash_id};
 use super::errors::ValueError;
+use amcl::sha3::{SHAKE256, SHA3};
 
 
 pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
@@ -41,16 +42,24 @@ pub fn random_field_vector(size: usize, order: Option<&BigNum>) -> Vec<BigNum> {
     (0..size).map( | _ | random_field_element(order)).collect::<Vec<BigNum>>()
 }
 
-pub fn hash_on_GroupG1(msg: &[u8]) -> GroupG1 {
+// Hash message and return output of size equal to curve modulus
+pub fn hash_msg(msg: &[u8]) -> [u8; MODBYTES] {
+    let mut hasher = SHA3::new(SHAKE256);
+    for i in 0..msg.len(){
+        hasher.process(msg[i]);
+    }
     let mut h: [u8; MODBYTES] = [0; MODBYTES];
-    hash_id(SHA384, msg, &mut h);
-    GroupG1::mapit(&h)
+    hasher.shake(&mut h,MODBYTES);
+    h
+}
+
+pub fn hash_on_GroupG1(msg: &[u8]) -> GroupG1 {
+    GroupG1::mapit(&hash_msg(msg))
 }
 
 pub fn hash_as_BigNum(msg: &[u8]) -> BigNum {
-    let mut h: [u8; MODBYTES] = [0; MODBYTES];
-    hash_id(SHA384, msg, &mut h);
-    let mut n = BigNum::frombytes(&h);
+    // TODO: Ensure result is not 0
+    let mut n = BigNum::frombytes(&hash_msg(msg));
     n.rmod(&CurveOrder);
     n
 }
