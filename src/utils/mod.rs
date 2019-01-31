@@ -10,7 +10,6 @@ use rand::rngs::EntropyRng;
 use self::amcl::rand::RAND;
 use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN};
 use super::types::{BigNum, GroupG1};
-//use super::BLSCurve::mpin::{SHA256, SHA384, hash_id};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
 
@@ -108,9 +107,7 @@ pub fn scalar_point_multiplication(a: &BigNum, b: &GroupG1) -> GroupG1 {
 // Computes inner product of 2 vectors of field elements
 // [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
 pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut accum = BigNum::new();
     for i in 0..a.len() {
         // Question: What if the next line overflows?
@@ -125,9 +122,7 @@ pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum
 // Computes inner product of 2 vectors, one of field elements and other of group elements.
 // [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
 pub fn scalar_point_inner_product(a: &[BigNum], b: &[GroupG1]) -> Result<GroupG1, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut accum = GroupG1::new();
     for i in 0..a.len() {
         accum.add(&scalar_point_multiplication(&a[i], &b[i]))
@@ -147,9 +142,7 @@ pub fn scale_field_element_vector(n: &BigNum, v: &[BigNum]) -> Vec<BigNum> {
 
 // Add 2 vectors of field elements
 pub fn add_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigNum>, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut sum_vector: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         sum_vector.push(add_field_elements!(&a[i], &b[i]))
@@ -159,12 +152,9 @@ pub fn add_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigN
 
 // Subtract 2 vectors of field elements, a - b
 pub fn subtract_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigNum>, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut diff_vector: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
-        // Use new_copy or new_big instead of new
         let diff = subtract_field_elements(&a[i], &b[i]);
         diff_vector.push(diff)
     }
@@ -204,9 +194,7 @@ pub fn sum_field_elem_vector(a: &[BigNum]) -> BigNum {
 // Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
 // Here `o` denotes group operation, which in elliptic curve is point addition
 pub fn group_elements_hadamard_product(a: &[GroupG1], b: &[GroupG1]) -> Result<Vec<GroupG1>, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut hadamard_product: Vec<GroupG1> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         hadamard_product.push(add_group_elements!(&a[i], &b[i]))
@@ -218,9 +206,7 @@ pub fn group_elements_hadamard_product(a: &[GroupG1], b: &[GroupG1]) -> Result<V
 // Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
 // Here `o` denotes multiply operation
 pub fn field_elements_hadamard_product(a: &[BigNum], b: &[BigNum]) -> Result<Vec<BigNum>, ValueError> {
-    if a.len() != b.len() {
-        return Err(ValueError::UnequalSizeVectors(a.len(), b.len()))
-    }
+    check_vector_size_for_equality!(a, b);
     let mut hadamard_product: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         hadamard_product.push(field_elements_multiplication(&a[i], &b[i]));

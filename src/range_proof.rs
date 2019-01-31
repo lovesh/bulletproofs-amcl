@@ -36,9 +36,7 @@ pub struct RangeProof {
 impl<'a> RangeProofProtocol<'a> {
     pub fn new(G: &'a [GroupG1], H: &'a [GroupG1], g: &'a GroupG1, h: &'a GroupG1,
                V: &'a GroupG1) -> Result<RangeProofProtocol<'a>, ValueError> {
-        if G.len() != H.len() {
-            return Err(ValueError::UnequalSizeVectors(G.len(), H.len()))
-        }
+        check_vector_size_for_equality!(G, H);
         if !G.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(G.len()))
         }
@@ -401,5 +399,16 @@ mod test {
             assert!(rpp.verify_proof(&proof).unwrap());
             println!("Proof successfully verified");
         }
+    }
+
+    #[test]
+    fn test_range_proof_bounds() {
+        let n = 8;
+        let G: Vec<GroupG1> = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(|s| hash_on_GroupG1(s.as_bytes())).collect();
+        let H: Vec<GroupG1> = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(|s| hash_on_GroupG1(s.as_bytes())).collect();
+        let g = hash_on_GroupG1("g".as_bytes());
+        let h = hash_on_GroupG1("h".as_bytes());
+
+
     }
 }
