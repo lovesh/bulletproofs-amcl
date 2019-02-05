@@ -5,8 +5,9 @@ authors = ["lovesh harchandani <lovesh.bond@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rand = "0.5.3"
+rand = "0.6"
 lazy_static = "1.0"
+merlin = "1"
 
 [dependencies.amcl]
 path = "./amcl"

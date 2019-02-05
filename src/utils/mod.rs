@@ -8,7 +8,7 @@ use rand::RngCore;
 use rand::rngs::EntropyRng;
 
 use self::amcl::rand::RAND;
-use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN};
+use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN, FieldElementZero};
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
@@ -71,6 +71,13 @@ pub fn get_bytes_for_G1_point(point: &GroupG1) -> Vec<u8> {
     bytes.to_vec()
 }
 
+pub fn get_bytes_for_BigNum(n: &BigNum) -> Vec<u8> {
+    let mut temp = BigNum::new_copy(&n);
+    let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
+    temp.tobytes(&mut bytes);
+    bytes.to_vec()
+}
+
 // Multiply 2 field elements modulus the order of the curve.
 // field_element_a * field_element_b % curve_order
 pub fn field_elements_multiplication(a: &BigNum, b: &BigNum) -> BigNum {
@@ -98,6 +105,11 @@ pub fn subtract_field_elements(a: &BigNum, b: &BigNum) -> BigNum {
     sum
 }
 
+// Return negative of field element
+pub fn negate_field_element(a: &BigNum) -> BigNum {
+    subtract_field_elements(&FieldElementZero, &a)
+}
+
 // Multiply point on the curve (element of group G1) with a scalar.
 // field_element_a * group_element_b
 pub fn scalar_point_multiplication(a: &BigNum, b: &GroupG1) -> GroupG1 {
@@ -107,7 +119,7 @@ pub fn scalar_point_multiplication(a: &BigNum, b: &GroupG1) -> GroupG1 {
 // Computes inner product of 2 vectors of field elements
 // [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
 pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut accum = BigNum::new();
     for i in 0..a.len() {
         // Question: What if the next line overflows?
@@ -122,7 +134,7 @@ pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum
 // Computes inner product of 2 vectors, one of field elements and other of group elements.
 // [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
 pub fn scalar_point_inner_product(a: &[BigNum], b: &[GroupG1]) -> Result<GroupG1, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut accum = GroupG1::new();
     for i in 0..a.len() {
         accum.add(&scalar_point_multiplication(&a[i], &b[i]))
@@ -142,7 +154,7 @@ pub fn scale_field_element_vector(n: &BigNum, v: &[BigNum]) -> Vec<BigNum> {
 
 // Add 2 vectors of field elements
 pub fn add_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigNum>, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut sum_vector: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         sum_vector.push(add_field_elements!(&a[i], &b[i]))
@@ -152,7 +164,7 @@ pub fn add_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigN
 
 // Subtract 2 vectors of field elements, a - b
 pub fn subtract_field_element_vectors(a: &[BigNum], b: &[BigNum]) ->  Result<Vec<BigNum>, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut diff_vector: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         let diff = subtract_field_elements(&a[i], &b[i]);
@@ -194,7 +206,7 @@ pub fn sum_field_elem_vector(a: &[BigNum]) -> BigNum {
 // Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
 // Here `o` denotes group operation, which in elliptic curve is point addition
 pub fn group_elements_hadamard_product(a: &[GroupG1], b: &[GroupG1]) -> Result<Vec<GroupG1>, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut hadamard_product: Vec<GroupG1> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         hadamard_product.push(add_group_elements!(&a[i], &b[i]))
@@ -206,7 +218,7 @@ pub fn group_elements_hadamard_product(a: &[GroupG1], b: &[GroupG1]) -> Result<V
 // Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
 // Here `o` denotes multiply operation
 pub fn field_elements_hadamard_product(a: &[BigNum], b: &[BigNum]) -> Result<Vec<BigNum>, ValueError> {
-    check_vector_size_for_equality!(a, b);
+    check_vector_size_for_equality!(a, b)?;
     let mut hadamard_product: Vec<BigNum> = Vec::with_capacity(a.len());
     for i in 0..a.len() {
         hadamard_product.push(field_elements_multiplication(&a[i], &b[i]));
@@ -249,7 +261,7 @@ pub fn get_generators(n: usize) -> Vec<GroupG1> {
     gens
 }
 
-// Gives a vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
+// Gives vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
 // hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
 pub fn to_bitvectors(n: &BigNum) -> Vec<Vec<u8>> {
     let mut k = NLEN - 1;
@@ -384,5 +396,14 @@ mod test {
         let m = BigNum::new_ints(&c);
         assert_eq!(to_bitvectors(&m), vec![vec![0, 1], vec![0, 0, 1, 0, 0, 1, 1]]);
         println!("{:?}", to_bitvectors(&BigNum::new()));
+    }
+
+    #[test]
+    fn test_negating_field_elems() {
+        let a = BigNum::new_int(100);
+        let neg_a = negate_field_element(&a);
+        assert!(!are_field_elements_equal(&a, &neg_a));
+        let neg_neg_a = negate_field_element(&neg_a);
+        assert!(are_field_elements_equal(&a, &neg_neg_a));
     }
 }

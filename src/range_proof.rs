@@ -36,7 +36,7 @@ pub struct RangeProof {
 impl<'a> RangeProofProtocol<'a> {
     pub fn new(G: &'a [GroupG1], H: &'a [GroupG1], g: &'a GroupG1, h: &'a GroupG1,
                V: &'a GroupG1) -> Result<RangeProofProtocol<'a>, ValueError> {
-        check_vector_size_for_equality!(G, H);
+        check_vector_size_for_equality!(G, H)?;
         if !G.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(G.len()))
         }

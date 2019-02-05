@@ -2,6 +2,7 @@ use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use super::utils::*;
 
+#[allow(non_snake_case)]
 pub struct InnerProductArgument<'a> {
     G: &'a [GroupG1],
     H: &'a [GroupG1],
@@ -10,6 +11,8 @@ pub struct InnerProductArgument<'a> {
     size: usize
 }
 
+#[derive(Clone, Debug)]
+#[allow(non_snake_case)]
 pub struct InnerProductArgumentProof {
     pub L: Vec<GroupG1>,
     pub R: Vec<GroupG1>,
@@ -20,7 +23,7 @@ pub struct InnerProductArgumentProof {
 impl<'a> InnerProductArgument<'a> {
     pub fn new(g: &'a [GroupG1], h: &'a [GroupG1], u: &'a GroupG1,
                P: &'a GroupG1) -> Result<InnerProductArgument<'a>, ValueError> {
-        check_vector_size_for_equality!(g, h);
+        check_vector_size_for_equality!(g, h)?;
         if !g.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(g.len()))
         }
@@ -31,7 +34,7 @@ impl<'a> InnerProductArgument<'a> {
     pub fn gen_proof(&self, a: &[BigNum], b: &[BigNum]) -> Result<InnerProductArgumentProof, ValueError> {
         let L: Vec<GroupG1> = vec![];
         let R: Vec<GroupG1> = vec![];
-        check_vector_size_for_equality!(a, b);
+        check_vector_size_for_equality!(a, b)?;
         let mut state: Vec<u8> = vec![];
         self._gen_proof(self.G, self.H, a, b, L, R, &mut state)
 
@@ -42,7 +45,8 @@ impl<'a> InnerProductArgument<'a> {
     // TODO: Add verification using multi-exponentiation
 
     pub fn verify_proof_recursively(&self, proof: &InnerProductArgumentProof) -> Result<bool, ValueError> {
-        check_vector_size_for_equality!(proof.L, proof.R);
+        let (l, r) = (&proof.L, &proof.R);
+        check_vector_size_for_equality!(l, r)?;
         let mut state: Vec<u8> = vec![];
         self._verify_proof_recursively(&self.G, &self.H, &proof.L, &proof.R, &proof.a, &proof.b, &self.P, &mut state)
     }
@@ -157,7 +161,7 @@ impl<'a> InnerProductArgument<'a> {
     // H(a_1, a'_2, b_1, b'_2, c) = g[:n/2]^a_1.g[n/2:]^a'_2.h[:n/2]^b_1.h[n/2:]^b'_2.u^c
     fn hash(g: &[GroupG1], h: &[GroupG1], a1: &[BigNum], a2_prime: &[BigNum], b1: &[BigNum],
                 b2_prime: &[BigNum], u: &GroupG1, c: &BigNum) -> Result<GroupG1, ValueError> {
-        check_vector_size_for_equality!(g, h);
+        check_vector_size_for_equality!(g, h)?;
         if !g.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(g.len()))
         }
