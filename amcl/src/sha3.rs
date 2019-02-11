@@ -241,27 +241,27 @@ impl SHA3 {
 fn main() {
     let s = String::from("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu");
     let mut digest: [u8;100]=[0;100];
-    let test = s.into_bytes();
+    let tests = s.into_bytes();
 
     let mut sh=SHA3::new(HASH256);
-    for i in 0..test.len(){
-        sh.process(test[i]);
+    for i in 0..tests.len(){
+        sh.process(tests[i]);
     }
     sh.hash(&mut digest);
     for i in 0..32 {print!("{:02x}",digest[i])}
     println!("");
 
     sh=SHA3::new(HASH512);
-    for i in 0..test.len(){
-        sh.process(test[i]);
+    for i in 0..tests.len(){
+        sh.process(tests[i]);
     }
     sh.hash(&mut digest);
     for i in 0..64 {print!("{:02x}",digest[i])}
     println!("");
 
     sh=SHA3::new(SHAKE256);
-    for i in 0..test.len(){
-        sh.process(test[i]);
+    for i in 0..tests.len(){
+        sh.process(tests[i]);
     }
     sh.shake(&mut digest,72);
     for i in 0..72 {print!("{:02x}",digest[i])}

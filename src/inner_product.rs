@@ -215,6 +215,19 @@ impl<'a> InnerProductArgument<'a> {
         let _P2 = scalar_point_multiplication(x_inv_sqr, R);
         add_group_elements!(old_P, &_P1, &_P2)
     }
+
+    // Construct H' = H^(y^-n)
+    pub fn compute_h_prime(H: &[GroupG1], y: &BigNum) -> Vec<GroupG1> {
+        let y_inv = field_element_inverse(y);
+        let y_inv_pow_vec = field_elem_power_vector(&y_inv, H.len());
+
+        // Construct H' = H^(y^-n)
+        let mut H_prime = Vec::with_capacity(H.len());
+        for i in 0..H.len() {
+            H_prime.push(scalar_point_multiplication(&y_inv_pow_vec[i], &H[i]));
+        }
+        H_prime
+    }
 }
 
 #[cfg(test)]

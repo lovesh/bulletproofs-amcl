@@ -86,7 +86,7 @@ impl FP12 {
         self.c.norm();
     }
 
-    /* test self=0 ? */
+    /* tests self=0 ? */
     pub fn iszilch(&self) -> bool {
         //self.reduce();
         return self.a.iszilch() && self.b.iszilch() && self.c.iszilch();
@@ -127,13 +127,13 @@ impl FP12 {
         self.cmove(&invf, (m & 1) as isize);
     }
 
-    /* test self=1 ? */
+    /* tests self=1 ? */
     pub fn isunity(&self) -> bool {
         let one = FP4::new_int(1);
         return self.a.equals(&one) && self.b.iszilch() && self.c.iszilch();
     }
 
-    /* test self=x */
+    /* tests self=x */
     pub fn equals(&self, x: &FP12) -> bool {
         return self.a.equals(&x.a) && self.b.equals(&x.b) && self.c.equals(&x.c);
     }

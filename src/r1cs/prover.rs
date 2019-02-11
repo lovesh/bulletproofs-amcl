@@ -12,7 +12,19 @@ use crate::r1cs::linear_combination::Variable;
 use crate::r1cs::constraint_system::RandomizedConstraintSystem;
 use crate::utils::field_elements_multiplication;
 use crate::utils::commit_to_field_element;
-
+use crate::utils::negate_field_element;
+use crate::r1cs::proof::R1CSProof;
+use core::mem;
+use crate::utils::field_element_inverse;
+use crate::utils::random_field_element;
+use crate::utils::scalar_point_inner_product;
+use crate::utils::vector_poly::*;
+use crate::utils::get_bytes_for_BigNum;
+use crate::utils::field_elem_power_vector;
+use crate::utils::subtract_field_elements;
+use crate::utils::scalar_point_multiplication;
+use crate::inner_product::InnerProductArgument;
+use crate::utils::field_elements_inner_product;
 
 type Scalar = BigNum;
 
@@ -26,11 +38,11 @@ type Scalar = BigNum;
 /// which consumes the `Prover` instance, samples random challenges
 /// that instantiate the randomized constraints, and creates a complete proof.
 pub struct Prover<'a, 'b> {
-    transcript: &'a mut Transcript,
     G: &'b [GroupG1],
     H: &'b [GroupG1],
     g: &'b GroupG1,
     h: &'b GroupG1,
+    transcript: &'a mut Transcript,
     /// The constraints accumulated so far.
     constraints: Vec<LinearCombination>,
     /// Stores assignments to the "left" of multiplication gates
@@ -159,23 +171,23 @@ impl<'a, 'b> Prover<'a, 'b> {
                 match var {
                     Variable::MultiplierLeft(i) => {
                         // wL[*i] += exp_z * coeff;
-                        let m = field_elements_multiplication(&exp_z, &coeff);
-                        wL[*i] = add_field_elements!(&wL[*i], &m);
+                        let p = field_elements_multiplication(&exp_z, &coeff);
+                        wL[*i] = add_field_elements!(&wL[*i], &p);
                     }
                     Variable::MultiplierRight(i) => {
                         // wR[*i] += exp_z * coeff;
-                        let m = field_elements_multiplication(&exp_z, &coeff);
-                        wR[*i] = add_field_elements!(&wR[*i], &m);
+                        let p = field_elements_multiplication(&exp_z, &coeff);
+                        wR[*i] = add_field_elements!(&wR[*i], &p);
                     }
                     Variable::MultiplierOutput(i) => {
                         // wO[*i] += exp_z * coeff;
-                        let m = field_elements_multiplication(&exp_z, &coeff);
-                        wO[*i] = add_field_elements!(&wO[*i], &m);
+                        let p = field_elements_multiplication(&exp_z, &coeff);
+                        wO[*i] = add_field_elements!(&wO[*i], &p);
                     }
                     Variable::Committed(i) => {
                         // wV[*i] -= exp_z * coeff;
-                        let m = field_elements_multiplication(&exp_z, &coeff);
-                        wV[*i] = add_field_elements!(&wV[*i], &m);
+                        let p = field_elements_multiplication(&exp_z, &coeff);
+                        wV[*i] = subtract_field_elements(&wV[*i], &p);
                     }
                     Variable::One() => {
                         // The prover doesn't need to handle constant terms
@@ -192,17 +204,293 @@ impl<'a, 'b> Prover<'a, 'b> {
     fn eval(&self, lc: &LinearCombination) -> Scalar {
         lc.terms
             .iter()
-            .map(|(var, coeff)| {
-                coeff
-                    * match var {
+            .fold(BigNum::new(),|sum, (var, coeff)| {
+                let val = match var {
                     Variable::MultiplierLeft(i) => self.a_L[*i],
                     Variable::MultiplierRight(i) => self.a_R[*i],
                     Variable::MultiplierOutput(i) => self.a_O[*i],
                     Variable::Committed(i) => self.v[*i],
                     Variable::One() => field_element_one!(),
-                }
+                };
+                // sum + coeff * val
+                add_field_elements!(&sum, &field_elements_multiplication(coeff, &val))
             })
-            .sum()
+    }
+
+    /// Calls all remembered callbacks with an API that
+    /// allows generating challenge scalars.
+    fn create_randomized_constraints(mut self) -> Result<Self, R1CSError> {
+        // Note: the wrapper could've used &mut instead of ownership,
+        // but specifying lifetimes for boxed closures is not going to be nice,
+        // so we move the self into wrapper and then move it back out afterwards.
+        let mut callbacks = mem::replace(&mut self.deferred_constraints, Vec::new());
+        let mut wrapped_self = RandomizingProver { prover: self };
+        for callback in callbacks.drain(..) {
+            callback(&mut wrapped_self)?;
+        }
+        Ok(wrapped_self.prover)
+    }
+
+    /// Consume this `ConstraintSystem` to produce a proof.
+    pub fn prove(mut self) -> Result<R1CSProof, R1CSError> {
+        use std::iter;
+
+        // Commit a length _suffix_ for the number of high-level variables.
+        // We cannot do this in advance because user can commit variables one-by-one,
+        // but this suffix provides safe disambiguation because each variable
+        // is prefixed with a separate label.
+        self.transcript.commit_u64(b"m", self.v.len() as u64);
+
+        // Commit to the first-phase low-level witness variables.
+        let n1 = self.a_L.len();
+
+        if self.G.len() < n1 {
+            return Err(R1CSError::InvalidGeneratorsLength);
+        }
+
+        let G_n1: &[GroupG1] = &self.G[0..n1];
+        let H_n1: &[GroupG1] = &self.H[0..n1];
+
+        let i_blinding1 = random_scalar!();
+        let o_blinding1 = random_scalar!();
+        let s_blinding1 = random_scalar!();
+
+        let s_L1: Vec<Scalar> = (0..n1).map(|_| random_scalar!()).collect();
+        let s_R1: Vec<Scalar> = (0..n1).map(|_| random_scalar!()).collect();
+
+        // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
+        let A_I1 = add_group_elements!(
+            &scalar_point_inner_product(&self.a_L, G_n1).unwrap(),
+            &scalar_point_inner_product(&self.a_R, H_n1).unwrap(),
+            &scalar_point_multiplication(&i_blinding1, self.h)
+        );
+
+        // A_O = <a_O, G> + o_blinding * B_blinding
+        let A_O1 = add_group_elements!(
+            &scalar_point_inner_product(&self.a_O, &G_n1).unwrap(),
+            &scalar_point_multiplication(&o_blinding1, self.h)
+        );
+
+        // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
+        let S1 = add_group_elements!(
+            &scalar_point_inner_product(&s_L1, G_n1).unwrap(),
+            &scalar_point_inner_product(&s_R1, H_n1).unwrap(),
+            &scalar_point_multiplication(&s_blinding1, self.h)
+        );
+
+        self.transcript.commit_point(b"A_I1", &A_I1);
+        self.transcript.commit_point(b"A_O1", &A_O1);
+        self.transcript.commit_point(b"S1", &S1);
+
+        // Process the remaining constraints.
+        self = self.create_randomized_constraints()?;
+
+        // Pad zeros to the next power of two (or do that implicitly when creating vectors)
+
+        // If the number of multiplications is not 0 or a power of 2, then pad the circuit.
+        let n = self.a_L.len();
+        let n2 = n - n1;
+        let padded_n = n.next_power_of_two();
+        let pad = padded_n - n;
+
+        if self.G.len() < padded_n {
+            return Err(R1CSError::InvalidGeneratorsLength);
+        }
+
+        let G_n2: &[GroupG1] = &self.G[n1..n];
+        let H_n2: &[GroupG1] = &self.H[n1..n];
+        let a_L_n2 = &self.a_L[n1..];
+        let a_R_n2 = &self.a_R[n1..];
+        let a_O_n2 = &self.a_O[n1..];
+
+        // Commit to the second-phase low-level witness variables
+
+        let i_blinding2 = random_scalar!();
+        let o_blinding2 = random_scalar!();
+        let s_blinding2 = random_scalar!();
+
+        let s_L2: Vec<Scalar> = (0..n2).map(|_| random_scalar!()).collect();
+        let s_R2: Vec<Scalar> = (0..n2).map(|_| random_scalar!()).collect();
+
+        // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
+        let A_I2 = add_group_elements!(
+            &scalar_point_inner_product(&a_L_n2, G_n2).unwrap(),
+            &scalar_point_inner_product(&a_R_n2, H_n2).unwrap(),
+            &scalar_point_multiplication(&i_blinding2, self.h)
+        );
+
+        // A_O = <a_O, G> + o_blinding * B_blinding
+        let A_O2 = add_group_elements!(
+            &scalar_point_inner_product(&a_O_n2, &G_n2).unwrap(),
+            &scalar_point_multiplication(&o_blinding2, self.h)
+        );
+
+        // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
+        let S2 = add_group_elements!(
+            &scalar_point_inner_product(&s_L2, G_n2).unwrap(),
+            &scalar_point_inner_product(&s_R2, H_n2).unwrap(),
+            &scalar_point_multiplication(&s_blinding2, self.h)
+        );
+
+        self.transcript.commit_point(b"A_I2", &A_I2);
+        self.transcript.commit_point(b"A_O2", &A_O2);
+        self.transcript.commit_point(b"S2", &S2);
+
+        // 4. Compute blinded vector polynomials l(x) and r(x)
+
+        let y = self.transcript.challenge_scalar(b"y");
+        let z = self.transcript.challenge_scalar(b"z");
+
+        let (wL, wR, wO, wV) = self.flattened_constraints(&z);
+
+        let mut l_poly = VecPoly3::zero(n);
+        let mut r_poly = VecPoly3::zero(n);
+
+        let mut exp_y = field_element_one!(); // y^n starting at n=0
+        let y_inv = field_element_inverse(&y);
+        let exp_y_inv = field_elem_power_vector(&y_inv, padded_n);
+
+        let sLsR = s_L1
+            .iter()
+            .chain(s_L2.iter())
+            .zip(s_R1.iter().chain(s_R2.iter()));
+        for (i, (sl, sr)) in sLsR.enumerate() {
+            // l_poly.0 = 0
+            // l_poly.1 = a_L + y^-n * (z * z^Q * W_R)
+            l_poly.1[i] = add_field_elements!(&self.a_L[i], &field_elements_multiplication(&exp_y_inv[i], &wR[i]));
+            // l_poly.2 = a_O
+            l_poly.2[i] = self.a_O[i];
+            // l_poly.3 = s_L
+            l_poly.3[i] = *sl;
+            // r_poly.0 = (z * z^Q * W_O) - y^n
+            r_poly.0[i] = subtract_field_elements(&wO[i], &exp_y);
+            // r_poly.1 = y^n * a_R + (z * z^Q * W_L)
+            r_poly.1[i] = add_field_elements!(&field_elements_multiplication(&exp_y, &self.a_R[i]), &wL[i]);
+            // r_poly.2 = 0
+            // r_poly.3 = y^n * s_R
+            r_poly.3[i] = field_elements_multiplication(&exp_y, &sr);
+
+            exp_y = field_elements_multiplication(&exp_y, &y); // y^i -> y^(i+1)
+        }
+
+        let t_poly = VecPoly3::special_inner_product(&l_poly, &r_poly);
+
+        let t_1_blinding = random_scalar!();
+        let t_3_blinding = random_scalar!();
+        let t_4_blinding = random_scalar!();
+        let t_5_blinding = random_scalar!();
+        let t_6_blinding = random_scalar!();
+
+        let T_1 = commit_to_field_element(&self.g, &self.h, &t_poly.t1, &t_1_blinding);
+        let T_3 = commit_to_field_element(&self.g, &self.h, &t_poly.t3, &t_3_blinding);
+        let T_4 = commit_to_field_element(&self.g, &self.h, &t_poly.t4, &t_4_blinding);
+        let T_5 = commit_to_field_element(&self.g, &self.h, &t_poly.t5, &t_5_blinding);
+        let T_6 = commit_to_field_element(&self.g, &self.h, &t_poly.t6, &t_6_blinding);
+
+        self.transcript.commit_point(b"T_1", &T_1);
+        self.transcript.commit_point(b"T_3", &T_3);
+        self.transcript.commit_point(b"T_4", &T_4);
+        self.transcript.commit_point(b"T_5", &T_5);
+        self.transcript.commit_point(b"T_6", &T_6);
+
+        let u = self.transcript.challenge_scalar(b"u");
+        let x = self.transcript.challenge_scalar(b"x");
+
+        // t_2_blinding = <z*z^Q, W_V * v_blinding>
+        // in the t_x_blinding calculations, line 76.
+        let t_2_blinding = wV
+            .iter()
+            .zip(self.v_blinding.iter())
+            .map(|(c, v_blinding)| field_elements_multiplication(&c, &v_blinding))
+            .fold(BigNum::new(), |accum, c| {
+                add_field_elements!(&accum, &c)
+            });
+
+        let t_blinding_poly = Poly6 {
+            t1: t_1_blinding,
+            t2: t_2_blinding,
+            t3: t_3_blinding,
+            t4: t_4_blinding,
+            t5: t_5_blinding,
+            t6: t_6_blinding,
+        };
+
+        let t_x = t_poly.eval(x);
+        let t_x_blinding = t_blinding_poly.eval(x);
+        let mut l_vec = l_poly.eval(x);
+        l_vec.append(&mut vec![field_element_zero!(); pad]);
+
+        let mut r_vec = r_poly.eval(x);
+        r_vec.append(&mut vec![field_element_zero!(); pad]);
+
+        // XXX this should refer to the notes to explain why this is correct
+        for i in n..padded_n {
+            r_vec[i] = negate_field_element(&exp_y);
+            exp_y = field_elements_multiplication(&exp_y, &y); // y^i -> y^(i+1)
+        }
+
+        // i_blinding = i_blinding1 + u * i_blinding2
+        let i_blinding = add_field_elements!(&i_blinding1, &field_elements_multiplication(&u, &i_blinding2));
+        // o_blinding = o_blinding1 + u * o_blinding2;
+        let o_blinding = add_field_elements!(&o_blinding1, &field_elements_multiplication(&u, &o_blinding2));
+        // s_blinding = s_blinding1 + u * s_blinding2;
+        let s_blinding = add_field_elements!(&s_blinding1, &field_elements_multiplication(&u, &s_blinding2));
+
+        // e_blinding = x * (i_blinding + x * (o_blinding + x * s_blinding))
+        let e_blinding = field_elements_multiplication(
+            &x,
+            &add_field_elements!(
+                &i_blinding,
+                &field_elements_multiplication(
+                    &x,
+                    &add_field_elements!(
+                        &o_blinding,
+                        &field_elements_multiplication(&x, &s_blinding)
+                    )
+                )
+              )
+        );
+
+        self.transcript.commit_scalar(b"t_x", &t_x);
+        self.transcript
+            .commit_scalar(b"t_x_blinding", &t_x_blinding);
+        self.transcript.commit_scalar(b"e_blinding", &e_blinding);
+
+        // Get a challenge value to combine statements for the IPP
+        let w = self.transcript.challenge_scalar(b"w");
+        let Q = scalar_point_multiplication(&w, &self.g);
+
+        let G_l_vec = scalar_point_inner_product(&l_vec, &self.G[0..padded_n]).unwrap();
+        let H_r_vec = scalar_point_inner_product(&r_vec, &self.H[0..padded_n]).unwrap();
+        let c = field_elements_inner_product(&l_vec, &r_vec).unwrap();
+        let Q_c = scalar_point_multiplication(&c, &Q);
+        let P = add_group_elements!(&G_l_vec, &H_r_vec, &Q_c);
+
+        let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &P).unwrap();
+        let ipp_proof = ipa.gen_proof(&l_vec, &r_vec).unwrap();
+
+        Ok(R1CSProof {
+            A_I1,
+            A_O1,
+            S1,
+            A_I2,
+            A_O2,
+            S2,
+            T_1,
+            T_3,
+            T_4,
+            T_5,
+            T_6,
+            t_x,
+            t_x_blinding,
+            e_blinding,
+            ipp_proof,
+            P
+        })
+    }
+
+    pub fn num_constraints(&self) -> usize {
+        self.constraints.len()
     }
 }
 
@@ -306,3 +594,4 @@ impl<'a, 'b> RandomizedConstraintSystem for RandomizingProver<'a, 'b> {
         self.prover.transcript.challenge_scalar(label)
     }
 }
+

@@ -55,4 +55,7 @@ pub struct R1CSProof {
     pub(super) e_blinding: BigNum,
     /// Proof data for the inner-product argument.
     pub(super) ipp_proof: InnerProductArgumentProof,
+
+    // TODO: REMOVE P as the prover can cheat
+    pub(super) P: GroupG1,
 }

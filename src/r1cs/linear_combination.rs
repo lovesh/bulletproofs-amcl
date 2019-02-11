@@ -49,6 +49,28 @@ impl From<Variable> for LinearCombination {
     }
 }
 
+impl FromIterator<(Variable, Scalar)> for LinearCombination {
+    fn from_iter<T>(iter: T) -> Self
+        where
+            T: IntoIterator<Item = (Variable, Scalar)>,
+    {
+        LinearCombination {
+            terms: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<'a> FromIterator<&'a (Variable, Scalar)> for LinearCombination {
+    fn from_iter<T>(iter: T) -> Self
+        where
+            T: IntoIterator<Item = &'a (Variable, Scalar)>,
+    {
+        LinearCombination {
+            terms: iter.into_iter().cloned().collect(),
+        }
+    }
+}
+
 // Arithmetic on linear combinations
 
 impl Neg for LinearCombination {
@@ -90,6 +112,14 @@ impl Add<Variable> for Scalar {
         LinearCombination {
             terms: vec![(Variable::One(), self), (other, BigNum::new_int(1))],
         }
+    }
+}
+
+impl<L: Into<LinearCombination>> Sub<L> for Variable {
+    type Output = LinearCombination;
+
+    fn sub(self, other: L) -> Self::Output {
+        LinearCombination::from(self) - other.into()
     }
 }
 

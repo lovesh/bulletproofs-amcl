@@ -276,11 +276,11 @@ impl HASH512 {
 /*
 fn main() {
     let s = String::from("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu");
-    let test = s.into_bytes();
+    let tests = s.into_bytes();
     let mut sh=HASH512::new();
 
-    for i in 0..test.len(){
-        sh.process(test[i]);
+    for i in 0..tests.len(){
+        sh.process(tests[i]);
     }
 
     let digest=sh.hash();

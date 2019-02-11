@@ -116,7 +116,7 @@ impl BIG {
         self.w[NLEN - 1] |= x;
     }
 
-    /* test for zero */
+    /* tests for zero */
     pub fn iszilch(&self) -> bool {
         for i in 0..NLEN {
             if self.w[i] != 0 {

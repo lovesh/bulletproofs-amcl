@@ -80,18 +80,18 @@ impl FP4 {
         self.b.cmove(&g.b, d);
     }
 
-    /* test self=0 ? */
+    /* tests self=0 ? */
     pub fn iszilch(&self) -> bool {
         return self.a.iszilch() && self.b.iszilch();
     }
 
-    /* test self=1 ? */
+    /* tests self=1 ? */
     pub fn isunity(&self) -> bool {
         let one = FP2::new_int(1);
         return self.a.equals(&one) && self.b.iszilch();
     }
 
-    /* test is w real? That is in a+ib test b is zero */
+    /* tests is w real? That is in a+ib tests b is zero */
     pub fn isreal(&mut self) -> bool {
         return self.b.iszilch();
     }
@@ -111,7 +111,7 @@ impl FP4 {
         return f;
     }
 
-    /* test self=x */
+    /* tests self=x */
     pub fn equals(&self, x: &FP4) -> bool {
         return self.a.equals(&x.a) && self.b.equals(&x.b);
     }

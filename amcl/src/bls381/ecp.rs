@@ -202,7 +202,7 @@ impl ECP {
         return r;
     }
 
-    /* test for O point-at-infinity */
+    /* tests for O point-at-infinity */
     pub fn is_infinity(&self) -> bool {
         let xx = FP::new_copy(&self.x);
         let zz = FP::new_copy(&self.z);

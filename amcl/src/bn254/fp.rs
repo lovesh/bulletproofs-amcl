@@ -201,7 +201,7 @@ impl FP {
         self.xes = 1;
     }
 
-    /* test this=0? */
+    /* tests this=0? */
     pub fn iszilch(&self) -> bool {
         let mut a = FP::new_copy(self);
         a.reduce();

@@ -64,7 +64,7 @@ impl<'a> RangeProofProtocol<'a> {
         if _a_L.len() > self.size {
             return Err(ValueError::OutOfRange(_a_L.len()))
         } else if _a_L.len() < self.size {
-            _a_L.extend(vec![0; (self.size-_a_L.len())])
+            _a_L.extend(vec![0; self.size - _a_L.len()])
         }
 
         let mut state: Vec<u8> = vec![];
@@ -196,7 +196,7 @@ impl<'a> RangeProofProtocol<'a> {
         let u = Self::compute_gen_for_inner_product_arg(&t_hat, &tau_x, &mu, &mut state);
         //println!("During proving, u is {}", &u);
 
-        let H_prime = self.compute_h_prime(&y);
+        let H_prime = InnerProductArgument::compute_h_prime(&self.H, &y);
 
         let g_l = scalar_point_inner_product(&l, &self.G).unwrap();
         let h_r = scalar_point_inner_product(&r, &H_prime).unwrap();
@@ -263,7 +263,7 @@ impl<'a> RangeProofProtocol<'a> {
         let _G_neg_z = scale_group_element_vector(&neg_z, &self.G);
         let G_neg_z = sum_group_elem_vector(&_G_neg_z);
 
-        let H_prime = self.compute_h_prime(&y);
+        let H_prime = InnerProductArgument::compute_h_prime(&self.H, &y);
 
         // H'^(z.y^n+z^2.2^n)
 
@@ -303,7 +303,7 @@ impl<'a> RangeProofProtocol<'a> {
         ipa.verify_proof_recursively(&proof.IPA_proof)
     }
 
-    // Construct H' = H^(y^-n)
+    /*// Construct H' = H^(y^-n)
     fn compute_h_prime(&self, y: &BigNum) -> Vec<GroupG1> {
         let y_inv = field_element_inverse(y);
         let y_inv_pow_vec = field_elem_power_vector(&y_inv, self.size);
@@ -314,7 +314,7 @@ impl<'a> RangeProofProtocol<'a> {
             H_prime.push(scalar_point_multiplication(&y_inv_pow_vec[i], &self.H[i]));
         }
         H_prime
-    }
+    }*/
 
     fn compute_gen_for_inner_product_arg(t_hat: &BigNum, tau_x: &BigNum, mu: &BigNum, state: &mut Vec<u8>) -> GroupG1 {
         let _u = gen_challenges(&[
@@ -376,7 +376,7 @@ mod test {
         }
     }
 
-    // TODO: Refactor test, remove code duplication
+    // TODO: Refactor tests, remove code duplication
     #[test]
     fn test_range_proof_8() {
         let n = 8;

@@ -4,11 +4,13 @@ extern crate amcl;
 #[macro_use]
 pub mod macros;
 
+pub mod vector_poly;
+
 use rand::RngCore;
 use rand::rngs::EntropyRng;
 
 use self::amcl::rand::RAND;
-use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, BASEBITS, NLEN, FieldElementZero};
+use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, FieldElementZero};
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
@@ -134,6 +136,7 @@ pub fn field_elements_inner_product(a: &[BigNum], b: &[BigNum]) -> Result<BigNum
 // Computes inner product of 2 vectors, one of field elements and other of group elements.
 // [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
 pub fn scalar_point_inner_product(a: &[BigNum], b: &[GroupG1]) -> Result<GroupG1, ValueError> {
+    // TODO: Use a faster multi-scalar multiplication algorithm
     check_vector_size_for_equality!(a, b)?;
     let mut accum = GroupG1::new();
     for i in 0..a.len() {
@@ -224,6 +227,16 @@ pub fn field_elements_hadamard_product(a: &[BigNum], b: &[BigNum]) -> Result<Vec
         hadamard_product.push(field_elements_multiplication(&a[i], &b[i]));
     }
     Ok(hadamard_product)
+}
+
+pub fn multi_scalar_multiplication(field_elems: &[BigNum], group_elems: &[GroupG1]) -> Result<GroupG1, ValueError> {
+    // TODO Add optimized implementation
+    check_vector_size_for_equality!(field_elems, group_elems)?;
+    let mut accum = GroupG1::new();
+    for (f, g) in field_elems.iter().zip(group_elems.iter()) {
+        accum.add(&scalar_point_multiplication(f, g))
+    }
+    Ok(accum)
 }
 
 // Generate a vector of field elements as:
@@ -405,5 +418,24 @@ mod test {
         assert!(!are_field_elements_equal(&a, &neg_a));
         let neg_neg_a = negate_field_element(&neg_a);
         assert!(are_field_elements_equal(&a, &neg_neg_a));
+    }
+
+    #[test]
+    fn test_multi_scalar_multiplication() {
+        let mut fs = vec![];
+        let mut gs = vec![];
+
+        for i in 0..5 {
+            fs.push(random_field_element(None));
+            gs.push(scalar_point_multiplication(&fs[i], &GeneratorG1))
+        }
+        let mut res = multi_scalar_multiplication(&fs, &gs).unwrap();
+
+        let mut expected = GroupG1::new();
+        for (f, g) in fs.iter().zip(gs.iter()) {
+            expected.add(&scalar_point_multiplication(f, g))
+        }
+
+        assert!(expected.equals(&mut res))
     }
 }

@@ -162,7 +162,7 @@ impl RAND {
     }
 }
 
-/* test main program */
+/* tests main program */
 /*
 fn main() {
     let mut raw : [u8;100]=[0;100];

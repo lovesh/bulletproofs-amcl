@@ -91,7 +91,7 @@ impl FP2 {
         self.b.norm();
     }
 
-    /* test self=0 ? */
+    /* tests self=0 ? */
     pub fn iszilch(&self) -> bool {
         return self.a.iszilch() && self.b.iszilch();
     }
@@ -101,13 +101,13 @@ impl FP2 {
         self.b.cmove(&g.b, d);
     }
 
-    /* test self=1 ? */
+    /* tests self=1 ? */
     pub fn isunity(&self) -> bool {
         let one = FP::new_int(1);
         return self.a.equals(&one) && self.b.iszilch();
     }
 
-    /* test self=x */
+    /* tests self=x */
     pub fn equals(&self, x: &FP2) -> bool {
         return self.a.equals(&x.a) && self.b.equals(&x.b);
     }
