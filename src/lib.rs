@@ -20,3 +20,4 @@ pub mod range_proof;
 extern crate lazy_static;
 
 pub mod r1cs;
+mod new_ipp;

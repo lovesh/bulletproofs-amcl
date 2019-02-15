@@ -56,6 +56,6 @@ pub struct R1CSProof {
     /// Proof data for the inner-product argument.
     pub(super) ipp_proof: InnerProductArgumentProof,
 
-    // TODO: REMOVE P as the prover can cheat
-    pub(super) P: GroupG1,
+    // Only for debugging; Don't inlcude P in proof as the prover can cheat
+    //pub(super) P: GroupG1,
 }

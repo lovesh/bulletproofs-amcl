@@ -190,7 +190,9 @@ impl<'a> InnerProductArgument<'a> {
         let b1_h1 = scalar_point_inner_product(b1, h1)?;
         let b2_prime_h2 = scalar_point_inner_product(b2_prime, h2)?;
 
-        Ok(add_group_elements!(&a1_g1, &a2_prime_g2, &b1_h1, &b2_prime_h2))
+        let u_c = scalar_point_multiplication(&c, &u);
+
+        Ok(add_group_elements!(&a1_g1, &a2_prime_g2, &b1_h1, &b2_prime_h2, &u_c))
     }
 
     // g' = (x^-1.g1 o x.g2)

@@ -18,10 +18,11 @@ use crate::utils::field_element_inverse;
 use crate::utils::field_elem_power_vector;
 use crate::utils::field_element_square;
 use crate::utils::field_elements_inner_product;
-use crate::inner_product::InnerProductArgument;
 use crate::utils::scalar_point_multiplication;
 use crate::constants::CurveOrder;
 use crate::utils::multi_scalar_multiplication;
+use crate::inner_product::InnerProductArgument;
+use crate::new_ipp::NewIPP;
 
 type Scalar = BigNum;
 
@@ -68,98 +69,6 @@ pub struct Verifier<'a, 'b> {
 /// the callback provided to `specify_randomized_constraints`.
 pub struct RandomizingVerifier<'a, 'b> {
     verifier: Verifier<'a, 'b>,
-}
-
-impl<'a, 'b> ConstraintSystem for Verifier<'a, 'b> {
-    type RandomizedCS = RandomizingVerifier<'a, 'b>;
-
-    fn multiply(
-        &mut self,
-        mut left: LinearCombination,
-        mut right: LinearCombination,
-    ) -> (Variable, Variable, Variable) {
-        let var = self.num_vars;
-        self.num_vars += 1;
-
-        // Create variables for l,r,o
-        let l_var = Variable::MultiplierLeft(var);
-        let r_var = Variable::MultiplierRight(var);
-        let o_var = Variable::MultiplierOutput(var);
-
-        // Constrain l,r,o:
-        left.terms.push((l_var, field_element_neg_one!()));
-        right.terms.push((r_var, field_element_neg_one!()));
-        self.constrain(left);
-        self.constrain(right);
-
-        (l_var, r_var, o_var)
-    }
-
-    fn allocate<F>(&mut self, _: F) -> Result<(Variable, Variable, Variable), R1CSError>
-        where
-            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        let var = self.num_vars;
-        self.num_vars += 1;
-
-        // Create variables for l,r,o
-        let l_var = Variable::MultiplierLeft(var);
-        let r_var = Variable::MultiplierRight(var);
-        let o_var = Variable::MultiplierOutput(var);
-
-        Ok((l_var, r_var, o_var))
-    }
-
-    fn constrain(&mut self, lc: LinearCombination) {
-        // TODO: check that the linear combinations are valid
-        // (e.g. that variables are valid, that the linear combination
-        // evals to 0 for prover, etc).
-        self.constraints.push(lc);
-    }
-
-    fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
-    {
-        self.deferred_constraints.push(Box::new(callback));
-        Ok(())
-    }
-}
-
-impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a, 'b> {
-    type RandomizedCS = Self;
-
-    fn multiply(
-        &mut self,
-        left: LinearCombination,
-        right: LinearCombination,
-    ) -> (Variable, Variable, Variable) {
-        self.verifier.multiply(left, right)
-    }
-
-    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
-        where
-            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        self.verifier.allocate(assign_fn)
-    }
-
-    fn constrain(&mut self, lc: LinearCombination) {
-        self.verifier.constrain(lc)
-    }
-
-    fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
-    {
-        callback(self)
-    }
-}
-
-impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a, 'b> {
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
-        self.verifier.transcript.challenge_scalar(label)
-    }
 }
 
 impl<'a, 'b> Verifier<'a, 'b> {
@@ -371,7 +280,6 @@ impl<'a, 'b> Verifier<'a, 'b> {
             .commit_scalar(b"e_blinding", &proof.e_blinding);
 
         let w = self.transcript.challenge_scalar(b"w");
-        let Q = scalar_point_multiplication(&w, &self.g);
 
         let (wL, wR, wO, wV, wc) = self.flattened_constraints(&z);
 
@@ -389,17 +297,56 @@ impl<'a, 'b> Verifier<'a, 'b> {
 
         let delta = field_elements_inner_product(&yneg_wR[0..n], &wL).unwrap();
 
-        // define parameters for P check
         // Get IPP variables
+        let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(&proof.ipp_proof.L, &proof.ipp_proof.R, padded_n, self.transcript)
+            .map_err(|_| R1CSError::VerificationError)?;
 
+        let u_for_g = iter::repeat(field_element_one!())
+            .take(n1)
+            .chain(iter::repeat(u).take(n2 + pad));
+        let u_for_h = u_for_g.clone();
+
+        // define parameters for P check
+        let g_scalars: Vec<Scalar> = yneg_wR
+            .iter()
+            .zip(u_for_g)
+            .zip(s.iter().take(padded_n))
+            .map(|((yneg_wRi, u_or_1), s_i)| {
+                // u_or_1 * (x * yneg_wRi - a * s_i)
+                field_elements_multiplication(&u_or_1,
+                                              &subtract_field_elements(
+                                                  &field_elements_multiplication(&x, &yneg_wRi),
+                                                  &field_elements_multiplication(&a, &s_i)
+                                              ))
+            }).collect();
+
+        let h_scalars: Vec<Scalar> = y_inv_vec
+            .iter()
+            .zip(u_for_h)
+            .zip(s.iter().rev().take(padded_n))
+            .zip(wL.into_iter().chain(iter::repeat(field_element_zero!()).take(pad)))
+            .zip(wO.into_iter().chain(iter::repeat(field_element_zero!()).take(pad)))
+            .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)| {
+                // u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - 1)
+                field_elements_multiplication(&u_or_1,
+                                              &subtract_field_elements(
+                                                  &field_elements_multiplication(
+                                                        &y_inv_i,
+                                                        &subtract_field_elements(
+                                                            &add_field_elements!(&field_elements_multiplication(&x, &wLi), &wOi),
+                                                            &field_elements_multiplication(&b, &s_i_inv))
+                                                        ),
+                                                  &field_element_one!()
+                                              )
+                )
+            }).collect();
+
+        /*let Q = scalar_point_multiplication(&w, &self.g);
         let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &proof.P).unwrap();
         let res = ipa.verify_proof_recursively(&proof.ipp_proof).unwrap();
         if !res {
             return Err(R1CSError::VerificationError);
-        }
-        // Create a `TranscriptRng` from the transcript. The verifier
-        // has no witness data to commit, so this just mixes external
-        // randomness into the existing transcript.
+        }*/
         let r = random_scalar!();
 
         let x_sqr = field_element_square(&x);
@@ -408,11 +355,11 @@ impl<'a, 'b> Verifier<'a, 'b> {
 
         // group the T_scalars and T_points together
         let T_scalars = [
-            field_elements_multiplication(&r, &x),
-            field_elements_multiplication(&x, &r_x_sqr),
-            field_elements_multiplication(&r_x_sqr, &x_sqr),
-            field_elements_multiplication(&r_x_sqr, &x_cube),
-            field_elements_multiplication(&r_x_sqr, &field_elements_multiplication(&x_sqr, &x_sqr))
+            field_elements_multiplication(&r, &x),  // rx
+            field_elements_multiplication(&r, &x_cube), // rx^3
+            field_elements_multiplication(&r_x_sqr, &x_sqr), // rx^4
+            field_elements_multiplication(&r_x_sqr, &x_cube), // rx^5
+            field_elements_multiplication(&r_x_sqr, &field_elements_multiplication(&x_sqr, &x_sqr))  // rx^6
         ];
         let T_points = [proof.T_1, proof.T_3, proof.T_4, proof.T_5, proof.T_6];
 
@@ -443,6 +390,10 @@ impl<'a, 'b> Verifier<'a, 'b> {
         // -proof.e_blinding - r * proof.t_x_blinding
         arg1.push(negate_field_element(&add_field_elements!(&proof.e_blinding,
                                                                     &field_elements_multiplication(&r, &proof.t_x_blinding))));
+        arg1.extend(&g_scalars);
+        arg1.extend(&h_scalars);
+        arg1.extend(&u_sq);
+        arg1.extend(&u_inv_sq);
 
         let mut arg2 = vec![
             proof.A_I1,
@@ -455,8 +406,12 @@ impl<'a, 'b> Verifier<'a, 'b> {
         arg2.extend(&self.V);
         arg2.extend(&T_points);
         arg2.extend(&[*self.g, *self.h]);
+        arg2.extend(&self.G[0..padded_n]);
+        arg2.extend(&self.H[0..padded_n]);
+        arg2.extend(&proof.ipp_proof.L);
+        arg2.extend(&proof.ipp_proof.R);
 
-        let mut res = multi_scalar_multiplication(&arg1,&arg2).unwrap();
+        let res = multi_scalar_multiplication(&arg1,&arg2).unwrap();
         if !res.is_infinity() {
             return Err(R1CSError::VerificationError);
         }
@@ -490,11 +445,103 @@ impl<'a, 'b> Verifier<'a, 'b> {
                 .chain(gens.G(padded_n).map(|&G_i| Some(G_i)))
                 .chain(gens.H(padded_n).map(|&H_i| Some(H_i)))
                 .chain(proof.ipp_proof.L_vec.iter().map(|L_i| L_i.decompress()))
-                .chain(proof.ipp_proof.R_vec.iter().map(|R_i| R_i.decompress())),
+                .chain(proof.ipp_proof.R_vec.iter().map(|R_i| R_i.decompress()))
         )
             .ok_or_else(|| R1CSError::VerificationError)?;*/
 
 
         Ok(())
     }
+}
+
+impl<'a, 'b> ConstraintSystem for Verifier<'a, 'b> {
+    type RandomizedCS = RandomizingVerifier<'a, 'b>;
+
+    fn multiply(
+        &mut self,
+        mut left: LinearCombination,
+        mut right: LinearCombination,
+    ) -> (Variable, Variable, Variable) {
+
+        let (l_var, r_var, o_var) = _allocate_vars(self);
+
+        // Constrain l,r,o:
+        left.terms.push((l_var, field_element_neg_one!()));
+        right.terms.push((r_var, field_element_neg_one!()));
+        self.constrain(left);
+        self.constrain(right);
+
+        (l_var, r_var, o_var)
+    }
+
+    fn allocate<F>(&mut self, _: F) -> Result<(Variable, Variable, Variable), R1CSError>
+        where
+            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
+    {
+        Ok(_allocate_vars(self))
+    }
+
+    fn constrain(&mut self, lc: LinearCombination) {
+        // TODO: check that the linear combinations are valid
+        // (e.g. that variables are valid, that the linear combination
+        // evals to 0 for prover, etc).
+        self.constraints.push(lc);
+    }
+
+    fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
+        where
+            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    {
+        self.deferred_constraints.push(Box::new(callback));
+        Ok(())
+    }
+}
+
+impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a, 'b> {
+    type RandomizedCS = Self;
+
+    fn multiply(
+        &mut self,
+        left: LinearCombination,
+        right: LinearCombination,
+    ) -> (Variable, Variable, Variable) {
+        self.verifier.multiply(left, right)
+    }
+
+    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
+        where
+            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
+    {
+        self.verifier.allocate(assign_fn)
+    }
+
+    fn constrain(&mut self, lc: LinearCombination) {
+        self.verifier.constrain(lc)
+    }
+
+    fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
+        where
+            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    {
+        callback(self)
+    }
+}
+
+impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a, 'b> {
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
+        self.verifier.transcript.challenge_scalar(label)
+    }
+}
+
+// Allocate variables
+fn _allocate_vars(verifier: &mut Verifier,) -> (Variable, Variable, Variable) {
+    let next_var_idx = verifier.num_vars;
+    verifier.num_vars += 1;
+
+    // Create variables for l,r,o
+    let l_var = Variable::MultiplierLeft(next_var_idx);
+    let r_var = Variable::MultiplierRight(next_var_idx);
+    let o_var = Variable::MultiplierOutput(next_var_idx);
+
+    (l_var, r_var, o_var)
 }

@@ -49,6 +49,14 @@ impl From<Variable> for LinearCombination {
     }
 }
 
+impl From<Scalar> for LinearCombination {
+    fn from(s: Scalar) -> LinearCombination {
+        LinearCombination {
+            terms: vec![(Variable::One(), s)],
+        }
+    }
+}
+
 impl FromIterator<(Variable, Scalar)> for LinearCombination {
     fn from_iter<T>(iter: T) -> Self
         where
@@ -110,7 +118,7 @@ impl Add<Variable> for Scalar {
 
     fn add(self, other: Variable) -> Self::Output {
         LinearCombination {
-            terms: vec![(Variable::One(), self), (other, BigNum::new_int(1))],
+            terms: vec![(Variable::One(), self), (other, field_element_one!())],
         }
     }
 }
@@ -130,3 +138,34 @@ impl Neg for Variable {
         -LinearCombination::from(self)
     }
 }
+
+impl<L: Into<LinearCombination>> Add<L> for Variable {
+    type Output = LinearCombination;
+
+    fn add(self, other: L) -> Self::Output {
+        LinearCombination::from(self) + other.into()
+    }
+}
+
+// Arithmetic on scalars with variables produces linear combinations
+
+impl Sub<Variable> for Scalar {
+    type Output = LinearCombination;
+
+    fn sub(self, other: Variable) -> Self::Output {
+        LinearCombination {
+            terms: vec![(Variable::One(), self), (other, field_element_neg_one!())],
+        }
+    }
+}
+
+impl Mul<Variable> for Scalar {
+    type Output = LinearCombination;
+
+    fn mul(self, other: Variable) -> Self::Output {
+        LinearCombination {
+            terms: vec![(other, self)],
+        }
+    }
+}
+

@@ -2,7 +2,6 @@ use merlin::Transcript;
 use crate::r1cs::transcript::TranscriptProtocol;
 
 use crate::errors::R1CSError;
-use crate::inner_product::InnerProductArgumentProof;
 use crate::r1cs::linear_combination::LinearCombination;
 use crate::types::BigNum;
 use crate::types::GroupG1;
@@ -25,6 +24,12 @@ use crate::utils::subtract_field_elements;
 use crate::utils::scalar_point_multiplication;
 use crate::inner_product::InnerProductArgument;
 use crate::utils::field_elements_inner_product;
+use crate::inner_product::InnerProductArgumentProof;
+use crate::utils::multi_scalar_multiplication;
+use core::iter;
+use crate::utils::field_element_square;
+use crate::new_ipp::NewIPP;
+use crate::utils::commit_to_field_element_vectors;
 
 type Scalar = BigNum;
 
@@ -233,7 +238,6 @@ impl<'a, 'b> Prover<'a, 'b> {
 
     /// Consume this `ConstraintSystem` to produce a proof.
     pub fn prove(mut self) -> Result<R1CSProof, R1CSError> {
-        use std::iter;
 
         // Commit a length _suffix_ for the number of high-level variables.
         // We cannot do this in advance because user can commit variables one-by-one,
@@ -259,11 +263,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         let s_R1: Vec<Scalar> = (0..n1).map(|_| random_scalar!()).collect();
 
         // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
-        let A_I1 = add_group_elements!(
-            &scalar_point_inner_product(&self.a_L, G_n1).unwrap(),
-            &scalar_point_inner_product(&self.a_R, H_n1).unwrap(),
-            &scalar_point_multiplication(&i_blinding1, self.h)
-        );
+        let A_I1 = commit_to_field_element_vectors(G_n1, H_n1, self.h, &self.a_L, &self.a_R, &i_blinding1).unwrap();
 
         // A_O = <a_O, G> + o_blinding * B_blinding
         let A_O1 = add_group_elements!(
@@ -272,11 +272,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         );
 
         // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-        let S1 = add_group_elements!(
-            &scalar_point_inner_product(&s_L1, G_n1).unwrap(),
-            &scalar_point_inner_product(&s_R1, H_n1).unwrap(),
-            &scalar_point_multiplication(&s_blinding1, self.h)
-        );
+        let S1 = commit_to_field_element_vectors(G_n1, H_n1, self.h, &s_L1, &s_R1, &s_blinding1).unwrap();
 
         self.transcript.commit_point(b"A_I1", &A_I1);
         self.transcript.commit_point(b"A_O1", &A_O1);
@@ -313,11 +309,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         let s_R2: Vec<Scalar> = (0..n2).map(|_| random_scalar!()).collect();
 
         // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
-        let A_I2 = add_group_elements!(
-            &scalar_point_inner_product(&a_L_n2, G_n2).unwrap(),
-            &scalar_point_inner_product(&a_R_n2, H_n2).unwrap(),
-            &scalar_point_multiplication(&i_blinding2, self.h)
-        );
+        let A_I2 = commit_to_field_element_vectors(G_n2, H_n2, self.h, &a_L_n2, &a_R_n2, &i_blinding2).unwrap();
 
         // A_O = <a_O, G> + o_blinding * B_blinding
         let A_O2 = add_group_elements!(
@@ -326,11 +318,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         );
 
         // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-        let S2 = add_group_elements!(
-            &scalar_point_inner_product(&s_L2, G_n2).unwrap(),
-            &scalar_point_inner_product(&s_R2, H_n2).unwrap(),
-            &scalar_point_multiplication(&s_blinding2, self.h)
-        );
+        let S2 = commit_to_field_element_vectors(G_n2, H_n2, self.h, &s_L2, &s_R2, &s_blinding2).unwrap();
 
         self.transcript.commit_point(b"A_I2", &A_I2);
         self.transcript.commit_point(b"A_O2", &A_O2);
@@ -398,13 +386,7 @@ impl<'a, 'b> Prover<'a, 'b> {
 
         // t_2_blinding = <z*z^Q, W_V * v_blinding>
         // in the t_x_blinding calculations, line 76.
-        let t_2_blinding = wV
-            .iter()
-            .zip(self.v_blinding.iter())
-            .map(|(c, v_blinding)| field_elements_multiplication(&c, &v_blinding))
-            .fold(BigNum::new(), |accum, c| {
-                add_field_elements!(&accum, &c)
-            });
+        let t_2_blinding = field_elements_inner_product(&wV, &self.v_blinding).unwrap();
 
         let t_blinding_poly = Poly6 {
             t1: t_1_blinding,
@@ -460,14 +442,56 @@ impl<'a, 'b> Prover<'a, 'b> {
         let w = self.transcript.challenge_scalar(b"w");
         let Q = scalar_point_multiplication(&w, &self.g);
 
-        let G_l_vec = scalar_point_inner_product(&l_vec, &self.G[0..padded_n]).unwrap();
+        /*let G_l_vec = scalar_point_inner_product(&l_vec, &self.G[0..padded_n]).unwrap();
         let H_r_vec = scalar_point_inner_product(&r_vec, &self.H[0..padded_n]).unwrap();
         let c = field_elements_inner_product(&l_vec, &r_vec).unwrap();
         let Q_c = scalar_point_multiplication(&c, &Q);
         let P = add_group_elements!(&G_l_vec, &H_r_vec, &Q_c);
 
         let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &P).unwrap();
-        let ipp_proof = ipa.gen_proof(&l_vec, &r_vec).unwrap();
+        let ipp_proof = ipa.gen_proof(&l_vec, &r_vec).unwrap();*/
+
+        let G_factors = iter::repeat(field_element_one!())
+            .take(n1)
+            .chain(iter::repeat(u).take(n2 + pad))
+            .collect::<Vec<_>>();
+        let H_factors = exp_y_inv.clone()
+            .into_iter()
+            .zip(G_factors.iter())
+            .map(|(y, u_or_1)| field_elements_multiplication(&y, &u_or_1))
+            .collect::<Vec<_>>();
+
+        //let mut new_trans = Transcript::new(b"innerproduct");
+        let ipp_proof = NewIPP::create_ipp(
+            self.transcript,
+            &Q,
+            &G_factors,
+            &H_factors,
+            &self.G[0..padded_n],
+            &self.H[0..padded_n],
+            &l_vec,
+            &r_vec,
+        );
+
+        /*let r_prime: Vec<Scalar> = r_vec.iter().zip(exp_y_inv.iter()).map(|(bi, yi)| field_elements_multiplication(&bi, &yi)).collect();
+        let c = field_elements_inner_product(&l_vec, &r_vec).unwrap();
+        let mut _1 = vec![];
+        _1.extend(&l_vec);
+        _1.extend(&r_prime);
+        _1.push(c);
+        let mut _2 = vec![];
+        _2.extend(&self.G[..padded_n]);
+        _2.extend(&self.H[..padded_n]);
+        _2.push(Q);
+        let P = multi_scalar_multiplication(
+            &_1,
+            &_2,
+        ).unwrap();
+
+        let mut new_trans1 = Transcript::new(b"innerproduct");
+        Self::verify_ipp(padded_n, &mut new_trans1, &G_factors, &H_factors,
+                         &P, &Q, &self.G[..padded_n], &self.H[..padded_n],
+                         &ipp_proof.a, &ipp_proof.b, &ipp_proof.L, &ipp_proof.R)?;*/
 
         Ok(R1CSProof {
             A_I1,
@@ -485,7 +509,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             t_x_blinding,
             e_blinding,
             ipp_proof,
-            P
+            //P
         })
     }
 
@@ -508,14 +532,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
         // o = l * r;
         let o = field_elements_multiplication(&l, &r);
 
-        // Create variables for l,r,o ...
-        let l_var = Variable::MultiplierLeft(self.a_L.len());
-        let r_var = Variable::MultiplierRight(self.a_R.len());
-        let o_var = Variable::MultiplierOutput(self.a_O.len());
-        // ... and assign them
-        self.a_L.push(l);
-        self.a_R.push(r);
-        self.a_O.push(o);
+        let (l_var, r_var, o_var) = _allocate_vars(self, l, r, o);
 
         // Constrain l,r,o:
         left.terms.push((l_var, field_element_neg_one!()));
@@ -532,16 +549,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
     {
         let (l, r, o) = assign_fn()?;
 
-        // Create variables for l,r,o ...
-        let l_var = Variable::MultiplierLeft(self.a_L.len());
-        let r_var = Variable::MultiplierRight(self.a_R.len());
-        let o_var = Variable::MultiplierOutput(self.a_O.len());
-        // ... and assign them
-        self.a_L.push(l);
-        self.a_R.push(r);
-        self.a_O.push(o);
-
-        Ok((l_var, r_var, o_var))
+        Ok(_allocate_vars(self, l, r, o))
     }
 
     fn constrain(&mut self, lc: LinearCombination) {
@@ -593,5 +601,19 @@ impl<'a, 'b> RandomizedConstraintSystem for RandomizingProver<'a, 'b> {
     fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
         self.prover.transcript.challenge_scalar(label)
     }
+}
+
+// Allocate variables for l, r and o and assign values
+fn _allocate_vars(prover: &mut Prover, l: Scalar, r: Scalar, o: Scalar) -> (Variable, Variable, Variable) {
+    // Create variables for l,r,o ...
+    let l_var = Variable::MultiplierLeft(prover.a_L.len());
+    let r_var = Variable::MultiplierRight(prover.a_R.len());
+    let o_var = Variable::MultiplierOutput(prover.a_O.len());
+    // ... and assign them
+    prover.a_L.push(l);
+    prover.a_R.push(r);
+    prover.a_O.push(o);
+
+    (l_var, r_var, o_var)
 }
 

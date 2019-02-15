@@ -264,11 +264,11 @@ pub fn are_field_elements_equal(a: &BigNum, b: &BigNum) -> bool {
     BigNum::comp(a, b) == 0
 }
 
-pub fn get_generators(n: usize) -> Vec<GroupG1> {
-    let suffix = String::from("bullet");
+pub fn get_generators(prefix: &str, n: usize) -> Vec<GroupG1> {
+    //let prefix = String::from(s);
     let mut gens: Vec<GroupG1> = Vec::with_capacity(n);
-    for i in 0..n {
-        let s: String = i.to_string() + &suffix;
+    for i in 1..n+1 {
+        let s: String = prefix.to_string() + &i.to_string();
         gens.push(hash_on_GroupG1(s.as_bytes()));
     }
     gens
@@ -408,7 +408,6 @@ mod test {
         c[1] = 100;
         let m = BigNum::new_ints(&c);
         assert_eq!(to_bitvectors(&m), vec![vec![0, 1], vec![0, 0, 1, 0, 0, 1, 1]]);
-        println!("{:?}", to_bitvectors(&BigNum::new()));
     }
 
     #[test]

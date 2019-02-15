@@ -6,6 +6,8 @@ use crate::utils::get_bytes_for_BigNum;
 use crate::utils::get_bytes_for_G1_point;
 
 pub trait TranscriptProtocol {
+    /// Commit a domain separator for a length-`n` inner product proof.
+    fn innerproduct_domain_sep(&mut self, n: u64);
     /// Commit a domain separator for a constraint system.
     fn r1cs_domain_sep(&mut self);
     /// Commit a `scalar` with the given `label`.
@@ -17,6 +19,11 @@ pub trait TranscriptProtocol {
 }
 
 impl TranscriptProtocol for Transcript {
+    fn innerproduct_domain_sep(&mut self, n: u64) {
+        self.commit_bytes(b"dom-sep", b"ipp v1");
+        self.commit_bytes(b"n", &n.to_le_bytes());
+    }
+
     fn r1cs_domain_sep(&mut self) {
         self.commit_bytes(b"dom-sep", b"r1cs v1");
     }
