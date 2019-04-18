@@ -1,3 +1,4 @@
+/*
 extern crate bulletproofs_amcl as bulletproofs;
 extern crate merlin;
 
@@ -122,4 +123,4 @@ mod tests {
 
         assert!(verifier.verify(&proof).is_ok());
     }
-}
+}*/

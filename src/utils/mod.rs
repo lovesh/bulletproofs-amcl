@@ -4,6 +4,11 @@ extern crate amcl;
 #[macro_use]
 pub mod macros;
 
+#[macro_use]
+pub mod field_elem;
+#[macro_use]
+pub mod group_elem;
+pub mod commitment;
 pub mod vector_poly;
 
 use rand::RngCore;
@@ -14,6 +19,8 @@ use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, Fi
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
+use crate::utils::group_elem::GroupElement;
+use crate::utils::field_elem::FieldElement;
 
 
 pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
@@ -304,7 +311,7 @@ pub fn to_bitvectors(n: &BigNum) -> Vec<Vec<u8>> {
 // Commit to field element vectors `a` and `b` with random field element `c`
 // Given group element vectors `g` and `h` and group element `u`, compute
 // (a1*g1 + a2*g2 + a3*g3) + (b1*h1 + b2*h2 + b3*h3) + c*u
-pub fn commit_to_field_element_vectors(g: &[GroupG1], h: &[GroupG1], u: &GroupG1,
+/*pub fn commit_to_field_element_vectors(g: &[GroupG1], h: &[GroupG1], u: &GroupG1,
                          a: &[BigNum], b: &[BigNum], c: &BigNum) -> Result<GroupG1, ValueError> {
     let a_g = scalar_point_inner_product(a, g)?;
     let b_h = scalar_point_inner_product(b, h)?;
@@ -318,12 +325,13 @@ pub fn commit_to_field_element(g: &GroupG1, h: &GroupG1, elem: &BigNum,
     let elem_g = scalar_point_multiplication(elem, g);
     let r_h = scalar_point_multiplication(r, h);
     add_group_elements!(&elem_g, &r_h)
-}
+}*/
+
 
 // Generate `n` challenge values. Takes input group elements and a mutable reference to current state.
 // Every challenge value includes the previous value too.
 // Apart from generating the challenge, updates the mutable state
-pub fn gen_challenges(input: &[&GroupG1], state: &mut Vec<u8>, n: usize) -> Vec<BigNum> {
+/*pub fn gen_challenges(input: &[&GroupG1], state: &mut Vec<u8>, n: usize) -> Vec<BigNum> {
     let mut r: Vec<BigNum> = Vec::with_capacity(n);
     for i in 0..input.len() {
         state.extend_from_slice(&get_bytes_for_G1_point(&input[i]));
@@ -334,6 +342,21 @@ pub fn gen_challenges(input: &[&GroupG1], state: &mut Vec<u8>, n: usize) -> Vec<
         let _p = GeneratorG1.mul(&r.last().unwrap());
         state.extend_from_slice(&get_bytes_for_G1_point(&_p));
         r.push(hash_as_BigNum(&state));
+    }
+    r
+}*/
+pub fn gen_challenges(input: &[&GroupElement], state: &mut Vec<u8>, n: usize) -> Vec<FieldElement> {
+    let mut r = Vec::<FieldElement>::with_capacity(n);
+    for i in 0..input.len() {
+        state.extend_from_slice(&input[i].to_bytes());
+    }
+    r.push(FieldElement::from_msg_hash(&state));
+
+    let gen = GroupElement::generator();
+    for _ in 1..n {
+        let _p = gen.scalar_multiplication(&r.last().unwrap());
+        state.extend_from_slice(&_p.to_bytes());
+        r.push(FieldElement::from_msg_hash(&state));
     }
     r
 }

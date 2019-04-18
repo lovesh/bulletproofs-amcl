@@ -2,6 +2,9 @@
 
 extern crate amcl;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub use self::amcl::bls381 as BLSCurve;
 //pub use self::amcl::bn254 as BLSCurve;
 
@@ -15,9 +18,7 @@ pub mod types;
 pub mod constants;
 pub mod inner_product;
 pub mod range_proof;
-
-#[macro_use]
-extern crate lazy_static;
+/*
 
 pub mod r1cs;
-mod new_ipp;
+mod new_ipp;*/

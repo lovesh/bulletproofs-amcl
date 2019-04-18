@@ -1,3 +1,4 @@
+/*
 #[macro_use] extern crate bulletproofs_amcl as bulletproofs;
 extern crate merlin;
 extern crate rand;
@@ -194,4 +195,4 @@ mod tests {
 
         Ok(verifier.verify(&proof)?)
     }
-}
+}*/
