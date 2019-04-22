@@ -7,7 +7,7 @@ pub fn commit_to_field_element(g: &GroupElement, h: &GroupElement, elem: &FieldE
                                r: &FieldElement) -> GroupElement {
     let elem_g = g.scalar_multiplication(elem);
     let r_h = h.scalar_multiplication(r);
-    add_group_elems!(&elem_g, &r_h)
+    elem_g + r_h
 }
 
 /// Commit to field element vectors `a` and `b` with random field element `c`
@@ -18,5 +18,5 @@ pub fn commit_to_field_element_vectors(g: &GroupElementVector, h: &GroupElementV
     let a_g = g.inner_product(a)?;
     let b_h = h.inner_product(b)?;
     let c_u = u.scalar_multiplication(c);
-    Ok(add_group_elems!(&a_g, &b_h, &c_u))
+    Ok(a_g + b_h + c_u)
 }

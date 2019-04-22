@@ -5,7 +5,7 @@ use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub};
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 use std::fmt;
 
@@ -16,7 +16,7 @@ macro_rules! add_group_elems {
         {
             let mut sum = GroupElement::new();
             $(
-                sum.add($elem);
+                sum += $elem;
             )*
             sum
         }
@@ -80,20 +80,24 @@ impl GroupElement {
         bytes.to_vec()
     }
 
-    pub fn add(&mut self, b: &Self) {
+    /// Add a group element to itself. `self = self + b`
+    pub fn add_assign_(&mut self, b: &Self) {
         self.value.add(&b.value);
     }
 
-    pub fn subtract(&mut self, b: &Self) {
+    /// Subtract a group element from itself. `self = self - b`
+    pub fn sub_assign_(&mut self, b: &Self) {
         self.value.sub(&b.value);
     }
 
+    /// Return sum of a group element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
         sum.into()
     }
 
+    /// Return difference of a group element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut diff = self.value.clone();
         diff.sub(&b.value);
@@ -131,6 +135,42 @@ impl PartialEq for GroupElement {
     }
 }
 
+impl Add for GroupElement {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        self.plus(&other)
+    }
+}
+
+impl Add<GroupElement> for &GroupElement {
+    type Output = GroupElement;
+
+    fn add(self, other: GroupElement) -> GroupElement {
+        self.plus(&other)
+    }
+}
+
+impl<'a> Add<&'a GroupElement> for GroupElement {
+    type Output = Self;
+    fn add(self, other: &'a GroupElement) -> Self {
+        self.plus(other)
+    }
+}
+
+impl AddAssign for GroupElement {
+    fn add_assign(&mut self, other: Self) {
+        self.add_assign_(&other)
+    }
+}
+
+impl Sub for GroupElement {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        self.minus(&other)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct GroupElementVector {
@@ -166,7 +206,7 @@ impl GroupElementVector {
     pub fn sum(&self) -> GroupElement {
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
-            accum.add(&self[i]);
+            accum += self[i];
         }
         accum
     }
@@ -194,7 +234,7 @@ impl GroupElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
-            accum.add(&self[i].scalar_multiplication(&b[i]));
+            accum += self[i].scalar_multiplication(&b[i]);
         }
         Ok(accum)
     }
@@ -216,7 +256,7 @@ impl GroupElementVector {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
-            accum.add(&self[i].scalar_multiplication(&field_elems[i]));
+            accum += self[i].scalar_multiplication(&field_elems[i]);
         }
         Ok(accum)
     }
@@ -258,6 +298,20 @@ impl IndexMut<usize> for GroupElementVector {
     }
 }
 
+impl PartialEq for GroupElementVector {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false
+        }
+        for i in 0..self.len() {
+            if self[i] != other[i] {
+                return false
+            }
+        }
+        true
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -277,7 +331,7 @@ mod test {
 
         let mut expected = GroupElement::new();
         for i in 0..fs.len() {
-            expected.add(&gs[i].scalar_multiplication(&fs[i]));
+            expected.add_assign_(&gs[i].scalar_multiplication(&fs[i]));
         }
 
         assert_eq!(expected, res)
@@ -289,7 +343,7 @@ mod test {
         let b = GroupElement::random(None);
         let c = GroupElement::random(None);
 
-        let mut sum =  add_group_elems!(&a, &b, &c);
+        let mut sum =  a + b + c;
 
         let mut expected_sum = GroupElement::new();
         expected_sum = expected_sum.plus(&a);

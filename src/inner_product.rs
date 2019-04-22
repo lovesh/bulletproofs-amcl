@@ -69,14 +69,10 @@ impl<'a> InnerProductArgument<'a> {
             },
             n => {
                 let n_prime = n / 2;
-                let (g1, g2) = g.as_slice().split_at(n_prime);
-                let (g1, g2) = (GroupElementVector::from(g1), GroupElementVector::from(g2));
-                let (h1, h2) = h.as_slice().split_at(n_prime);
-                let (h1, h2) = (GroupElementVector::from(h1), GroupElementVector::from(h2));
-                let (a1, a2) = a.as_slice().split_at(n_prime);
-                let (a1, a2) = (FieldElementVector::from(a1), FieldElementVector::from(a2));
-                let (b1, b2) = b.as_slice().split_at(n_prime);
-                let (b1, b2) = (FieldElementVector::from(b1), FieldElementVector::from(b2));
+                let (g1, g2) = g.split_at(n_prime);
+                let (h1, h2) = h.split_at(n_prime);
+                let (a1, a2) = a.split_at(n_prime);
+                let (b1, b2) = b.split_at(n_prime);
 
                 // H(0^n_prime, a1, b2, 0^n_prime, <a1, b2>), not using `hash` to avoid working on 0^n_prime
                 let a1_b2= a1.inner_product(&b2)?;
@@ -125,9 +121,9 @@ impl<'a> InnerProductArgument<'a> {
             1 => {
                 let g_a = g[0].scalar_multiplication(&a);
                 let h_b = h[0].scalar_multiplication(&b);
-                let c = a.multiply(&b);
+                let c = a * b;
                 let u_c = self.u.scalar_multiplication(&c);
-                let mut sum = add_group_elems!(&g_a, &h_b, &u_c);
+                let mut sum = g_a + h_b + u_c;
                 Ok(sum == *P)
             },
             n => {
@@ -143,10 +139,8 @@ impl<'a> InnerProductArgument<'a> {
 //                println!("During verification, for n {}, challenge is {}, new P is {}, L R {:?} {:?}", &n, &x, &self.P, &_L, &_R);
 
                 let n_prime = n / 2;
-                let (g1, g2) = g.as_slice().split_at(n_prime);
-                let (g1, g2) = (GroupElementVector::from(g1), GroupElementVector::from(g2));
-                let (h1, h2) = h.as_slice().split_at(n_prime);
-                let (h1, h2) = (GroupElementVector::from(h1), GroupElementVector::from(h2));
+                let (g1, g2) = g.split_at(n_prime);
+                let (h1, h2) = h.split_at(n_prime);
 
                 let g_prime = Self::calculate_new_g(&g1, &g2, &x, &x_inv)?;
                 let h_prime = Self::calculate_new_h(&h1, &h2, &x, &x_inv)?;
@@ -189,10 +183,8 @@ impl<'a> InnerProductArgument<'a> {
             return Err(ValueError::IncorrectSize(n_prime))
         }
 
-        let (g1, g2) = g.as_slice().split_at(n_prime);
-        let (g1, g2) = (GroupElementVector::from(g1), GroupElementVector::from(g2));
-        let (h1, h2) = h.as_slice().split_at(n_prime);
-        let (h1, h2) = (GroupElementVector::from(h1), GroupElementVector::from(h2));
+        let (g1, g2) = g.split_at(n_prime);
+        let (h1, h2) = h.split_at(n_prime);
 
         let a1_g1 = g1.inner_product(&a1)?;
         let a2_prime_g2 = g2.inner_product(a2_prime)?;
@@ -201,7 +193,7 @@ impl<'a> InnerProductArgument<'a> {
 
         let u_c = u.scalar_multiplication(&c);
 
-        Ok(add_group_elems!(&a1_g1, &a2_prime_g2, &b1_h1, &b2_prime_h2, &u_c))
+        Ok(a1_g1 + a2_prime_g2 + b1_h1 + b2_prime_h2+ u_c)
     }
 
     // g' = (x^-1.g1 o x.g2)
@@ -220,18 +212,18 @@ impl<'a> InnerProductArgument<'a> {
     fn calculate_new_P(old_P: &GroupElement, x_sqr: &FieldElement, x_inv_sqr: &FieldElement, L: &GroupElement, R: &GroupElement) -> GroupElement {
         let _P1 = L.scalar_multiplication(x_sqr);
         let _P2 = R.scalar_multiplication(x_inv_sqr);
-        add_group_elems!(old_P, &_P1, &_P2)
+        old_P + _P1 + _P2
     }
 
     // Construct H' = H^(y^-n)
     pub fn compute_h_prime(H: &GroupElementVector, y: &FieldElement) -> GroupElementVector {
         let y_inv = y.inverse();
-        let y_inv_pow_vec = FieldElementVector::new_power_vector(&y_inv, H.len());
+        let y_inv_vandm_vec = FieldElementVector::new_vandermonde_vector(&y_inv, H.len());
 
         // Construct H' = H^(y^-n)
         let mut H_prime = GroupElementVector::with_capacity(H.len());
         for i in 0..H.len() {
-            H_prime.push(H[i].scalar_multiplication(&y_inv_pow_vec[i]));
+            H_prime.push(H[i].scalar_multiplication(&y_inv_vandm_vec[i]));
         }
         H_prime
     }
@@ -254,7 +246,7 @@ mod test {
         let c = a.inner_product(&b).unwrap();
         let u_c = u.scalar_multiplication(&c);
 
-        let P = add_group_elems!(&g_a, &h_b, &u_c);
+        let P = g_a + h_b + u_c;
 
         // Correct proof
         let ipa = InnerProductArgument::new(&g, &h, &u, &P).unwrap();
@@ -285,7 +277,7 @@ mod test {
         let c = a.inner_product(&b).unwrap();
         let u_c = u.scalar_multiplication(&c);
 
-        let P = add_group_elems!(&g_a, &u_c);
+        let P = g_a + u_c;
 
         let ipc = InnerProductArgument::new(&g, &h, &u, &P);
         assert!(ipc.is_err());

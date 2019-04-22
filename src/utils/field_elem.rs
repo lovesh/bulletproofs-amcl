@@ -8,7 +8,7 @@ use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
 use std::fmt;
 use core::fmt::Display;
 
@@ -19,7 +19,7 @@ macro_rules! add_field_elems {
         {
             let mut sum = FieldElement::new();
             $(
-                sum.add($elem);
+                sum += $elem;
             )*
             sum
         }
@@ -88,17 +88,20 @@ impl FieldElement {
 
     }
 
-    pub fn add(&mut self, b: &Self) {
+    /// Add a field element to itself. `self = self + b`
+    pub fn add_assign_(&mut self, b: &Self) {
         self.value.add(&b.value);
         self.value.rmod(&CurveOrder);
     }
 
-    pub fn subtract(&mut self, b: &Self) {
+    /// Subtract a field element from itself. `self = self - b`
+    pub fn sub_assign_(&mut self, b: &Self) {
         let neg_b = BigNum::modneg(&b.value, &CurveOrder);
         self.value.add(&neg_b);
         self.value.rmod(&CurveOrder);
     }
 
+    /// Return sum of a field element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
@@ -106,6 +109,7 @@ impl FieldElement {
         sum.into()
     }
 
+    /// Return difference of a field element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         let neg_b = BigNum::modneg(&b.value, &CurveOrder);
@@ -131,7 +135,7 @@ impl FieldElement {
         zero.minus(&self)
     }
 
-    pub fn negation_mut(&mut self) {
+    pub fn negate(&mut self) {
         let zero = Self::zero();
         self.value = zero.minus(&self).value;
     }
@@ -252,14 +256,105 @@ impl Ord for FieldElement {
 
 impl Eq for FieldElement {}
 
+impl Add for FieldElement {
+    type Output = Self;
 
-/*impl Add for FieldElement {
+    fn add(self, other: Self) -> Self {
+        self.plus(&other)
+    }
+}
+
+impl Add<FieldElement> for &FieldElement {
     type Output = FieldElement;
 
-    fn add(self, other: FieldElement) -> Self {
-        self.add(&other)
+    fn add(self, other: FieldElement) -> FieldElement {
+        self.plus(&other)
     }
-}*/
+}
+
+impl<'a> Add<&'a FieldElement> for FieldElement {
+    type Output = Self;
+    fn add(self, other: &'a FieldElement) -> Self {
+        self.plus(other)
+    }
+}
+
+impl<'a> Add<&'a FieldElement> for &FieldElement {
+    type Output = FieldElement;
+    fn add(self, other: &'a FieldElement) -> FieldElement {
+        self.plus(other)
+    }
+}
+
+impl AddAssign for FieldElement {
+    fn add_assign(&mut self, other: Self) {
+        self.add_assign_(&other)
+    }
+}
+
+impl Sub for FieldElement {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        self.minus(&other)
+    }
+}
+
+impl Sub<FieldElement> for &FieldElement {
+    type Output = FieldElement;
+
+    fn sub(self, other: FieldElement) -> FieldElement {
+        self.minus(&other)
+    }
+}
+
+impl<'a> Sub<&'a FieldElement> for FieldElement {
+    type Output = Self;
+
+    fn sub(self, other: &'a FieldElement) -> Self {
+        self.minus(&other)
+    }
+}
+
+impl<'a> Sub<&'a FieldElement> for &FieldElement {
+    type Output = FieldElement;
+
+    fn sub(self, other: &'a FieldElement) -> FieldElement {
+        self.minus(&other)
+    }
+}
+
+impl Mul for FieldElement {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self {
+        self.multiply(&other)
+    }
+}
+
+impl Mul<FieldElement> for &FieldElement {
+    type Output = FieldElement;
+
+    fn mul(self, other: FieldElement) -> FieldElement {
+        self.multiply(&other)
+    }
+}
+
+impl<'a> Mul<&'a FieldElement> for FieldElement {
+    type Output = FieldElement;
+
+    fn mul(self, other: &'a FieldElement) -> FieldElement {
+        self.multiply(other)
+    }
+}
+
+impl<'a> Mul<&'a FieldElement> for &FieldElement {
+    type Output = FieldElement;
+
+    fn mul(self, other: &'a FieldElement) -> FieldElement {
+        self.multiply(other)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct FieldElementVector {
@@ -273,10 +368,10 @@ impl FieldElementVector {
         }
     }
 
-    /// Generate a vector of field elements as:
-    /// field_elem_vector!(k, n) => vec![1, k, k^2, k^3, ... k^n-1]
-    /// field_elem_vector!(0, n) => vec![0, 0, ... n times]
-    pub fn new_power_vector(elem: &FieldElement, size: usize) -> Self {
+    /// Generate a Vandermonde vector of field elements as:
+    /// FieldElementVector::new_vandermonde_vector(k, n) => vec![1, k, k^2, k^3, ... k^n-1]
+    /// FieldElementVector::new_vandermonde_vector(0, n) => vec![0, 0, ... n times]
+    pub fn new_vandermonde_vector(elem: &FieldElement, size: usize) -> Self {
         if elem.is_zero() {
             Self::new(size)
         } else if elem.is_unity() {
@@ -337,7 +432,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            sum_vector.push(add_field_elems!(&self[i], &b.elems[i]))
+            sum_vector.push(self[i] + b.elems[i])
         }
         Ok(sum_vector)
     }
@@ -347,8 +442,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            let diff = self[i].minus(&b[i]);
-            diff_vector.push(diff)
+            diff_vector.push(self[i] - b[i])
         }
         Ok(diff_vector)
     }
@@ -357,7 +451,7 @@ impl FieldElementVector {
     pub fn sum(&self) -> FieldElement {
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum.add(&self[i]);
+            accum += self[i];
         }
         accum
     }
@@ -368,7 +462,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut accum = FieldElement::new();
         for i in 0..self.len() {
-            accum.add(&self[i].multiply(&b[i]));
+            accum += self[i] * b[i];
 
         }
         Ok(accum)
@@ -381,7 +475,7 @@ impl FieldElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut hadamard_product = FieldElementVector::with_capacity(self.len());
         for i in 0..self.len() {
-            hadamard_product.push(self[i].multiply(&b[i]));
+            hadamard_product.push(self[i] * b[i]);
         }
         Ok(hadamard_product)
     }
@@ -423,7 +517,21 @@ impl IndexMut<usize> for FieldElementVector {
     }
 }
 
-// TODO: Implement add/sub/mul ops
+impl PartialEq for FieldElementVector {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false
+        }
+        for i in 0..self.len() {
+            if self[i] != other[i] {
+                return false
+            }
+        }
+        true
+    }
+}
+
+// TODO: Implement add/sub/mul ops but need some way to handle error when vectors are of different length
 
 
 #[cfg(test)]
@@ -435,7 +543,8 @@ mod test {
         let a: FieldElement = 5u8.into();
         let b: FieldElement = 18u8.into();
         let c: FieldElement = 90u8.into();
-        assert_eq!(a.multiply(&b), c)
+        assert_eq!(a.multiply(&b), c);
+        assert_eq!(a * b, c);
     }
 
     #[test]
@@ -444,6 +553,16 @@ mod test {
         let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::unity(), FieldElement::from(200), FieldElement::zero()].into();
         let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
         assert_eq!(a.inner_product(&b).unwrap(), c);
+    }
+
+    #[test]
+    fn test_field_elements_hadamard_product() {
+        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::unity(), FieldElement::from(100), FieldElement::zero()].into();
+        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::unity(), FieldElement::from(200), FieldElement::zero()].into();
+        let h: FieldElementVector = vec![FieldElement::from(90), FieldElement::unity(), FieldElement::from(200 * 100), FieldElement::zero()].into();
+        let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
+        assert_eq!(a.hadamard_product(&b).unwrap(), h);
+        assert_eq!(h.sum(), c);
     }
 
     #[test]
@@ -469,18 +588,18 @@ mod test {
     }
 
     #[test]
-    fn test_field_elem_vector() {
-        let zero_vec = FieldElementVector::new_power_vector(&FieldElement::zero(), 5);
+    fn test_field_elem_vandermonde_vector() {
+        let zero_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::zero(), 5);
         for i in 0..5 {
             assert!(zero_vec[i].is_zero())
         }
 
-        let unit_vec = FieldElementVector::new_power_vector(&FieldElement::unity(), 5);
+        let unit_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::unity(), 5);
         for i in 0..4 {
             assert!(unit_vec[i].is_unity())
         }
 
-        let two_vec = FieldElementVector::new_power_vector(&FieldElement::from(2u8), 10);
+        let two_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::from(2u8), 10);
         let base = 2u32;
         for i in 0..10 {
             assert_eq!(two_vec[i], FieldElement::from(base.pow(i as u32) as u32));
@@ -513,12 +632,12 @@ mod test {
         let b = FieldElement::random(None);
         let c = FieldElement::random(None);
 
-        let sum =  add_field_elems!(&a, &b, &c);
+        let sum =  a + b + c;
 
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
         expected_sum = expected_sum.plus(&b);
-        expected_sum.add(&c);
+        expected_sum.add_assign_(&c);
         assert_eq!(sum, expected_sum);
     }
 }
