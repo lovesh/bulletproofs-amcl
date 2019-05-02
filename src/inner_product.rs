@@ -119,10 +119,10 @@ impl<'a> InnerProductArgument<'a> {
                                  a: &FieldElement, b: &FieldElement, P: &GroupElement, state: &mut Vec<u8>) -> Result<bool, ValueError> {
         match g.len() {
             1 => {
-                let g_a = g[0].scalar_multiplication(&a);
-                let h_b = h[0].scalar_multiplication(&b);
+                let g_a = g[0] * a;
+                let h_b = h[0] * b;
                 let c = a * b;
-                let u_c = self.u.scalar_multiplication(&c);
+                let u_c = self.u * c;
                 let mut sum = g_a + h_b + u_c;
                 Ok(sum == *P)
             },
@@ -191,7 +191,7 @@ impl<'a> InnerProductArgument<'a> {
         let b1_h1 = h1.inner_product(&b1)?;
         let b2_prime_h2 = h2.inner_product(b2_prime)?;
 
-        let u_c = u.scalar_multiplication(&c);
+        let u_c = u * c;
 
         Ok(a1_g1 + a2_prime_g2 + b1_h1 + b2_prime_h2+ u_c)
     }
@@ -210,8 +210,8 @@ impl<'a> InnerProductArgument<'a> {
 
     // P = L^x^2.P.R^x^-2
     fn calculate_new_P(old_P: &GroupElement, x_sqr: &FieldElement, x_inv_sqr: &FieldElement, L: &GroupElement, R: &GroupElement) -> GroupElement {
-        let _P1 = L.scalar_multiplication(x_sqr);
-        let _P2 = R.scalar_multiplication(x_inv_sqr);
+        let _P1 = L * x_sqr;
+        let _P2 = R * x_inv_sqr;
         old_P + _P1 + _P2
     }
 
@@ -223,7 +223,7 @@ impl<'a> InnerProductArgument<'a> {
         // Construct H' = H^(y^-n)
         let mut H_prime = GroupElementVector::with_capacity(H.len());
         for i in 0..H.len() {
-            H_prime.push(H[i].scalar_multiplication(&y_inv_vandm_vec[i]));
+            H_prime.push(H[i] * y_inv_vandm_vec[i]);
         }
         H_prime
     }
@@ -244,7 +244,7 @@ mod test {
         let g_a = g.inner_product(&a).unwrap();
         let h_b = h.inner_product(&b).unwrap();
         let c = a.inner_product(&b).unwrap();
-        let u_c = u.scalar_multiplication(&c);
+        let u_c = u * c;
 
         let P = g_a + h_b + u_c;
 
@@ -275,7 +275,7 @@ mod test {
         let h_b = h.inner_product(&b);
         assert!(h_b.is_err());
         let c = a.inner_product(&b).unwrap();
-        let u_c = u.scalar_multiplication(&c);
+        let u_c = u * c;
 
         let P = g_a + u_c;
 

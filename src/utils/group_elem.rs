@@ -5,7 +5,7 @@ use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 use std::fmt;
 
@@ -172,6 +172,38 @@ impl Sub for GroupElement {
     }
 }
 
+impl Mul<FieldElement> for GroupElement {
+    type Output = Self;
+
+    fn mul(self, other: FieldElement) -> Self {
+        self.scalar_multiplication(&other)
+    }
+}
+
+impl Mul<&FieldElement> for GroupElement {
+    type Output = Self;
+
+    fn mul(self, other: &FieldElement) -> Self {
+        self.scalar_multiplication(other)
+    }
+}
+
+impl Mul<FieldElement> for &GroupElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: FieldElement) -> GroupElement {
+        self.scalar_multiplication(&other)
+    }
+}
+
+impl Mul<&FieldElement> for &GroupElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: &FieldElement) -> GroupElement {
+        self.scalar_multiplication(other)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GroupElementVector {
     elems: Vec<GroupElement>
@@ -215,14 +247,14 @@ impl GroupElementVector {
     /// element `n` (scale the vector)
     pub fn scale(&mut self, n: &FieldElement) {
         for i in 0..self.len() {
-            self[i] = self[i].scalar_multiplication(n);
+            self[i] = self[i] * n;
         }
     }
 
     pub fn scaled_by(&self, n: &FieldElement) -> Self {
         let mut scaled = Self::with_capacity(self.len());
         for i in 0..self.len() {
-            scaled.push(self[i].scalar_multiplication(n))
+            scaled.push(self[i] * n)
         }
         scaled.into()
     }
@@ -234,7 +266,7 @@ impl GroupElementVector {
         check_vector_size_for_equality!(self, b)?;
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
-            accum += self[i].scalar_multiplication(&b[i]);
+            accum += self[i] * b[i];
         }
         Ok(accum)
     }
@@ -256,7 +288,7 @@ impl GroupElementVector {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
-            accum += self[i].scalar_multiplication(&field_elems[i]);
+            accum += self[i] * field_elems[i];
         }
         Ok(accum)
     }
@@ -330,11 +362,14 @@ mod test {
             &FieldElementVector::from(fs.as_slice())).unwrap();
 
         let mut expected = GroupElement::new();
+        let mut expected_1 = GroupElement::new();
         for i in 0..fs.len() {
             expected.add_assign_(&gs[i].scalar_multiplication(&fs[i]));
+            expected_1.add_assign_(&(gs[i] * &fs[i]));
         }
 
-        assert_eq!(expected, res)
+        assert_eq!(expected, res);
+        assert_eq!(expected_1, res)
     }
 
     #[test]

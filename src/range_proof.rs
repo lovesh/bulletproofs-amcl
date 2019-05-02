@@ -194,7 +194,7 @@ impl<'a> RangeProofProtocol<'a> {
 
         let g_l = self.G.inner_product(&l).unwrap();
         let h_r = H_prime.inner_product(&r).unwrap();
-        let u_t_hat = u.scalar_multiplication(&t_hat);
+        let u_t_hat = u * t_hat;
 
         let P = g_l + h_r + u_t_hat;
         let ipa = InnerProductArgument::new(&self.G, &H_prime, &u, &P).unwrap();
@@ -239,10 +239,10 @@ impl<'a> RangeProofProtocol<'a> {
         let mut lhs = commit_to_field_element(&self.g, &self.h, &proof.t_hat, &proof.tau_x);
 
         // rhs = V^(z^2).g^delta.T1^x.T2^(x^2)
-        let V_z_sqr = self.V.scalar_multiplication(&z_sqr);
-        let g_delta = self.g.scalar_multiplication(&delta);
-        let T1_x = proof.T1.scalar_multiplication(&x);
-        let T2_x_sqr = proof.T2.scalar_multiplication(&x_sqr);
+        let V_z_sqr = self.V * z_sqr;
+        let g_delta = self.g * delta;
+        let T1_x = proof.T1 * x;
+        let T2_x_sqr = proof.T2 * x_sqr;
         let mut rhs = V_z_sqr + g_delta + T1_x + T2_x_sqr;
 
         if lhs != rhs {
@@ -268,7 +268,7 @@ impl<'a> RangeProofProtocol<'a> {
 
         let H_prime_exp = H_prime.inner_product(&exp)?;
 
-        let P = proof.A + proof.S.scalar_multiplication(&x) + G_neg_z + H_prime_exp;
+        let P = proof.A + proof.S * x + G_neg_z + H_prime_exp;
 
         // For debugging only
         /*let h_mu = scalar_point_multiplication(&proof.mu, &self.h);
@@ -280,14 +280,14 @@ impl<'a> RangeProofProtocol<'a> {
         }*/
 
         // Compute P.h^-mu
-        let h_neg_mu = self.h.scalar_multiplication(&proof.mu.negation());
+        let h_neg_mu = self.h  * proof.mu.negation();
         let mut newP = P + h_neg_mu;
 
         let u = Self::compute_gen_for_inner_product_arg(&proof.t_hat, &proof.tau_x, &proof.mu, &mut state);
         //println!("During verify, u is {}", &u);
 
         // Compute P.h^-mu.u^t_hat
-        let u_t_hat = u.scalar_multiplication(&proof.t_hat);
+        let u_t_hat = u * proof.t_hat;
         newP = newP + u_t_hat;
 
         let ipa = InnerProductArgument::new(&self.G, &H_prime, &u, &newP).unwrap();
@@ -309,12 +309,9 @@ impl<'a> RangeProofProtocol<'a> {
 
     fn compute_gen_for_inner_product_arg(t_hat: &FieldElement, tau_x: &FieldElement, mu: &FieldElement, state: &mut Vec<u8>) -> GroupElement {
         let gen = GroupElement::generator();
-        let _u = gen_challenges(&[
-            &(gen.scalar_multiplication(&t_hat)),
-            &(gen.scalar_multiplication(&tau_x)),
-            &(gen.scalar_multiplication(&mu)),
-        ], state, 1)[0];
-        gen.scalar_multiplication(&_u)
+        let input = gen * (t_hat + tau_x + mu);
+        let _u = gen_challenges(&[&input], state, 1)[0];
+        gen * _u
     }
 
     fn calc_delta_y_z(&self, y: &FieldElement, z: &FieldElement) -> Result<FieldElement, ValueError>{

@@ -131,6 +131,7 @@ impl FieldElement {
 
     /// Return negative of field element
     pub fn negation(&self) -> Self {
+        // TODO: Implement Neg operator
         let zero = Self::zero();
         zero.minus(&self)
     }

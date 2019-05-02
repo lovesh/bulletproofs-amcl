@@ -354,7 +354,7 @@ pub fn gen_challenges(input: &[&GroupElement], state: &mut Vec<u8>, n: usize) ->
 
     let gen = GroupElement::generator();
     for _ in 1..n {
-        let _p = gen.scalar_multiplication(&r.last().unwrap());
+        let _p = gen * r.last().unwrap();
         state.extend_from_slice(&_p.to_bytes());
         r.push(FieldElement::from_msg_hash(&state));
     }

@@ -5,8 +5,8 @@ use crate::errors::ValueError;
 // Commit to field element `elem` with randomness `r` given groups elements `g` and `h`, i.e. compute g^elem.h^r
 pub fn commit_to_field_element(g: &GroupElement, h: &GroupElement, elem: &FieldElement,
                                r: &FieldElement) -> GroupElement {
-    let elem_g = g.scalar_multiplication(elem);
-    let r_h = h.scalar_multiplication(r);
+    let elem_g = g * elem;
+    let r_h = h * r;
     elem_g + r_h
 }
 
@@ -17,6 +17,6 @@ pub fn commit_to_field_element_vectors(g: &GroupElementVector, h: &GroupElementV
                                        a: &FieldElementVector, b: &FieldElementVector, c: &FieldElement) -> Result<GroupElement, ValueError> {
     let a_g = g.inner_product(a)?;
     let b_h = h.inner_product(b)?;
-    let c_u = u.scalar_multiplication(c);
+    let c_u = u * c;
     Ok(a_g + b_h + c_u)
 }
