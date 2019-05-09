@@ -189,6 +189,65 @@ impl FieldElement {
         };
         if n.iszilch() { Self::random_field_element(order) } else { n }
     }
+
+    pub fn non_adjacent_form(&self, w: usize) -> Vec<i8> {
+        // required by the NAF definition
+        debug_assert!( w >= 2 );
+        // required so that the NAF digits fit in i8
+        debug_assert!( w <= 8 );
+
+        use byteorder::{ByteOrder, LittleEndian, BigEndian};
+
+        let mut naf = vec![0i8; MODBYTES * 8];
+
+        let mut x_u64 = vec![0u64; NLEN];
+        let mut bytes = self.to_bytes();
+        bytes.reverse();
+        LittleEndian::read_u64_into(&bytes, &mut x_u64[0..NLEN-1]);
+
+        let width = 1 << w;
+        let window_mask = width - 1;
+
+        let mut pos = 0;
+        let mut carry = 0;
+        while pos < naf.len() {
+            // Construct a buffer of bits of the scalar, starting at bit `pos`
+            let u64_idx = pos / 64;
+            let bit_idx = pos % 64;
+            let bit_buf: u64;
+            if bit_idx < 64 - w {
+                // This window's bits are contained in a single u64
+                bit_buf = x_u64[u64_idx] >> bit_idx;
+            } else {
+                // Combine the current u64's bits with the bits from the next u64
+                bit_buf = (x_u64[u64_idx] >> bit_idx) | (x_u64[1+u64_idx] << (64 - bit_idx));
+            }
+
+            // Add the carry into the current window
+            let window = carry + (bit_buf & window_mask);
+
+            if window & 1 == 0 {
+                // If the window value is even, preserve the carry and continue.
+                // Why is the carry preserved?
+                // If carry == 0 and window & 1 == 0, then the next carry should be 0
+                // If carry == 1 and window & 1 == 0, then bit_buf & 1 == 1 so the next carry should be 1
+                pos += 1;
+                continue;
+            }
+
+            if window < width/2 {
+                carry = 0;
+                naf[pos] = window as i8;
+            } else {
+                carry = 1;
+                naf[pos] = (window as i8) - (width as i8);
+            }
+
+            pos += w;
+        }
+
+        naf
+    }
 }
 
 impl From<u8> for FieldElement {

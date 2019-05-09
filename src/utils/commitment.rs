@@ -15,8 +15,8 @@ pub fn commit_to_field_element(g: &GroupElement, h: &GroupElement, elem: &FieldE
 /// (a1*g1 + a2*g2 + a3*g3) + (b1*h1 + b2*h2 + b3*h3) + c*u
 pub fn commit_to_field_element_vectors(g: &GroupElementVector, h: &GroupElementVector, u: &GroupElement,
                                        a: &FieldElementVector, b: &FieldElementVector, c: &FieldElement) -> Result<GroupElement, ValueError> {
-    let a_g = g.inner_product(a)?;
-    let b_h = h.inner_product(b)?;
+    let a_g = g.inner_product_const_time(a)?;
+    let b_h = h.inner_product_const_time(b)?;
     let c_u = u * c;
     Ok(a_g + b_h + c_u)
 }

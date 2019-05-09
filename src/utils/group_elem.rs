@@ -42,7 +42,8 @@ impl GroupElement {
         }
     }
 
-    pub fn infinity() -> Self {
+    /// Return the identity element
+    pub fn identity() -> Self {
         let mut v = GroupG1::new();
         v.inf();
         Self {
@@ -56,14 +57,14 @@ impl GroupElement {
 
     pub fn random(order: Option<&BigNum>) -> Self {
         let n = FieldElement::random(order);
-        Self::generator().scalar_multiplication(&n)
+        Self::generator().scalar_mul(&n)
     }
 
-    pub fn is_infinity(&self) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.value.is_infinity()
     }
 
-    pub fn set_to_infinity(&mut self) {
+    pub fn set_to_identity(&mut self) {
         self.value.inf()
     }
 
@@ -106,8 +107,37 @@ impl GroupElement {
 
     /// Multiply point on the curve (element of group G1) with a scalar.
     /// field_element_a * group_element_b
-    pub fn scalar_multiplication(&self, a: &FieldElement) -> Self {
+    pub fn scalar_mul(&self, a: &FieldElement) -> Self {
         self.value.mul(a.as_bignum()).into()
+    }
+
+    pub fn double(&self) -> Self {
+        let mut d = self.value.clone();
+        d.dbl();
+        d.into()
+    }
+
+    pub fn wnaf_exp(table: &NafLookupTable5, wnaf: &[i8]) -> Self {
+        let mut result = GroupElement::identity();
+
+        for n in wnaf.iter().rev() {
+            result = result.double();
+
+            let v = *n;
+            if v > 0 {
+                result = result + table.select(v as usize);
+            } else if v < 0 {
+                result = result - table.select(-v as usize);
+            }
+        }
+
+        result
+    }
+
+    pub fn to_wnaf_lookup_table(&self, width: usize) -> NafLookupTable5 {
+        // Only supporting table of width 5 for now
+        debug_assert_eq!(width, 5);
+        NafLookupTable5::from(self)
     }
 }
 
@@ -176,7 +206,7 @@ impl Mul<FieldElement> for GroupElement {
     type Output = Self;
 
     fn mul(self, other: FieldElement) -> Self {
-        self.scalar_multiplication(&other)
+        self.scalar_mul(&other)
     }
 }
 
@@ -184,7 +214,7 @@ impl Mul<&FieldElement> for GroupElement {
     type Output = Self;
 
     fn mul(self, other: &FieldElement) -> Self {
-        self.scalar_multiplication(other)
+        self.scalar_mul(other)
     }
 }
 
@@ -192,7 +222,7 @@ impl Mul<FieldElement> for &GroupElement {
     type Output = GroupElement;
 
     fn mul(self, other: FieldElement) -> GroupElement {
-        self.scalar_multiplication(&other)
+        self.scalar_mul(&other)
     }
 }
 
@@ -200,7 +230,7 @@ impl Mul<&FieldElement> for &GroupElement {
     type Output = GroupElement;
 
     fn mul(self, other: &FieldElement) -> GroupElement {
-        self.scalar_multiplication(other)
+        self.scalar_mul(other)
     }
 }
 
@@ -261,14 +291,12 @@ impl GroupElementVector {
 
     /// Computes inner product of 2 vectors, one of field elements and other of group elements.
     /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...group elements] = (a1*b1 + a2*b2 + a3*b3)
-    pub fn inner_product(&self, b: &FieldElementVector) -> Result<GroupElement, ValueError> {
-        // TODO: Use a faster multi-scalar multiplication algorithm
-        check_vector_size_for_equality!(self, b)?;
-        let mut accum = GroupElement::new();
-        for i in 0..self.len() {
-            accum += self[i] * b[i];
-        }
-        Ok(accum)
+    pub fn inner_product_const_time(&self, b: &FieldElementVector) -> Result<GroupElement, ValueError> {
+        self.multi_scalar_mul_const_time(b)
+    }
+
+    pub fn inner_product_var_time(&self, b: &FieldElementVector) -> Result<GroupElement, ValueError> {
+        self.multi_scalar_mul_var_time(b)
     }
 
     /// Calculates Hadamard product of 2 group element vectors.
@@ -283,8 +311,13 @@ impl GroupElementVector {
         Ok(hadamard_product)
     }
 
-    pub fn multi_scalar_multiplication(&self, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
-        // TODO Add optimized implementation
+    pub fn split_at(&self, mid: usize) -> (Self, Self) {
+        let (l, r) = self.as_slice().split_at(mid);
+        (Self::from(l), Self::from(r))
+    }
+
+    /// Constant time multi-scalar multiplication
+    pub fn multi_scalar_mul_const_time(&self, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
         check_vector_size_for_equality!(field_elems, self)?;
         let mut accum = GroupElement::new();
         for i in 0..self.len() {
@@ -293,9 +326,50 @@ impl GroupElementVector {
         Ok(accum)
     }
 
-    pub fn split_at(&self, mid: usize) -> (Self, Self) {
-        let (l, r) = self.as_slice().split_at(mid);
-        (Self::from(l), Self::from(r))
+    /// Variable time multi-scalar multiplication
+    pub fn multi_scalar_mul_var_time(&self, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
+        Self::multi_scalar_mul_var_time(&self, field_elems)
+    }
+
+    /// Strauss multi-scalar multiplication
+    pub fn _multi_scalar_mul_var_time(group_elems: &GroupElementVector, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
+        check_vector_size_for_equality!(field_elems, group_elems)?;
+        let lookup_tables: Vec<_> = group_elems.as_slice()
+            .into_iter()
+            .map(|e| NafLookupTable5::from(e))
+            .collect();
+
+        Self::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, field_elems)
+    }
+
+    /// Strauss multi-scalar multiplication. Passing the lookup tables since in lot of cases generators will be fixed
+    pub fn multi_scalar_mul_var_time_with_precomputation_done(lookup_tables: &[NafLookupTable5],
+                                                              field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
+        // Redundant check when called from multi_scalar_mul_var_time
+        check_vector_size_for_equality!(field_elems, lookup_tables)?;
+
+        let nafs: Vec<_> = field_elems.as_slice()
+            .into_iter()
+            .map(|e| e.non_adjacent_form(5))
+            .collect();
+
+        let mut r = GroupElement::identity();
+
+        for i in (0..MODBYTES*8-1).rev() {
+            let mut t = r.double();
+
+            for (naf, lookup_table) in nafs.iter().zip(lookup_tables.iter()) {
+                if naf[i] > 0 {
+                    t = t + lookup_table.select(naf[i] as usize);
+                } else if naf[i] < 0 {
+                    t = t - lookup_table.select(-naf[i] as usize);
+                }
+            }
+
+            r = t;
+        }
+
+        Ok(r)
     }
 }
 
@@ -344,9 +418,35 @@ impl PartialEq for GroupElementVector {
     }
 }
 
+pub struct NafLookupTable5([GroupElement; 8]);
+
+impl NafLookupTable5 {
+    /// Given public A and odd x with 0 < x < 2^4, return x.A.
+    pub fn select(&self, x: usize) -> GroupElement {
+        debug_assert_eq!(x & 1, 1);
+        debug_assert!(x < 16);
+
+        self.0[x / 2]
+    }
+}
+
+impl<'a> From<&'a GroupElement> for NafLookupTable5 {
+    fn from(A: &'a GroupElement) -> Self {
+        let mut Ai = [GroupElement::new(); 8];
+        let A2 = A.double();
+        Ai[0] = A.clone();
+        for i in 0..7 {
+            Ai[i + 1] = Ai[i] + A2;
+        }
+        // Now Ai = [A, 3A, 5A, 7A, 9A, 11A, 13A, 15A]
+        Self(Ai)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_multi_scalar_multiplication() {
@@ -354,22 +454,27 @@ mod test {
         let mut gs = vec![];
         let gen: GroupElement = GroupElement::generator();
 
-        for i in 0..5 {
+        for i in 0..10 {
             fs.push(FieldElement::random(None));
-            gs.push(gen.scalar_multiplication(&fs[i]));
+            gs.push(gen.scalar_mul(&fs[i]));
         }
-        let mut res = GroupElementVector::from(gs.as_slice()).multi_scalar_multiplication(
-            &FieldElementVector::from(fs.as_slice())).unwrap();
+
+        let gv = GroupElementVector::from(gs.as_slice());
+        let fv = FieldElementVector::from(fs.as_slice());
+        let res = gv.multi_scalar_mul_const_time(&fv).unwrap();
+
+        let res_1 = GroupElementVector::_multi_scalar_mul_var_time(&gv, &fv).unwrap();
 
         let mut expected = GroupElement::new();
         let mut expected_1 = GroupElement::new();
         for i in 0..fs.len() {
-            expected.add_assign_(&gs[i].scalar_multiplication(&fs[i]));
+            expected.add_assign_(&gs[i].scalar_mul(&fs[i]));
             expected_1.add_assign_(&(gs[i] * &fs[i]));
         }
 
         assert_eq!(expected, res);
-        assert_eq!(expected_1, res)
+        assert_eq!(expected_1, res);
+        assert_eq!(res_1, res)
     }
 
     #[test]
@@ -385,5 +490,73 @@ mod test {
         expected_sum = expected_sum.plus(&b);
         expected_sum = expected_sum.plus(&c);
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn test_NafLookupTable5() {
+        let a = GroupElement::random(None);
+        let x = [1, 3, 5, 7, 9, 11, 13, 15];
+        let table = NafLookupTable5::from(&a);
+        for i in x.iter() {
+            let f = FieldElement::from(*i as u8);
+            let expected = a * f;
+            assert_eq!(expected, table.select(*i as usize));
+        }
+    }
+
+    #[test]
+    fn test_wnaf_exp() {
+        for _ in 0..100 {
+            let mut a = GroupElement::random(None);
+            let r = FieldElement::random(None);
+            let expected = a * r;
+
+            let table = NafLookupTable5::from(&a);
+            let wnaf = r.non_adjacent_form(5);
+            let p = GroupElement::wnaf_exp(&table, &wnaf);
+
+            assert_eq!(expected, p);
+        }
+    }
+
+    #[test]
+    fn timing_multi_scalar_multiplication() {
+        let mut fs = vec![];
+        let mut gs = vec![];
+
+        let n = 256;
+
+        for _ in 0..n {
+            fs.push(FieldElement::random(None));
+            gs.push(GroupElement::random(None));
+        }
+
+        let gv = GroupElementVector::from(gs.as_slice());
+        let fv = FieldElementVector::from(fs.as_slice());
+
+        let mut start = Instant::now();
+        let res = gv.multi_scalar_mul_const_time(&fv).unwrap();
+        let const_time = start.elapsed();
+
+        start = Instant::now();
+        let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
+        let var_time = start.elapsed();
+
+        assert_eq!(res_1, res);
+
+        let lookup_tables: Vec<_> = gv.as_slice()
+            .into_iter()
+            .map(|e| e.to_wnaf_lookup_table(5))
+            .collect();
+
+        start = Instant::now();
+        let res_2 = GroupElementVector::multi_scalar_mul_var_time_with_precomputation_done(&lookup_tables, &fv).unwrap();
+        let var_precomp_time = start.elapsed();
+
+        assert_eq!(res_2, res);
+
+        println!("Constant time for {} scalar multiplications: {:?}", n, const_time);
+        println!("Variable time for {} scalar multiplications: {:?}", n, var_time);
+        println!("Variable time with pre-computation for {} scalar multiplications: {:?}", n, var_precomp_time);
     }
 }

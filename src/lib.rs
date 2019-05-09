@@ -19,6 +19,6 @@ pub mod constants;
 pub mod inner_product;
 pub mod range_proof;
 /*
-
+mod new_ipp;
 pub mod r1cs;
-mod new_ipp;*/
+*/

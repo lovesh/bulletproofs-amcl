@@ -186,10 +186,10 @@ impl<'a> InnerProductArgument<'a> {
         let (g1, g2) = g.split_at(n_prime);
         let (h1, h2) = h.split_at(n_prime);
 
-        let a1_g1 = g1.inner_product(&a1)?;
-        let a2_prime_g2 = g2.inner_product(a2_prime)?;
-        let b1_h1 = h1.inner_product(&b1)?;
-        let b2_prime_h2 = h2.inner_product(b2_prime)?;
+        let a1_g1 = g1.inner_product_var_time(&a1)?;
+        let a2_prime_g2 = g2.inner_product_var_time(a2_prime)?;
+        let b1_h1 = h1.inner_product_var_time(&b1)?;
+        let b2_prime_h2 = h2.inner_product_var_time(b2_prime)?;
 
         let u_c = u * c;
 
@@ -241,8 +241,8 @@ mod test {
         let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
         let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
 
-        let g_a = g.inner_product(&a).unwrap();
-        let h_b = h.inner_product(&b).unwrap();
+        let g_a = g.inner_product_var_time(&a).unwrap();
+        let h_b = h.inner_product_var_time(&b).unwrap();
         let c = a.inner_product(&b).unwrap();
         let u_c = u * c;
 
@@ -271,8 +271,8 @@ mod test {
         let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
         let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
 
-        let g_a = g.inner_product(&a).unwrap();
-        let h_b = h.inner_product(&b);
+        let g_a = g.inner_product_var_time(&a).unwrap();
+        let h_b = h.inner_product_var_time(&b);
         assert!(h_b.is_err());
         let c = a.inner_product(&b).unwrap();
         let u_c = u * c;

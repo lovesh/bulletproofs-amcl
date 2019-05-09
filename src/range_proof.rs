@@ -192,8 +192,8 @@ impl<'a> RangeProofProtocol<'a> {
 
         let H_prime = InnerProductArgument::compute_h_prime(&self.H, &y);
 
-        let g_l = self.G.inner_product(&l).unwrap();
-        let h_r = H_prime.inner_product(&r).unwrap();
+        let g_l = self.G.inner_product_const_time(&l).unwrap();
+        let h_r = H_prime.inner_product_const_time(&r).unwrap();
         let u_t_hat = u * t_hat;
 
         let P = g_l + h_r + u_t_hat;
@@ -266,7 +266,7 @@ impl<'a> RangeProofProtocol<'a> {
         let z_sqr_two = self.two_vandm_vec.scaled_by(&z_sqr);
         let exp = z_sqr_two.plus(&z_y_n)?;
 
-        let H_prime_exp = H_prime.inner_product(&exp)?;
+        let H_prime_exp = H_prime.inner_product_var_time(&exp)?;
 
         let P = proof.A + proof.S * x + G_neg_z + H_prime_exp;
 
