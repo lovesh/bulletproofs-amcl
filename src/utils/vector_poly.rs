@@ -1,8 +1,3 @@
-use crate::utils::field_elements_inner_product;
-use crate::utils::add_field_element_vectors;
-use crate::utils::field_elements_multiplication;
-use crate::utils::subtract_field_elements;
-use crate::constants::CurveOrder;
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 
 /// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
@@ -38,9 +33,11 @@ impl VecPoly1 {
 
     pub fn inner_product(&self, rhs: &VecPoly1) -> Poly2 {
         // Uses Karatsuba's method
-        // TODO: Remove unwraps
+
         let l = self;
         let r = rhs;
+
+        // Unwraps are fine as the initialization of vector polynomial ensures vectors are of equal length
 
         let t0 = l.0.inner_product(&r.0).unwrap();
         let t2 = l.1.inner_product(&r.1).unwrap();
@@ -78,8 +75,7 @@ impl VecPoly3 {
     /// - `rhs.2` is zero;
     /// This is the case in the constraint system proof.
     pub fn special_inner_product(lhs: &Self, rhs: &Self) -> Poly6 {
-        // TODO: make checks that l_poly.0 and r_poly.2 are zero.
-        // TODO: Remove unwraps
+        // Unwraps are fine as the initialization of vector polynomial ensures vectors are of equal length
 
         let t1 = lhs.1.inner_product(&rhs.0).unwrap();
         let t2 = lhs.1.inner_product(&rhs.1).unwrap() + lhs.2.inner_product(&rhs.0).unwrap();

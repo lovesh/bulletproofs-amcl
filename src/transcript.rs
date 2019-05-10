@@ -1,9 +1,9 @@
 //! Defines a `TranscriptProtocol` trait for using a Merlin transcript.
 use merlin::Transcript;
-use crate::types::BigNum;
-use crate::types::GroupG1;
-use crate::utils::get_bytes_for_BigNum;
-use crate::utils::get_bytes_for_G1_point;
+use crate::utils::field_elem::FieldElement;
+use crate::utils::group_elem::GroupElement;
+use crate::constants::MODBYTES;
+
 
 pub trait TranscriptProtocol {
     /// Commit a domain separator for a length-`n` inner product proof.
@@ -11,11 +11,11 @@ pub trait TranscriptProtocol {
     /// Commit a domain separator for a constraint system.
     fn r1cs_domain_sep(&mut self);
     /// Commit a `scalar` with the given `label`.
-    fn commit_scalar(&mut self, label: &'static [u8], scalar: &BigNum);
+    fn commit_scalar(&mut self, label: &'static [u8], scalar: &FieldElement);
     /// Commit a `point` with the given `label`.
-    fn commit_point(&mut self, label: &'static [u8], point: &GroupG1);
+    fn commit_point(&mut self, label: &'static [u8], point: &GroupElement);
     /// Compute a `label`ed challenge variable.
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> BigNum;
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement;
 }
 
 impl TranscriptProtocol for Transcript {
@@ -28,18 +28,18 @@ impl TranscriptProtocol for Transcript {
         self.commit_bytes(b"dom-sep", b"r1cs v1");
     }
 
-    fn commit_scalar(&mut self, label: &'static [u8], scalar: &BigNum) {
-        self.commit_bytes(label, &get_bytes_for_BigNum(scalar));
+    fn commit_scalar(&mut self, label: &'static [u8], scalar: &FieldElement) {
+        self.commit_bytes(label, &scalar.to_bytes());
     }
 
-    fn commit_point(&mut self, label: &'static [u8], point: &GroupG1) {
-        self.commit_bytes(label, &get_bytes_for_G1_point(point));
+    fn commit_point(&mut self, label: &'static [u8], point: &GroupElement) {
+        self.commit_bytes(label, &point.to_bytes());
     }
 
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> BigNum {
-        let mut buf = [0u8; 64];
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement {
+        let mut buf = [0u8; MODBYTES];
         self.challenge_bytes(label, &mut buf);
 
-        BigNum::frombytes(&buf)
+        FieldElement::from(&buf)
     }
 }

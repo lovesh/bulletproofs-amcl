@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
 use std::fmt;
 use core::fmt::Display;
+use crate::utils::group_elem::GroupElement;
 
 
 #[macro_export]
@@ -196,7 +197,7 @@ impl FieldElement {
         // required so that the NAF digits fit in i8
         debug_assert!( w <= 8 );
 
-        use byteorder::{ByteOrder, LittleEndian, BigEndian};
+        use byteorder::{ByteOrder, LittleEndian};
 
         let mut naf = vec![0i8; MODBYTES * 8];
 
@@ -413,6 +414,38 @@ impl<'a> Mul<&'a FieldElement> for &FieldElement {
 
     fn mul(self, other: &'a FieldElement) -> FieldElement {
         self.multiply(other)
+    }
+}
+
+impl Mul<GroupElement> for FieldElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: GroupElement) -> GroupElement {
+        other.scalar_mul(&self)
+    }
+}
+
+impl Mul<&GroupElement> for FieldElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: &GroupElement) -> GroupElement {
+        other.scalar_mul(&self)
+    }
+}
+
+impl Mul<GroupElement> for &FieldElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: GroupElement) -> GroupElement {
+        other.scalar_mul(self)
+    }
+}
+
+impl Mul<&GroupElement> for &FieldElement {
+    type Output = GroupElement;
+
+    fn mul(self, other: &GroupElement) -> GroupElement {
+        other.scalar_mul(self)
     }
 }
 

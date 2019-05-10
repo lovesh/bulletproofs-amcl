@@ -403,11 +403,10 @@ impl<'a, 'b> Prover<'a, 'b> {
         l_vec.append(&mut vec![field_element_zero!(); pad]);
 
         let mut r_vec = r_poly.eval(x);
-        r_vec.append(&mut vec![field_element_zero!(); pad]);
 
-        // XXX this should refer to the notes to explain why this is correct
-        for i in n..padded_n {
-            r_vec[i] = negate_field_element(&exp_y);
+        // Since r_poly contains terms of y without any multiplicand, i.e. in the constant term
+        for _ in n..padded_n {
+            r_vec.push(negate_field_element(&exp_y));
             exp_y = field_elements_multiplication(&exp_y, &y); // y^i -> y^(i+1)
         }
 

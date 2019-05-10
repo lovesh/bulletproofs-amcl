@@ -332,7 +332,7 @@ impl GroupElementVector {
     }
 
     /// Strauss multi-scalar multiplication
-    pub fn _multi_scalar_mul_var_time(group_elems: &GroupElementVector, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
+    fn _multi_scalar_mul_var_time(group_elems: &GroupElementVector, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
         check_vector_size_for_equality!(field_elems, group_elems)?;
         let lookup_tables: Vec<_> = group_elems.as_slice()
             .into_iter()
@@ -449,32 +449,15 @@ mod test {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn test_multi_scalar_multiplication() {
-        let mut fs = vec![];
-        let mut gs = vec![];
-        let gen: GroupElement = GroupElement::generator();
-
-        for i in 0..10 {
-            fs.push(FieldElement::random(None));
-            gs.push(gen.scalar_mul(&fs[i]));
+    fn test_scalar_mult_operators() {
+        for _ in 0..10 {
+            let g = GroupElement::random(None);
+            let f = FieldElement::random(None);
+            let m = g.scalar_mul(&f);
+            // Operands can be in any order
+            assert_eq!(m, g * f);
+            assert_eq!(m, f * g);
         }
-
-        let gv = GroupElementVector::from(gs.as_slice());
-        let fv = FieldElementVector::from(fs.as_slice());
-        let res = gv.multi_scalar_mul_const_time(&fv).unwrap();
-
-        let res_1 = GroupElementVector::_multi_scalar_mul_var_time(&gv, &fv).unwrap();
-
-        let mut expected = GroupElement::new();
-        let mut expected_1 = GroupElement::new();
-        for i in 0..fs.len() {
-            expected.add_assign_(&gs[i].scalar_mul(&fs[i]));
-            expected_1.add_assign_(&(gs[i] * &fs[i]));
-        }
-
-        assert_eq!(expected, res);
-        assert_eq!(expected_1, res);
-        assert_eq!(res_1, res)
     }
 
     #[test]
@@ -520,11 +503,40 @@ mod test {
     }
 
     #[test]
+    fn test_multi_scalar_multiplication() {
+        let mut fs = vec![];
+        let mut gs = vec![];
+        let gen: GroupElement = GroupElement::generator();
+
+        for i in 0..10 {
+            fs.push(FieldElement::random(None));
+            gs.push(gen.scalar_mul(&fs[i]));
+        }
+
+        let gv = GroupElementVector::from(gs.as_slice());
+        let fv = FieldElementVector::from(fs.as_slice());
+        let res = gv.multi_scalar_mul_const_time(&fv).unwrap();
+
+        let res_1 = gv.multi_scalar_mul_var_time(&fv).unwrap();
+
+        let mut expected = GroupElement::new();
+        let mut expected_1 = GroupElement::new();
+        for i in 0..fs.len() {
+            expected.add_assign_(&gs[i].scalar_mul(&fs[i]));
+            expected_1.add_assign_(&(gs[i] * &fs[i]));
+        }
+
+        assert_eq!(expected, res);
+        assert_eq!(expected_1, res);
+        assert_eq!(res_1, res)
+    }
+
+    #[test]
     fn timing_multi_scalar_multiplication() {
         let mut fs = vec![];
         let mut gs = vec![];
 
-        let n = 256;
+        let n = 32;
 
         for _ in 0..n {
             fs.push(FieldElement::random(None));

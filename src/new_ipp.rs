@@ -1,20 +1,11 @@
 use merlin::Transcript;
-use crate::r1cs::transcript::TranscriptProtocol;
+use crate::transcript::TranscriptProtocol;
 use crate::inner_product::InnerProductArgumentProof;
-use crate::types::GroupG1;
-use crate::types::BigNum;
-use crate::utils::field_elements_inner_product;
-use crate::utils::field_elements_multiplication;
-use crate::utils::multi_scalar_multiplication;
+use crate::utils::field_elem::{FieldElement, FieldElementVector};
+use crate::utils::group_elem::{GroupElement, GroupElementVector};
 use core::iter;
-use crate::utils::field_element_inverse;
 use crate::errors::R1CSError;
-use crate::utils::negate_field_element;
-use crate::utils::field_element_square;
 use crate::constants::CurveOrder;
-use crate::utils::subtract_field_elements;
-
-type Scalar = BigNum;
 
 pub struct NewIPP {}
 impl NewIPP {
@@ -31,89 +22,78 @@ impl NewIPP {
     /// either 0 or a power of 2.
     pub fn create_ipp(
         transcript: &mut Transcript,
-        Q: &GroupG1,
-        G_factors: &[Scalar],
-        H_factors: &[Scalar],
-        G_vec: &[GroupG1],
-        H_vec: &[GroupG1],
-        a_vec: &[Scalar],
-        b_vec: &[Scalar],
+        Q: &GroupElement,
+        G_factors: &FieldElementVector,
+        H_factors: &FieldElementVector,
+        G_vec: &GroupElementVector,
+        H_vec: &GroupElementVector,
+        a_vec: &FieldElementVector,
+        b_vec: &FieldElementVector,
     ) -> InnerProductArgumentProof {
-        // Create slices G, H, a, b backed by their respective
-        // vectors.  This lets us reslice as we compress the lengths
-        // of the vectors in the main loop below.
-        let mut G = G_vec.to_vec();
-        let mut H = H_vec.to_vec();
-        let mut a = a_vec.to_vec();
-        let mut b = b_vec.to_vec();
 
-        let mut n = G.len();
-
-        // All of the input vectors must have the same length.
-        assert_eq!(G.len(), n);
-        assert_eq!(H.len(), n);
-        assert_eq!(a.len(), n);
-        assert_eq!(b.len(), n);
-        assert_eq!(G_factors.len(), n);
-        assert_eq!(H_factors.len(), n);
+        let mut n = G_vec.len();
 
         // All of the input vectors must have a length that is a power of two.
         assert!(n.is_power_of_two());
 
+        // All of the input vectors must have the same length.
+        assert_eq!(H_vec.len(), n);
+        assert_eq!(a_vec.len(), n);
+        assert_eq!(b_vec.len(), n);
+        assert_eq!(G_factors.len(), n);
+        assert_eq!(H_factors.len(), n);
+
+        // Create slices G, H, a, b backed by their respective
+        // vectors.  This lets us reslice as we compress the lengths
+        // of the vectors in the main loop below.
+        let mut G = G_vec.clone();
+        let mut H = H_vec.clone();
+        let mut a = a_vec.clone();
+        let mut b = b_vec.clone();
+
         transcript.innerproduct_domain_sep(n as u64);
 
         let lg_n = n.next_power_of_two().trailing_zeros() as usize;
-        let mut L_vec = Vec::with_capacity(lg_n);
-        let mut R_vec = Vec::with_capacity(lg_n);
+        let mut L_vec = GroupElementVector::with_capacity(lg_n);
+        let mut R_vec = GroupElementVector::with_capacity(lg_n);
 
         // If it's the first iteration, unroll the Hprime = H*y_inv scalar mults
         // into multiscalar muls, for performance.
         if n != 1 {
             n = n / 2;
-            let (mut a_L, a_R) = (a[..n].to_vec(), a[n..].to_vec());
-            let (mut b_L, b_R) = (b[..n].to_vec(), b[n..].to_vec());
-            let (mut G_L, G_R) = (G[..n].to_vec(), G[n..].to_vec());
-            let (mut H_L, H_R) = (H[..n].to_vec(), H[n..].to_vec());
-            let (G_factors_L, G_factors_R) = (G_factors[..n].to_vec(), G_factors[n..].to_vec());
-            let (H_factors_L, H_factors_R) = (H_factors[..n].to_vec(), H_factors[n..].to_vec());
+            let (mut a_L, a_R) = a.split_at(n);
+            let (mut b_L, b_R) = b.split_at(n);
+            let (mut G_L, G_R) = G.split_at(n);
+            let (mut H_L, H_R) = H.split_at(n);
+            let (G_factors_L, G_factors_R) = G_factors.split_at(n);
+            let (H_factors_L, H_factors_R) = H_factors.split_at(n);
 
-            let c_L = field_elements_inner_product(&a_L, &b_R).unwrap();
-            let c_R = field_elements_inner_product(&a_R, &b_L).unwrap();
+            let c_L = a_L.inner_product(&b_R).unwrap();
+            let c_R = a_R.inner_product(&b_L).unwrap();
 
-            let mut _1 = vec![];
-            _1.extend(&G_R);
-            _1.extend(&H_L);
-            _1.push(Q.clone());
-            let L = multi_scalar_multiplication(
-                &(a_L.iter()
-                    .zip(G_factors_R.iter())
-                    .map(|(a_L_i, g)| field_elements_multiplication(&a_L_i, &g))
-                    .chain(
-                        b_R.iter()
-                            .zip(H_factors_L.iter())
-                            .map(|(b_R_i, h)| field_elements_multiplication(&b_R_i, &h)),
-                    )
-                    .chain(iter::once(c_L)).collect::<Vec<_>>()),
-                &_1
-            ).unwrap();
+            let mut L_0 = vec![];
+            L_0.extend(a_L.inner_product(&G_factors_R));
+            L_0.extend(b_R.inner_product(&H_factors_L));
+            L_0.push(c_L);
 
-            let mut _2 = vec![];
-            _2.extend(&G_L);
-            _2.extend(&H_R);
-            _2.push(Q.clone());
+            let mut L_1 = vec![];
+            L_1.extend(&G_R);
+            L_1.extend(&H_L);
+            L_1.push(Q.clone());
 
-            let R = multi_scalar_multiplication(
-                &(a_R.iter()
-                    .zip(G_factors_L.iter())
-                    .map(|(a_R_i, g)| field_elements_multiplication(&a_R_i, &g))
-                    .chain(
-                        b_L.iter()
-                            .zip(H_factors_R.iter())
-                            .map(|(b_L_i, h)| field_elements_multiplication(&b_L_i, &h)),
-                    )
-                    .chain(iter::once(c_R)).collect::<Vec<_>>()),
-                &_2,
-            ).unwrap();
+            let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
+
+            let mut R_0 = vec![];
+            R_0.extend(a_R.inner_product(&G_factors_L));
+            R_0.extend(b_L.inner_product(&H_factors_R));
+            R_0.push(c_R);
+
+            let mut R_1 = vec![];
+            R_1.extend(&G_L);
+            R_1.extend(&H_R);
+            R_1.push(Q.clone());
+
+            let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
 
             L_vec.push(L);
             R_vec.push(R);
@@ -122,23 +102,13 @@ impl NewIPP {
             transcript.commit_point(b"R", &R);
 
             let u = transcript.challenge_scalar(b"u");
-            let u_inv = field_element_inverse(&u);
+            let u_inv = u.inverse();
 
             for i in 0..n {
-                // a_L[i] = a_L[i] * u + u_inv * a_R[i];
-                a_L[i] = add_field_elements!(&field_elements_multiplication(&a_L[i], &u), &field_elements_multiplication(&a_R[i], &u_inv));
-                // b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                b_L[i] = add_field_elements!(&field_elements_multiplication(&b_L[i], &u_inv), &field_elements_multiplication(&b_R[i], &u));
-                // G_L[i] = (u_inv * G_factors_L[i])*G_L[i] + (u * G_factors_R[i])* G_R[i]
-                G_L[i] = multi_scalar_multiplication(
-                    &[field_elements_multiplication(&u_inv, &G_factors_L[i]), field_elements_multiplication(&u, &G_factors_R[i])],
-                    &[G_L[i], G_R[i]]
-                ).unwrap();
-                // H_L[i] = (u * H_factors_L[i])*H_L[i] + (u_inv * H_factors_R[i])*H_R[i]
-                H_L[i] = multi_scalar_multiplication(
-                    &[field_elements_multiplication(&u, &H_factors_L[i]), field_elements_multiplication(&u_inv, &H_factors_R[i])],
-                    &[H_L[i], H_R[i]]
-                ).unwrap();
+                a_L[i] = a_L[i] * u + u_inv * a_R[i];
+                b_L[i] = b_L[i] * u_inv + u * b_R[i];
+                G_L[i] = (u_inv * G_factors_L[i])*G_L[i] + (u * G_factors_R[i])* G_R[i];
+                H_L[i] = (u * H_factors_L[i])*H_L[i] + (u_inv * H_factors_R[i])*H_R[i];
             }
 
             a = a_L;
@@ -149,39 +119,35 @@ impl NewIPP {
 
         while n != 1 {
             n = n / 2;
-            let (mut a_L, a_R) = (a[..n].to_vec(), a[n..].to_vec());
-            let (mut b_L, b_R) = (b[..n].to_vec(), b[n..].to_vec());
-            let (mut G_L, G_R) = (G[..n].to_vec(), G[n..].to_vec());
-            let (mut H_L, H_R) = (H[..n].to_vec(), H[n..].to_vec());
+            let (mut a_L, a_R) = a.split_at(n);
+            let (mut b_L, b_R) = b.split_at(n);
+            let (mut G_L, G_R) = G.split_at(n);
+            let (mut H_L, H_R) = H.split_at(n);
 
-            let c_L = field_elements_inner_product(&a_L, &b_R).unwrap();
-            let c_R = field_elements_inner_product(&a_R, &b_L).unwrap();
+            let c_L = a_L.inner_product(&b_R).unwrap();
+            let c_R = a_R.inner_product(&b_L).unwrap();
 
-            let mut _1 = vec![];
-            _1.extend(&G_R);
-            _1.extend(&H_L);
-            _1.push(Q.clone());
-            let mut __1 = vec![];
-            __1.extend(&a_L);
-            __1.extend(&b_R);
-            __1.push(c_L);
-            let L = multi_scalar_multiplication(
-                &__1,
-                &_1,
-            ).unwrap();
+            let mut L_1 = vec![];
+            L_1.extend(&G_R);
+            L_1.extend(&H_L);
+            L_1.push(Q.clone());
+            let mut L_0 = vec![];
+            L_0.extend(&a_L);
+            L_0.extend(&b_R);
+            L_0.push(c_L);
 
-            let mut _2 = vec![];
-            _2.extend(&G_L);
-            _2.extend(&H_R);
-            _2.push(Q.clone());
-            let mut __2 = vec![];
-            __2.extend(&a_R);
-            __2.extend(&b_L);
-            __2.push(c_R);
-            let R = multi_scalar_multiplication(
-                &__2,
-                &_2,
-            ).unwrap();
+            let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
+
+            let mut R_1 = vec![];
+            R_1.extend(&G_L);
+            R_1.extend(&H_R);
+            R_1.push(Q.clone());
+            let mut R_0 = vec![];
+            R_0.extend(&a_R);
+            R_0.extend(&b_L);
+            R_0.push(c_R);
+
+            let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
 
             L_vec.push(L);
             R_vec.push(R);
@@ -190,23 +156,13 @@ impl NewIPP {
             transcript.commit_point(b"R", &R);
 
             let u = transcript.challenge_scalar(b"u");
-            let u_inv = field_element_inverse(&u);
+            let u_inv = u.inverse();
 
             for i in 0..n {
-                // a_L[i] = a_L[i] * u + u_inv * a_R[i];
-                a_L[i] = add_field_elements!(&field_elements_multiplication(&a_L[i], &u), &field_elements_multiplication(&a_R[i], &u_inv));
-                // b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                b_L[i] = add_field_elements!(&field_elements_multiplication(&b_L[i], &u_inv), &field_elements_multiplication(&b_R[i], &u));
-                // G_L[i] = (u_inv * G_L[i]) + (u * G_R[i])
-                G_L[i] = multi_scalar_multiplication(
-                    &[u_inv, u],
-                    &[G_L[i], G_R[i]]
-                ).unwrap();
-                // H_L[i] = (u * H_L[i]) + (u_inv * H_R[i])
-                H_L[i] = multi_scalar_multiplication(
-                    &[u, u_inv],
-                    &[H_L[i], H_R[i]]
-                ).unwrap();
+                a_L[i] = a_L[i] * u + u_inv * a_R[i];
+                b_L[i] = b_L[i] * u_inv + u * b_R[i];
+                G_L[i] = (u_inv * G_L[i]) + (u * G_R[i]);
+                H_L[i] = (u * H_L[i]) + (u_inv * H_R[i]);
             }
 
             a = a_L;
@@ -226,16 +182,16 @@ impl NewIPP {
     pub fn verify_ipp(
         n: usize,
         transcript: &mut Transcript,
-        G_factors: &[Scalar],
-        H_factors: &[Scalar],
-        P: &GroupG1,
-        Q: &GroupG1,
-        G: &[GroupG1],
-        H: &[GroupG1],
-        a: &Scalar,
-        b: &Scalar,
-        L_vec: &[GroupG1],
-        R_vec: &[GroupG1],
+        G_factors: &[FieldElement],
+        H_factors: &[FieldElement],
+        P: &GroupElement,
+        Q: &GroupElement,
+        G: &[GroupElement],
+        H: &[GroupElement],
+        a: &FieldElement,
+        b: &FieldElement,
+        L_vec: &[GroupElement],
+        R_vec: &[GroupElement],
     ) -> Result<(), R1CSError>
     {
         let (u_sq, u_inv_sq, s) = Self::verification_scalars(&L_vec, &R_vec, n, transcript).unwrap();
@@ -263,7 +219,7 @@ impl NewIPP {
             .chain(neg_u_sq)
             .chain(neg_u_inv_sq).collect();
 
-        let mut _2: Vec<GroupG1> = vec![];
+        let mut _2: Vec<GroupElement> = vec![];
         _2.push(*Q);
         _2.extend(G);
         _2.extend(H);
@@ -282,8 +238,8 @@ impl NewIPP {
         }
     }
 
-    pub fn verification_scalars(L_vec: &[GroupG1], R_vec: &[GroupG1], n: usize,
-                                transcript: &mut Transcript) -> Result<(Vec<Scalar>, Vec<Scalar>, Vec<Scalar>), R1CSError> {
+    pub fn verification_scalars(L_vec: &[GroupElement], R_vec: &[GroupElement], n: usize,
+                                transcript: &mut Transcript) -> Result<(Vec<FieldElement>, Vec<FieldElement>, Vec<FieldElement>), R1CSError> {
         let lg_n = L_vec.len();
         if lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
@@ -355,11 +311,11 @@ mod tests {
         let a: Vec<BigNum> = vec![1, 2, 3, 4].iter().map(| i | BigNum::new_int(*i as isize)).collect();
         let b: Vec<BigNum> = vec![5, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
 
-        let G_factors: Vec<Scalar> = iter::repeat(BigNum::new_int(1)).take(n).collect();
+        let G_factors: Vec<FieldElement> = iter::repeat(BigNum::new_int(1)).take(n).collect();
 
         // y_inv is (the inverse of) a random challenge
         let y_inv = BigNum::new_int(1);//random_field_element(None);
-        let H_factors: Vec<Scalar> = field_elem_power_vector(&y_inv, n);
+        let H_factors: Vec<FieldElement> = field_elem_power_vector(&y_inv, n);
 
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = NewIPP::create_ipp(
@@ -373,7 +329,7 @@ mod tests {
             &b,
         );
 
-        let b_prime: Vec<Scalar> = b.iter().zip(H_factors.iter()).map(|(bi, yi)| field_elements_multiplication(&bi, &yi)).collect();
+        let b_prime: Vec<FieldElement> = b.iter().zip(H_factors.iter()).map(|(bi, yi)| field_elements_multiplication(&bi, &yi)).collect();
         let c = field_elements_inner_product(&a, &b).unwrap();
         let mut _1 = vec![];
         _1.extend(&a);

@@ -415,40 +415,6 @@ impl<'a, 'b> Verifier<'a, 'b> {
         if !res.is_infinity() {
             return Err(R1CSError::VerificationError);
         }
-        /*let mega_check = RistrettoPoint::optional_multiscalar_mul(
-            iter::once(x) // A_I1
-                .chain(iter::once(x_sqr)) // A_O1
-                .chain(iter::once(x_cube)) // S1
-                .chain(iter::once(u * x)) // A_I2
-                .chain(iter::once(u * x_sqr)) // A_O2
-                .chain(iter::once(u * x_cube)) // S2
-                .chain(wV.iter().map(|wVi| wVi * r_x_sqr)) // V
-                .chain(T_scalars.iter().cloned()) // T_points
-                .chain(iter::once(
-                    w * (proof.t_x - a * b) + r * (x_sqr * (wc + delta) - proof.t_x),
-                )) // B
-                .chain(iter::once(-proof.e_blinding - r * proof.t_x_blinding)) // B_blinding
-                .chain(g_scalars) // G
-                .chain(h_scalars) // H
-                .chain(u_sq.iter().cloned()) // ipp_proof.L_vec
-                .chain(u_inv_sq.iter().cloned()), // ipp_proof.R_vec
-            iter::once(proof.A_I1.decompress())
-                .chain(iter::once(proof.A_O1.decompress()))
-                .chain(iter::once(proof.S1.decompress()))
-                .chain(iter::once(proof.A_I2.decompress()))
-                .chain(iter::once(proof.A_O2.decompress()))
-                .chain(iter::once(proof.S2.decompress()))
-                .chain(self.V.iter().map(|V_i| V_i.decompress()))
-                .chain(T_points.iter().map(|T_i| T_i.decompress()))
-                .chain(iter::once(Some(self.pc_gens.B)))
-                .chain(iter::once(Some(self.pc_gens.B_blinding)))
-                .chain(gens.G(padded_n).map(|&G_i| Some(G_i)))
-                .chain(gens.H(padded_n).map(|&H_i| Some(H_i)))
-                .chain(proof.ipp_proof.L_vec.iter().map(|L_i| L_i.decompress()))
-                .chain(proof.ipp_proof.R_vec.iter().map(|R_i| R_i.decompress()))
-        )
-            .ok_or_else(|| R1CSError::VerificationError)?;*/
-
 
         Ok(())
     }
