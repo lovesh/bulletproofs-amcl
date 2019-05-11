@@ -123,7 +123,7 @@ impl<'a> InnerProductArgument<'a> {
                 let h_b = h[0] * b;
                 let c = a * b;
                 let u_c = self.u * c;
-                let mut sum = g_a + h_b + u_c;
+                let sum = g_a + h_b + u_c;
                 Ok(sum == *P)
             },
             n => {

@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 use std::fmt;
+use std::slice::Iter;
 
 
 #[macro_export]
@@ -30,7 +31,7 @@ pub struct GroupElement {
 
 impl fmt::Display for GroupElement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut c = self.value.clone();
+        let c = self.value.clone();
         write!(f, "{}", c.tostring())
     }
 }
@@ -328,7 +329,7 @@ impl GroupElementVector {
 
     /// Variable time multi-scalar multiplication
     pub fn multi_scalar_mul_var_time(&self, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
-        Self::multi_scalar_mul_var_time(&self, field_elems)
+        Self::_multi_scalar_mul_var_time(&self, field_elems)
     }
 
     /// Strauss multi-scalar multiplication
@@ -370,6 +371,10 @@ impl GroupElementVector {
         }
 
         Ok(r)
+    }
+
+    pub fn iter(&self) -> Iter<GroupElement> {
+        self.as_slice().iter()
     }
 }
 
@@ -415,6 +420,15 @@ impl PartialEq for GroupElementVector {
             }
         }
         true
+    }
+}
+
+impl IntoIterator for GroupElementVector {
+    type Item = GroupElement;
+    type IntoIter = ::std::vec::IntoIter<GroupElement>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elems.into_iter()
     }
 }
 

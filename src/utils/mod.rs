@@ -271,12 +271,12 @@ pub fn are_field_elements_equal(a: &BigNum, b: &BigNum) -> bool {
     BigNum::comp(a, b) == 0
 }
 
-pub fn get_generators(prefix: &str, n: usize) -> Vec<GroupG1> {
+pub fn get_generators(prefix: &str, n: usize) -> Vec<GroupElement> {
     //let prefix = String::from(s);
-    let mut gens: Vec<GroupG1> = Vec::with_capacity(n);
+    let mut gens: Vec<GroupElement> = Vec::with_capacity(n);
     for i in 1..n+1 {
         let s: String = prefix.to_string() + &i.to_string();
-        gens.push(hash_on_GroupG1(s.as_bytes()));
+        gens.push(GroupElement::from_msg_hash(s.as_bytes()));
     }
     gens
 }

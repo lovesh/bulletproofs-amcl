@@ -72,25 +72,25 @@ impl NewIPP {
             let c_R = a_R.inner_product(&b_L).unwrap();
 
             let mut L_0 = vec![];
-            L_0.extend(a_L.inner_product(&G_factors_R));
-            L_0.extend(b_R.inner_product(&H_factors_L));
+            L_0.extend(a_L.hadamard_product(&G_factors_R).unwrap());
+            L_0.extend(b_R.hadamard_product(&H_factors_L).unwrap());
             L_0.push(c_L);
 
             let mut L_1 = vec![];
-            L_1.extend(&G_R);
-            L_1.extend(&H_L);
+            L_1.extend(G_R.iter());
+            L_1.extend(H_L.iter());
             L_1.push(Q.clone());
 
             let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
 
             let mut R_0 = vec![];
-            R_0.extend(a_R.inner_product(&G_factors_L));
-            R_0.extend(b_L.inner_product(&H_factors_R));
+            R_0.extend(a_R.hadamard_product(&G_factors_L).unwrap());
+            R_0.extend(b_L.hadamard_product(&H_factors_R).unwrap());
             R_0.push(c_R);
 
             let mut R_1 = vec![];
-            R_1.extend(&G_L);
-            R_1.extend(&H_R);
+            R_1.extend(G_L.iter());
+            R_1.extend(H_R.iter());
             R_1.push(Q.clone());
 
             let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
@@ -128,23 +128,23 @@ impl NewIPP {
             let c_R = a_R.inner_product(&b_L).unwrap();
 
             let mut L_1 = vec![];
-            L_1.extend(&G_R);
-            L_1.extend(&H_L);
+            L_1.extend(G_R.iter());
+            L_1.extend(H_L.iter());
             L_1.push(Q.clone());
             let mut L_0 = vec![];
-            L_0.extend(&a_L);
-            L_0.extend(&b_R);
+            L_0.extend(a_L.iter());
+            L_0.extend(b_R.iter());
             L_0.push(c_L);
 
             let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
 
             let mut R_1 = vec![];
-            R_1.extend(&G_L);
-            R_1.extend(&H_R);
+            R_1.extend(G_L.iter());
+            R_1.extend(H_R.iter());
             R_1.push(Q.clone());
             let mut R_0 = vec![];
-            R_0.extend(&a_R);
-            R_0.extend(&b_L);
+            R_0.extend(a_R.iter());
+            R_0.extend(b_L.iter());
             R_0.push(c_R);
 
             let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
@@ -182,38 +182,38 @@ impl NewIPP {
     pub fn verify_ipp(
         n: usize,
         transcript: &mut Transcript,
-        G_factors: &[FieldElement],
-        H_factors: &[FieldElement],
+        G_factors: &FieldElementVector,
+        H_factors: &FieldElementVector,
         P: &GroupElement,
         Q: &GroupElement,
-        G: &[GroupElement],
-        H: &[GroupElement],
+        G: &GroupElementVector,
+        H: &GroupElementVector,
         a: &FieldElement,
         b: &FieldElement,
-        L_vec: &[GroupElement],
-        R_vec: &[GroupElement],
+        L_vec: &GroupElementVector,
+        R_vec: &GroupElementVector,
     ) -> Result<(), R1CSError>
     {
-        let (u_sq, u_inv_sq, s) = Self::verification_scalars(&L_vec, &R_vec, n, transcript).unwrap();
+        let (u_sq, u_inv_sq, s) = Self::verification_scalars(L_vec, R_vec, n, transcript).unwrap();
 
         let g_times_a_times_s = G_factors
-            .into_iter()
+            .iter()
             .zip(s.iter())
-            .map(|(g_i, s_i)| field_elements_multiplication(&field_elements_multiplication(&a, &s_i), &g_i))
+            .map(|(g_i, s_i)| (a * s_i) * g_i)
             .take(G.len());
 
         // 1/s[i] is s[!i], and !i runs from n-1 to 0 as i runs from 0 to n-1
         let inv_s = s.iter().rev();
 
         let h_times_b_div_s = H_factors
-            .into_iter()
+            .iter()
             .zip(inv_s)
-            .map(|(h_i, s_i_inv)| field_elements_multiplication(&field_elements_multiplication(&b, &s_i_inv), &h_i));
+            .map(|(h_i, s_i_inv)| (b * s_i_inv) * h_i);
 
-        let neg_u_sq = u_sq.iter().map(|ui| negate_field_element(&ui));
-        let neg_u_inv_sq = u_inv_sq.iter().map(|ui| negate_field_element(&ui));
+        let neg_u_sq = u_sq.iter().map(|u| u.negation());
+        let neg_u_inv_sq = u_inv_sq.iter().map(|u| u.negation());
 
-        let _1: Vec<BigNum> = iter::once(field_elements_multiplication(&a, &b))
+        let _1: Vec<FieldElement> = iter::once(a*b)
             .chain(g_times_a_times_s)
             .chain(h_times_b_div_s)
             .chain(neg_u_sq)
@@ -221,24 +221,21 @@ impl NewIPP {
 
         let mut _2: Vec<GroupElement> = vec![];
         _2.push(*Q);
-        _2.extend(G);
-        _2.extend(H);
-        _2.extend(L_vec);
-        _2.extend(R_vec);
+        _2.extend(G.iter());
+        _2.extend(H.iter());
+        _2.extend(L_vec.iter());
+        _2.extend(R_vec.iter());
 
-        let mut expect_P = multi_scalar_multiplication(
-            &_1,
-            &_2,
-        ).unwrap();
+        let expected_P = GroupElementVector::from(_2).multi_scalar_mul_var_time(&_1.into()).unwrap();
 
-        if expect_P.equals(&mut P.clone()) {
+        if expected_P == *P {
             Ok(())
         } else {
             Err(R1CSError::VerificationError)
         }
     }
 
-    pub fn verification_scalars(L_vec: &[GroupElement], R_vec: &[GroupElement], n: usize,
+    pub fn verification_scalars(L_vec: &GroupElementVector, R_vec: &GroupElementVector, n: usize,
                                 transcript: &mut Transcript) -> Result<(Vec<FieldElement>, Vec<FieldElement>, Vec<FieldElement>), R1CSError> {
         let lg_n = L_vec.len();
         if lg_n >= 32 {
@@ -266,12 +263,12 @@ impl NewIPP {
 
         let mut challenges_sq = Vec::with_capacity(lg_n);
         let mut challenges_inv_sq = Vec::with_capacity(lg_n);
-        let mut product_chal_inv = field_element_one!();
+        let mut product_chal_inv = FieldElement::one();
         for c in &challenges {
-            let inv = field_element_inverse(c);
-            challenges_sq.push(field_element_square(c));
-            challenges_inv_sq.push(field_element_square(&inv));
-            product_chal_inv = field_elements_multiplication(&product_chal_inv, &inv);
+            let inv = c.inverse();
+            challenges_sq.push(c.square());
+            challenges_inv_sq.push(inv.square());
+            product_chal_inv = product_chal_inv * inv;
         }
 
         // 3. Compute s values inductively.
@@ -284,7 +281,7 @@ impl NewIPP {
             // The challenges are stored in "creation order" as [u_k,...,u_1],
             // so u_{lg(i)+1} = is indexed by (lg_n-1) - lg_i
             let u_lg_i_sq = challenges_sq[(lg_n - 1) - lg_i];
-            s.push(field_elements_multiplication(&s[i - k], &u_lg_i_sq));
+            s.push(s[i - k] * u_lg_i_sq);
         }
 
         Ok((challenges_sq, challenges_inv_sq, s))
@@ -304,18 +301,18 @@ mod tests {
     #[test]
     fn test_ipp() {
         let n = 4;
-        let G = get_generators("g", n);
-        let H = get_generators("h", n);
-        let Q = hash_on_GroupG1("Q".as_bytes());
+        let G: GroupElementVector = get_generators("g", n).into();
+        let H: GroupElementVector = get_generators("h", n).into();
+        let Q = GroupElement::from_msg_hash("Q".as_bytes());
 
-        let a: Vec<BigNum> = vec![1, 2, 3, 4].iter().map(| i | BigNum::new_int(*i as isize)).collect();
-        let b: Vec<BigNum> = vec![5, 6, 7, 8].iter().map(| i | BigNum::new_int(*i as isize)).collect();
+        let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
+        let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
 
-        let G_factors: Vec<FieldElement> = iter::repeat(BigNum::new_int(1)).take(n).collect();
+        let G_factors: FieldElementVector = vec![FieldElement::one(); n].into();
 
         // y_inv is (the inverse of) a random challenge
-        let y_inv = BigNum::new_int(1);//random_field_element(None);
-        let H_factors: Vec<FieldElement> = field_elem_power_vector(&y_inv, n);
+        let y_inv = FieldElement::random(None);
+        let H_factors = FieldElementVector::new_vandermonde_vector(&y_inv, n);
 
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = NewIPP::create_ipp(
@@ -329,20 +326,17 @@ mod tests {
             &b,
         );
 
-        let b_prime: Vec<FieldElement> = b.iter().zip(H_factors.iter()).map(|(bi, yi)| field_elements_multiplication(&bi, &yi)).collect();
-        let c = field_elements_inner_product(&a, &b).unwrap();
+        let b_prime: Vec<FieldElement> = b.iter().zip(H_factors.iter()).map(|(bi, yi)| bi * yi).collect();
+        let c = a.inner_product(&b).unwrap();
         let mut _1 = vec![];
-        _1.extend(&a);
-        _1.extend(&b_prime);
+        _1.extend(a.iter());
+        _1.extend(b_prime.iter());
         _1.push(c);
         let mut _2 = vec![];
-        _2.extend(&G);
-        _2.extend(&H);
+        _2.extend(G.iter());
+        _2.extend(H.iter());
         _2.push(Q);
-        let P = multi_scalar_multiplication(
-            &_1,
-            &_2,
-        ).unwrap();
+        let P = GroupElementVector::from(_2).multi_scalar_mul_var_time(&_1.into()).unwrap();
 
         let mut new_trans1 = Transcript::new(b"innerproduct");
         NewIPP::verify_ipp(n, &mut new_trans1, &G_factors, &H_factors,

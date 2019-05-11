@@ -236,14 +236,14 @@ impl<'a> RangeProofProtocol<'a> {
         // check that t_hat = t(x) = t0 + t1.x + t2.x^2
 
         // lhs = g^t_hat.h^tau_x
-        let mut lhs = commit_to_field_element(&self.g, &self.h, &proof.t_hat, &proof.tau_x);
+        let lhs = commit_to_field_element(&self.g, &self.h, &proof.t_hat, &proof.tau_x);
 
         // rhs = V^(z^2).g^delta.T1^x.T2^(x^2)
         let V_z_sqr = self.V * z_sqr;
         let g_delta = self.g * delta;
         let T1_x = proof.T1 * x;
         let T2_x_sqr = proof.T2 * x_sqr;
-        let mut rhs = V_z_sqr + g_delta + T1_x + T2_x_sqr;
+        let rhs = V_z_sqr + g_delta + T1_x + T2_x_sqr;
 
         if lhs != rhs {
             println!("Polynomial evaluation not satisfied");

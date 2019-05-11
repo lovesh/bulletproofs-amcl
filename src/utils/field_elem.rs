@@ -12,6 +12,7 @@ use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
 use std::fmt;
 use core::fmt::Display;
 use crate::utils::group_elem::GroupElement;
+use std::slice::Iter;
 
 
 #[macro_export]
@@ -51,7 +52,7 @@ impl FieldElement {
         }
     }
 
-    pub fn unity() -> Self {
+    pub fn one() -> Self {
         Self {
             value: BigNum::new_int(1)
         }
@@ -66,7 +67,7 @@ impl FieldElement {
         BigNum::iszilch(&self.value)
     }
 
-    pub fn is_unity(&self) -> bool {
+    pub fn is_one(&self) -> bool {
         BigNum::isunity(&self.value)
     }
 
@@ -467,11 +468,11 @@ impl FieldElementVector {
     pub fn new_vandermonde_vector(elem: &FieldElement, size: usize) -> Self {
         if elem.is_zero() {
             Self::new(size)
-        } else if elem.is_unity() {
-            vec![FieldElement::unity(); size].into()
+        } else if elem.is_one() {
+            vec![FieldElement::one(); size].into()
         } else {
             let mut v = Vec::<FieldElement>::with_capacity(size);
-            v.push(FieldElement::unity());
+            v.push(FieldElement::one());
             let mut current = elem.clone();
             for _ in 1..size {
                 v.push(current.clone());
@@ -577,6 +578,10 @@ impl FieldElementVector {
         let (l, r) = self.as_slice().split_at(mid);
         (Self::from(l), Self::from(r))
     }
+
+    pub fn iter(&self) -> Iter<FieldElement> {
+        self.as_slice().iter()
+    }
 }
 
 impl From<Vec<FieldElement>> for FieldElementVector {
@@ -624,6 +629,15 @@ impl PartialEq for FieldElementVector {
     }
 }
 
+impl IntoIterator for FieldElementVector {
+    type Item = FieldElement;
+    type IntoIter = ::std::vec::IntoIter<FieldElement>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elems.into_iter()
+    }
+}
+
 // TODO: Implement add/sub/mul ops but need some way to handle error when vectors are of different length
 
 
@@ -642,17 +656,17 @@ mod test {
 
     #[test]
     fn test_field_elements_inner_product() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::unity(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::unity(), FieldElement::from(200), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
+        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
         let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
         assert_eq!(a.inner_product(&b).unwrap(), c);
     }
 
     #[test]
     fn test_field_elements_hadamard_product() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::unity(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::unity(), FieldElement::from(200), FieldElement::zero()].into();
-        let h: FieldElementVector = vec![FieldElement::from(90), FieldElement::unity(), FieldElement::from(200 * 100), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
+        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
+        let h: FieldElementVector = vec![FieldElement::from(90), FieldElement::one(), FieldElement::from(200 * 100), FieldElement::zero()].into();
         let c = FieldElement::from((90 + 1 + 200 * 100) as u32);
         assert_eq!(a.hadamard_product(&b).unwrap(), h);
         assert_eq!(h.sum(), c);
@@ -671,8 +685,8 @@ mod test {
 
     #[test]
     fn test_add_field_element_vectors() {
-        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::unity(), FieldElement::from(100), FieldElement::zero()].into();
-        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::unity(), FieldElement::from(200), FieldElement::zero()].into();
+        let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
+        let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
         let c = a.plus(&b).unwrap();
         assert_eq!(c[0], FieldElement::from(5 + 18));
         assert_eq!(c[1], FieldElement::from(1 + 1));
@@ -687,9 +701,9 @@ mod test {
             assert!(zero_vec[i].is_zero())
         }
 
-        let unit_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::unity(), 5);
+        let unit_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::one(), 5);
         for i in 0..4 {
-            assert!(unit_vec[i].is_unity())
+            assert!(unit_vec[i].is_one())
         }
 
         let two_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::from(2u8), 10);
