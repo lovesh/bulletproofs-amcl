@@ -288,7 +288,7 @@ impl FP {
         return r;
     }
 
-    // find appoximation to quotient of a/m
+    // find approximation to quotient of a/m
     // Out by at most 2.
     // Note that MAXXES is bounded to be 2-bits less than half a word
     fn quo(n: &BIG, m: &BIG) -> isize {
@@ -552,6 +552,7 @@ impl FP {
         }
         return r;
     }
+
     /* self=1/self mod Modulus */
     pub fn inverse(&mut self) {
         if MODTYPE == PSEUDO_MERSENNE || MODTYPE == GENERALISED_MERSENNE {
@@ -566,6 +567,8 @@ impl FP {
             y.sqr();
             self.mul(&y);
         } else {
+            // Constant time inversion using Fermat's little theorem.
+            // Fermat's little theorem says for a prime p and for any a < p, a^p = a % p => a^(p-1) = 1 % p => a^(p-2) = a^-1 % p
             let mut m2 = BIG::new_ints(&rom::MODULUS);
             m2.dec(2);
             m2.norm();

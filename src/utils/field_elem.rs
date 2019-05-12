@@ -192,7 +192,7 @@ impl FieldElement {
         if n.iszilch() { Self::random_field_element(order) } else { n }
     }
 
-    pub fn non_adjacent_form(&self, w: usize) -> Vec<i8> {
+    pub fn to_wnaf(&self, w: usize) -> Vec<i8> {
         // required by the NAF definition
         debug_assert!( w >= 2 );
         // required so that the NAF digits fit in i8
@@ -249,6 +249,41 @@ impl FieldElement {
         }
 
         naf
+    }
+
+    /// Takes a bunch of field elements and returns the inverse of all field elements.
+    /// Also returns the product of all inverses as its computed as a side effect.
+    /// For an input of n elements, rather than doing n inversions, does only 1 inversion but 3n multiplications.
+    /// eg `batch_invert([a, b, c, d])` returns ([1/a, 1/b, 1/c, 1/d], 1/a * 1/b * 1/c * 1/d)
+    /// Algorithm taken from Guide to Elliptic Curve Cryptography book, "Algorithm 2.26 Simultaneous inversion"
+    pub fn batch_invert(elems: &[Self]) -> (Vec<Self>, Self) {
+        // TODO: Currently inversion seems to happen faster than multiplication as one of the test below shows.
+        // This might be due to the fact that the current field element multiplication algorithm is constant time.
+        // Check and add a faster multiplication algorithm if needed.
+
+        debug_assert!( elems.len() > 0 );
+
+        let k = elems.len();
+
+        // Construct c as [elems[0], elems[0]*elems[1], elems[0]*elems[1]*elems[2], .... elems[0]*elems[1]*elems[2]*...elems[k-1]]
+        let mut c: Vec<Self> = vec![elems[0].clone()];
+        for i in 1..k {
+            c.push(c[i-1] * elems[i])
+        }
+
+        // u = 1 / elems[0]*elems[1]*elems[2]*...elems[k-1]
+        let all_inv = c[k-1].inverse();
+        let mut u = all_inv;
+        let mut inverses = vec![FieldElement::one(); k];
+
+        for i in (1..k).rev() {
+            inverses[i] = u * c[i-1];
+            u = u * elems[i];
+        }
+
+        inverses[0] = u;
+
+        (inverses, all_inv)
     }
 }
 
@@ -644,6 +679,8 @@ impl IntoIterator for FieldElementVector {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::{Duration, Instant};
+    use amcl::bls381::big::BIG;
 
     #[test]
     fn test_field_elem_multiplication() {
@@ -746,5 +783,89 @@ mod test {
         expected_sum = expected_sum.plus(&b);
         expected_sum.add_assign_(&c);
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn timing_multiplication_inversion() {
+        // Timing multiplication and inversion
+        let count = 100;
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+
+        let mut res_mul = FieldElement::one();
+        let mut start = Instant::now();
+        for e in &elems {
+            res_mul = res_mul * e;
+        }
+        println!("Multiplication time for {} elems = {:?}", count, start.elapsed());
+
+        start = Instant::now();
+        let mut inverses = vec![];
+        for e in &elems {
+            inverses.push(e.inverse());
+        }
+        println!("Inverse time for {} elems = {:?}", count, start.elapsed());
+
+        start = Instant::now();
+        let (inverses_1, all_inv) = FieldElement::batch_invert(&elems);
+        println!("Batch inverse time for {} elems = {:?}", count, start.elapsed());
+
+        let mut expected_inv_product = FieldElement::one();
+        for i in 0..count {
+            assert_eq!(inverses[i], inverses_1[i]);
+            expected_inv_product = expected_inv_product * inverses[i];
+        }
+
+        assert_eq!(expected_inv_product, all_inv);
+    }
+
+    #[test]
+    fn timing_fp_big() {
+        use crate::amcl::bls381::fp::FP;
+
+        let count = 100;
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let bigs: Vec<_> = elems.iter().map(|f|f.value).collect();
+        let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
+        let mut res_mul = BIG::new_int(1 as isize);
+        let mut start = Instant::now();
+        for b in &bigs {
+            res_mul = BigNum::modmul(&res_mul, &b, &CurveOrder);
+        }
+        println!("Multiplication time for {} BIGs = {:?}", count, start.elapsed());
+
+        let mut res_mul = FP::new_int(1 as isize);
+        start = Instant::now();
+        for f in &fs {
+            res_mul.mul(&f);
+        }
+        println!("Multiplication time for {} FPs = {:?}", count, start.elapsed());
+
+        let mut inverses_b: Vec<BigNum> = vec![];
+        let mut inverses_f: Vec<FP> = vec![];
+
+        start = Instant::now();
+        for b in &bigs {
+            let mut i = b.clone();
+            i.invmodp(&CurveOrder);
+            inverses_b.push(i);
+        }
+        println!("Inverse time for {} BIGs = {:?}", count, start.elapsed());
+        for i in 0..count {
+            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CurveOrder);
+            assert_eq!(BigNum::comp(&r, &BigNum::new_int(1 as isize)), 0);
+        }
+
+        start = Instant::now();
+        for f in &fs {
+            let mut i = f.clone();
+            i.inverse();
+            inverses_f.push(i);
+        }
+        println!("Inverse time for {} FPs = {:?}", count, start.elapsed());
+        for i in 0..count {
+            let mut c = inverses_f[i].clone();
+            c.mul(&fs[i]);
+            assert!(c.equals(&FP::new_int(1 as isize)));
+        }
     }
 }

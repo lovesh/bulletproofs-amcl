@@ -118,6 +118,12 @@ impl GroupElement {
         d.into()
     }
 
+    pub fn to_wnaf_lookup_table(&self, width: usize) -> NafLookupTable5 {
+        // Only supporting table of width 5 for now
+        debug_assert_eq!(width, 5);
+        NafLookupTable5::from(self)
+    }
+
     pub fn wnaf_exp(table: &NafLookupTable5, wnaf: &[i8]) -> Self {
         let mut result = GroupElement::identity();
 
@@ -133,12 +139,6 @@ impl GroupElement {
         }
 
         result
-    }
-
-    pub fn to_wnaf_lookup_table(&self, width: usize) -> NafLookupTable5 {
-        // Only supporting table of width 5 for now
-        debug_assert_eq!(width, 5);
-        NafLookupTable5::from(self)
     }
 }
 
@@ -351,7 +351,7 @@ impl GroupElementVector {
 
         let nafs: Vec<_> = field_elems.as_slice()
             .into_iter()
-            .map(|e| e.non_adjacent_form(5))
+            .map(|e| e.to_wnaf(5))
             .collect();
 
         let mut r = GroupElement::identity();
@@ -509,7 +509,7 @@ mod test {
             let expected = a * r;
 
             let table = NafLookupTable5::from(&a);
-            let wnaf = r.non_adjacent_form(5);
+            let wnaf = r.to_wnaf(5);
             let p = GroupElement::wnaf_exp(&table, &wnaf);
 
             assert_eq!(expected, p);
@@ -584,5 +584,38 @@ mod test {
         println!("Constant time for {} scalar multiplications: {:?}", n, const_time);
         println!("Variable time for {} scalar multiplications: {:?}", n, var_time);
         println!("Variable time with pre-computation for {} scalar multiplications: {:?}", n, var_precomp_time);
+    }
+
+    #[test]
+    fn timing_wnaf_exp() {
+        let mut fs = vec![];
+        let mut gs = vec![];
+
+        let n = 32;
+        let w = 5;
+
+        for _ in 0..n {
+            fs.push(FieldElement::random(None));
+            gs.push(GroupElement::random(None));
+        }
+
+        let gv = GroupElementVector::from(gs.as_slice());
+        let fv = FieldElementVector::from(fs.as_slice());
+
+        let mut start = Instant::now();
+        for i in 0..n {
+            // The compiler might not execute the statement below
+            gv[i] * fv[i];
+        }
+        println!("Time for {} scalar multiplications: {:?}", n, start.elapsed());
+
+        start = Instant::now();
+        for i in 0..n {
+            let naf = fv[i].to_wnaf(w);
+            let table = gv[i].to_wnaf_lookup_table(w);
+            // The compiler might not execute the statement below
+            GroupElement::wnaf_exp(&table, &naf);
+        }
+        println!("Time for {} scalar multiplications using wnaf: {:?}", n, start.elapsed());
     }
 }
