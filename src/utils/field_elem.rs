@@ -40,6 +40,7 @@ impl fmt::Display for FieldElement {
 }
 
 impl FieldElement {
+    /// Creates a new field element with value 0
     pub fn new() -> Self {
         Self {
             value: BigNum::new()
@@ -503,6 +504,7 @@ pub struct FieldElementVector {
 }
 
 impl FieldElementVector {
+    /// Creates a new field element vector with each element being 0
     pub fn new(size: usize) -> Self {
         Self {
             elems: (0..size).map(|_| FieldElement::new()).collect()
@@ -797,7 +799,22 @@ mod test {
         let mut expected_sum = FieldElement::new();
         expected_sum = expected_sum.plus(&a);
         expected_sum = expected_sum.plus(&b);
-        expected_sum.add_assign_(&c);
+        expected_sum += c;
+        assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn test_field_elem_subtraction() {
+        let a = FieldElement::random(None);
+        let b = FieldElement::random(None);
+        let c = FieldElement::random(None);
+
+        let sum =  a - b - c;
+
+        let mut expected_sum = FieldElement::new();
+        expected_sum = expected_sum.plus(&a);
+        expected_sum = expected_sum - b;
+        expected_sum -= c;
         assert_eq!(sum, expected_sum);
     }
 

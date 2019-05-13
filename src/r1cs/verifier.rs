@@ -293,12 +293,14 @@ impl<'a> Verifier<'a> {
             .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)|
                 u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - FieldElement::one())).collect();
 
-        /*let Q = scalar_point_multiplication(&w, &self.g);
-        let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &proof.P).unwrap();
+        /*let Q = g * w;
+        let ipa = InnerProductArgument::new(&G.as_slice()[0..padded_n].into(),
+                                            &H.as_slice()[0..padded_n].into(), &Q, &proof.P).unwrap();
         let res = ipa.verify_proof_recursively(&proof.ipp_proof).unwrap();
         if !res {
             return Err(R1CSError::VerificationError);
         }*/
+
         let r = FieldElement::random(None);
 
         let x_sqr = x.square();

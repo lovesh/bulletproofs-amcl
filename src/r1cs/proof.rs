@@ -56,5 +56,5 @@ pub struct R1CSProof {
     pub(super) ipp_proof: InnerProductArgumentProof,
 
     // Only for debugging; Don't inlcude P in proof as the prover can cheat
-    //pub(super) P: GroupElement,
+    // pub(super) P: GroupElement,
 }

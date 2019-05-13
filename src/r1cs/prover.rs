@@ -289,8 +289,8 @@ impl<'a, 'b> Prover<'a, 'b> {
         let s_R2 = FieldElementVector::random(n2, None);
 
         let (A_I2, A_O2, S2) = if has_2nd_phase_commitments {
-            let G_n2: GroupElementVector = G.as_slice()[n1..n2].into();
-            let H_n2: GroupElementVector = H.as_slice()[n1..n2].into();
+            let G_n2: GroupElementVector = G.as_slice()[n1..n].into();
+            let H_n2: GroupElementVector = H.as_slice()[n1..n].into();
             let a_L_n2: FieldElementVector = self.a_L.as_slice()[n1..].into();
             let a_R_n2: FieldElementVector = self.a_R.as_slice()[n1..].into();
             let a_O_n2: FieldElementVector = self.a_O.as_slice()[n1..].into();
@@ -336,7 +336,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         for (i, (sl, sr)) in sLsR.enumerate() {
             // l_poly.0 = 0
             // l_poly.1 = a_L + y^-n * (z * z^Q * W_R)
-            l_poly.1[i] = self.a_L[i] + exp_y_inv[i] * wR[i];
+            l_poly.1[i] = self.a_L[i] + (exp_y_inv[i] * wR[i]);
             // l_poly.2 = a_O
             l_poly.2[i] = self.a_O[i];
             // l_poly.3 = s_L
@@ -344,7 +344,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             // r_poly.0 = (z * z^Q * W_O) - y^n
             r_poly.0[i] = wO[i] - exp_y;
             // r_poly.1 = y^n * a_R + (z * z^Q * W_L)
-            r_poly.1[i] = exp_y * self.a_R[i] + &wL[i];
+            r_poly.1[i] = exp_y * (self.a_R[i] + &wL[i]);
             // r_poly.2 = 0
             // r_poly.3 = y^n * s_R
             r_poly.3[i] = exp_y * sr;
@@ -397,7 +397,7 @@ impl<'a, 'b> Prover<'a, 'b> {
 
         // Since r_poly contains terms of y without any multiplicand, i.e. in the constant term
         for _ in n..padded_n {
-            r_vec.push(exp_y.inverse());
+            r_vec.push(exp_y.negation());
             exp_y = exp_y * y; // y^i -> y^(i+1)
         }
 
