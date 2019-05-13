@@ -19,8 +19,8 @@ use super::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, Fi
 use super::types::{BigNum, GroupG1};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
-use crate::utils::group_elem::GroupElement;
 use crate::utils::field_elem::FieldElement;
+use crate::utils::group_elem::GroupElement;
 
 
 pub fn get_seeded_RNG(entropy_size: usize) -> RAND {

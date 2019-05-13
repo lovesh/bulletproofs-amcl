@@ -52,7 +52,7 @@ impl<'a> RangeProofProtocol<'a> {
     // Generate a range proof of `v` for randomness `lambda`
     pub fn gen_proof(&self, v: &FieldElement, lambda: &FieldElement) -> Result<RangeProof, ValueError> {
         if v < &FieldElement::zero() {
-            return Err(ValueError::NegativeValue(*v.as_bignum()));
+            return Err(ValueError::NegativeValue(v.to_bignum()));
         }
 
         let mut _bitvectors = v.to_bitvectors();
@@ -396,7 +396,5 @@ mod test {
         let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(|s| GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
         let g = GroupElement::from_msg_hash("g".as_bytes());
         let h = GroupElement::from_msg_hash("h".as_bytes());
-
-
     }
 }

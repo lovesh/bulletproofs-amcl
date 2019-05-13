@@ -2,8 +2,8 @@ use rand::RngCore;
 use rand::rngs::EntropyRng;
 
 use crate::amcl::rand::RAND;
-use crate::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, FieldElementZero};
-use crate::types::{BigNum, GroupG1};
+use crate::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN};
+use crate::types::{BigNum, PrimeFieldElem, GroupG1};
 use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
@@ -13,6 +13,7 @@ use std::fmt;
 use core::fmt::Display;
 use crate::utils::group_elem::GroupElement;
 use std::slice::Iter;
+use std::path::Component::Prefix;
 
 
 #[macro_export]
@@ -30,7 +31,7 @@ macro_rules! add_field_elems {
 
 #[derive(Copy, Clone, Debug)]
 pub struct FieldElement {
-    value: BigNum
+    value: PrimeFieldElem
 }
 
 impl fmt::Display for FieldElement {
@@ -42,20 +43,25 @@ impl fmt::Display for FieldElement {
 impl FieldElement {
     pub fn new() -> Self {
         Self {
-            value: BigNum::new()
+            value: PrimeFieldElem::new()
         }
     }
 
     pub fn zero() -> Self {
         Self {
-            value: BigNum::new()
+            value: PrimeFieldElem::new()
         }
     }
 
     pub fn one() -> Self {
         Self {
-            value: BigNum::new_int(1)
+            value: PrimeFieldElem::new_int(1)
         }
+    }
+
+    pub fn to_bignum(&self) -> BigNum {
+        let mut t = PrimeFieldElem::new_copy(&self.value);
+        t.redc()
     }
 
     /// Get a random field element of the curve order. Avoid 0.
@@ -64,22 +70,18 @@ impl FieldElement {
     }
 
     pub fn is_zero(&self) -> bool {
-        BigNum::iszilch(&self.value)
+        PrimeFieldElem::iszilch(&self.value)
     }
 
     pub fn is_one(&self) -> bool {
-        BigNum::isunity(&self.value)
+        BigNum::isunity(&self.to_bignum())
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut temp = BigNum::new_copy(&self.value);
+        let mut temp = BigNum::new_copy(&self.to_bignum());
         let mut bytes: [u8; MODBYTES] = [0; MODBYTES];
         temp.tobytes(&mut bytes);
         bytes.to_vec()
-    }
-
-    pub fn as_bignum(&self) -> &BigNum {
-        &self.value
     }
 
     /// Hash message and return output as field element
@@ -93,72 +95,79 @@ impl FieldElement {
     /// Add a field element to itself. `self = self + b`
     pub fn add_assign_(&mut self, b: &Self) {
         self.value.add(&b.value);
-        self.value.rmod(&CurveOrder);
     }
 
     /// Subtract a field element from itself. `self = self - b`
     pub fn sub_assign_(&mut self, b: &Self) {
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
-        self.value.add(&neg_b);
-        self.value.rmod(&CurveOrder);
+        self.value.sub(&b.value);
     }
 
     /// Return sum of a field element and itself. `self + b`
     pub fn plus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
         sum.add(&b.value);
-        sum.rmod(&CurveOrder);
         sum.into()
     }
 
     /// Return difference of a field element and itself. `self - b`
     pub fn minus(&self, b: &Self) -> Self {
         let mut sum = self.value.clone();
-        let neg_b = BigNum::modneg(&b.value, &CurveOrder);
-        sum.add(&neg_b);
-        sum.rmod(&CurveOrder);
+        let neg_b = b.negation();
+        sum.add(&neg_b.value);
         sum.into()
     }
 
     /// Multiply 2 field elements modulus the order of the curve.
     /// field_element_a * field_element_b % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
-        BigNum::modmul(&self.value, &b.value, &CurveOrder).into()
+        let mut pr = self.value.clone();
+        pr.mul(&b.value);
+        pr.into()
     }
 
     /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
-        BigNum::modsqr(&self.value, &CurveOrder).into()
+        let mut t = self.value.clone();
+        t.sqr();
+        t.into()
     }
 
     /// Return negative of field element
     pub fn negation(&self) -> Self {
         // TODO: Implement Neg operator
-        let zero = Self::zero();
-        zero.minus(&self)
+        let mut t = PrimeFieldElem::new_copy(&self.value);
+        t.neg();
+        t.into()
     }
 
     pub fn negate(&mut self) {
-        let zero = Self::zero();
-        self.value = zero.minus(&self).value;
+        self.value.neg();
     }
 
-    /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`
+    /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`. Constant time operation
     pub fn inverse(&self) -> Self {
         let mut inv = self.value.clone();
+        inv.inverse();
+        inv.into()
+    }
+
+    /// Replace itself with inverse. Constant time operation
+    pub fn inverse_mut(&mut self) {
+        self.value.inverse();
+    }
+
+    /// Calculate inverse of a field element modulo the curve order, i.e `a^-1 % curve_order`. Variable time operation. Faster than constant time.
+    pub fn inverse_var_time(&self) -> Self {
+        let mut inv = self.to_bignum();
         inv.invmodp(&CurveOrder);
         inv.into()
     }
 
-    pub fn inverse_mut(&mut self) {
-        self.value.invmodp(&CurveOrder);
-    }
-
-    /// Gives vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
-    /// hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
+    /// Gives vectors of bit-vectors for the Big number of the field element.
+    /// Each `Chunk` has a separate bit-vector, hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
     pub fn to_bitvectors(&self) -> Vec<Vec<u8>> {
         let mut k = NLEN - 1;
-        let mut s = BigNum::new_copy(&self.value);
+        let mut s = self.to_bignum();
         s.norm();
 
         while (k as isize) >= 0 && s.w[k] == 0 {
@@ -181,13 +190,13 @@ impl FieldElement {
         return b_vec;
     }
 
-    fn random_field_element(order: Option<&BigNum>) -> BigNum {
+    fn random_field_element(order: Option<&BigNum>) -> PrimeFieldElem {
         // initialise from at least 128 byte string of raw random entropy
         let entropy_size = 256;
         let mut r = get_seeded_RNG(entropy_size);
         let n = match order {
-            Some(o) => BigNum::randomnum(&o, &mut r),
-            None => BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r)
+            Some(o) => PrimeFieldElem::new_big(&BigNum::randomnum(&o, &mut r)),
+            None => PrimeFieldElem::new_big(&BigNum::randomnum(&BigNum::new_big(&CurveOrder), &mut r))
         };
         if n.iszilch() { Self::random_field_element(order) } else { n }
     }
@@ -257,10 +266,6 @@ impl FieldElement {
     /// eg `batch_invert([a, b, c, d])` returns ([1/a, 1/b, 1/c, 1/d], 1/a * 1/b * 1/c * 1/d)
     /// Algorithm taken from Guide to Elliptic Curve Cryptography book, "Algorithm 2.26 Simultaneous inversion"
     pub fn batch_invert(elems: &[Self]) -> (Vec<Self>, Self) {
-        // TODO: Currently inversion seems to happen faster than multiplication as one of the test below shows.
-        // This might be due to the fact that the current field element multiplication algorithm is constant time.
-        // Check and add a faster multiplication algorithm if needed.
-
         debug_assert!( elems.len() > 0 );
 
         let k = elems.len();
@@ -290,7 +295,7 @@ impl FieldElement {
 impl From<u8> for FieldElement {
     fn from(x: u8) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: PrimeFieldElem::new_int(x as isize)
         }
     }
 }
@@ -298,7 +303,7 @@ impl From<u8> for FieldElement {
 impl From<u32> for FieldElement {
     fn from(x: u32) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: PrimeFieldElem::new_int(x as isize)
         }
     }
 }
@@ -306,7 +311,15 @@ impl From<u32> for FieldElement {
 impl From<i32> for FieldElement {
     fn from(x: i32) -> Self {
         Self {
-            value: BigNum::new_int(x as isize)
+            value: PrimeFieldElem::new_int(x as isize)
+        }
+    }
+}
+
+impl From<PrimeFieldElem> for FieldElement {
+    fn from(x: PrimeFieldElem) -> Self {
+        Self {
+            value: x
         }
     }
 }
@@ -314,7 +327,7 @@ impl From<i32> for FieldElement {
 impl From<BigNum> for FieldElement {
     fn from(x: BigNum) -> Self {
         Self {
-            value: x
+            value: PrimeFieldElem::new_big(&x)
         }
     }
 }
@@ -323,15 +336,16 @@ impl From<&[u8; MODBYTES]> for FieldElement {
     fn from(x: &[u8; MODBYTES]) -> Self {
         let mut n = BigNum::frombytes(x);
         n.rmod(&CurveOrder);
+        let f = PrimeFieldElem::new_big(&n);
         Self {
-            value: n
+            value: f
         }
     }
 }
 
 impl PartialEq for FieldElement {
     fn eq(&self, other: &FieldElement) -> bool {
-        BigNum::comp(&self.value, &other.value) == 0
+        self.value.equals(&other.value)
     }
 }
 
@@ -343,7 +357,9 @@ impl PartialOrd for FieldElement {
 
 impl Ord for FieldElement {
     fn cmp(&self, other: &FieldElement) -> Ordering {
-        match BigNum::comp(&self.value, &other.value) {
+        let a = self.to_bignum();
+        let b = other.to_bignum();
+        match BigNum::comp(&a, &b) {
             0 => Ordering::Equal,
             -1 => Ordering::Less,
             _ => Ordering::Greater
@@ -692,6 +708,29 @@ mod test {
     }
 
     #[test]
+    fn test_field_elem_squaring() {
+        let count = 100;
+        for _ in 0..count {
+            let a = FieldElement::random(None);
+            let a_sqr = a.square();
+            assert_eq!(a_sqr, a * a);
+        }
+    }
+
+    #[test]
+    fn test_field_elem_inversion() {
+        let count = 10;
+        for _ in 0..count {
+            let a = FieldElement::random(None);
+            let a_inv = a.inverse();
+            assert_eq!(a * a_inv, FieldElement::one());
+            let a_inv_var_time = a.inverse_var_time();
+            assert_eq!(a_inv, a_inv_var_time);
+            assert_eq!(a * a_inv_var_time, FieldElement::one());
+        }
+    }
+
+    #[test]
     fn test_field_elements_inner_product() {
         let a: FieldElementVector = vec![FieldElement::from(5), FieldElement::one(), FieldElement::from(100), FieldElement::zero()].into();
         let b: FieldElementVector = vec![FieldElement::from(18), FieldElement::one(), FieldElement::from(200), FieldElement::zero()].into();
@@ -762,31 +801,63 @@ mod test {
     }
 
     #[test]
-    fn test_negating_field_elems() {
-        let a = FieldElement::from(100u32);
-        let neg_a = a.negation();
-        assert_ne!(a, neg_a);
-        let neg_neg_a = neg_a.negation();
-        assert_eq!(a, neg_neg_a);
-    }
-
-    #[test]
     fn test_field_elem_addition() {
-        let a = FieldElement::random(None);
-        let b = FieldElement::random(None);
-        let c = FieldElement::random(None);
+        for _ in 0..100 {
+            let a = FieldElement::random(None);
+            let b = FieldElement::random(None);
+            let c = FieldElement::random(None);
 
-        let sum =  a + b + c;
+            let sum =  a + b + c;
 
-        let mut expected_sum = FieldElement::new();
-        expected_sum = expected_sum.plus(&a);
-        expected_sum = expected_sum.plus(&b);
-        expected_sum.add_assign_(&c);
-        assert_eq!(sum, expected_sum);
+            let mut expected_sum = FieldElement::new();
+            expected_sum = expected_sum.plus(&a);
+            expected_sum = expected_sum.plus(&b);
+            expected_sum += c;
+            assert_eq!(sum, expected_sum);
+            assert_eq!(sum, c + b + a);
+            assert_eq!(sum, b + c + a);
+        }
     }
 
     #[test]
-    fn timing_multiplication_inversion() {
+    fn test_negating_field_elems() {
+        for _ in 0..100 {
+            let a = FieldElement::random(None);
+            let neg_a = a.negation();
+            assert_ne!(a, neg_a);
+            let neg_neg_a = neg_a.negation();
+            assert_eq!(a, neg_neg_a);
+        }
+    }
+
+    #[test]
+    fn test_field_elem_subtraction() {
+        for _ in 0..100 {
+            let a = FieldElement::random(None);
+            let b = FieldElement::random(None);
+            let c = a - b;
+            let d = c + b;
+            assert_eq!(d, a);
+            let e = c - a;
+            let neg_b = b.negation();
+            assert_eq!(e, neg_b);
+        }
+    }
+
+    #[test]
+    fn test_field_elem_to_from_bytes() {
+        for _ in 0..100 {
+            let a = FieldElement::random(None);
+            let bytes = a.to_bytes();
+            let mut bs: [u8; MODBYTES] = [0; MODBYTES];
+            bs.clone_from_slice(bytes.as_slice());
+            let f = FieldElement::from(&bs);
+            assert_eq!(a, f);
+        }
+    }
+
+    #[test]
+    fn timing_multiplication_inversion_batch_inversion() {
         // Timing multiplication and inversion
         let count = 100;
         let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
@@ -823,8 +894,9 @@ mod test {
         use crate::amcl::bls381::fp::FP;
 
         let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
-        let bigs: Vec<_> = elems.iter().map(|f|f.value).collect();
+        let entropy_size = 256;
+        let mut r = get_seeded_RNG(entropy_size);
+        let bigs: Vec<_> = (0..count).map(|_| BigNum::randomnum(&CurveOrder, &mut r)).collect();
         let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
         let mut res_mul = BIG::new_int(1 as isize);
         let mut start = Instant::now();
