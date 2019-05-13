@@ -1,8 +1,7 @@
 //! Definition of the proof struct.
 
-
-use crate::types::GroupG1;
-use crate::types::BigNum;
+use crate::utils::field_elem::FieldElement; 
+use crate::utils::group_elem::GroupElement; 
 use crate::inner_product::InnerProductArgumentProof;
 
 /// A proof of some statement specified by a
@@ -25,37 +24,37 @@ use crate::inner_product::InnerProductArgumentProof;
 #[allow(non_snake_case)]
 pub struct R1CSProof {
     /// Commitment to the values of input wires in the first phase.
-    pub(super) A_I1: GroupG1,
+    pub(super) A_I1: GroupElement,
     /// Commitment to the values of output wires in the first phase.
-    pub(super) A_O1: GroupG1,
+    pub(super) A_O1: GroupElement,
     /// Commitment to the blinding factors in the first phase.
-    pub(super) S1: GroupG1,
+    pub(super) S1: GroupElement,
     /// Commitment to the values of input wires in the second phase.
-    pub(super) A_I2: GroupG1,
+    pub(super) A_I2: GroupElement,
     /// Commitment to the values of output wires in the second phase.
-    pub(super) A_O2: GroupG1,
+    pub(super) A_O2: GroupElement,
     /// Commitment to the blinding factors in the second phase.
-    pub(super) S2: GroupG1,
+    pub(super) S2: GroupElement,
     /// Commitment to the \\(t_1\\) coefficient of \\( t(x) \\)
-    pub(super) T_1: GroupG1,
+    pub(super) T_1: GroupElement,
     /// Commitment to the \\(t_3\\) coefficient of \\( t(x) \\)
-    pub(super) T_3: GroupG1,
+    pub(super) T_3: GroupElement,
     /// Commitment to the \\(t_4\\) coefficient of \\( t(x) \\)
-    pub(super) T_4: GroupG1,
+    pub(super) T_4: GroupElement,
     /// Commitment to the \\(t_5\\) coefficient of \\( t(x) \\)
-    pub(super) T_5: GroupG1,
+    pub(super) T_5: GroupElement,
     /// Commitment to the \\(t_6\\) coefficient of \\( t(x) \\)
-    pub(super) T_6: GroupG1,
+    pub(super) T_6: GroupElement,
     /// Evaluation of the polynomial \\(t(x)\\) at the challenge point \\(x\\)
-    pub(super) t_x: BigNum,
+    pub(super) t_x: FieldElement,
     /// Blinding factor for the synthetic commitment to \\( t(x) \\)
-    pub(super) t_x_blinding: BigNum,
+    pub(super) t_x_blinding: FieldElement,
     /// Blinding factor for the synthetic commitment to the
     /// inner-product arguments
-    pub(super) e_blinding: BigNum,
+    pub(super) e_blinding: FieldElement,
     /// Proof data for the inner-product argument.
     pub(super) ipp_proof: InnerProductArgumentProof,
 
     // Only for debugging; Don't inlcude P in proof as the prover can cheat
-    //pub(super) P: GroupG1,
+    //pub(super) P: GroupElement,
 }

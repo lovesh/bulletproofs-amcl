@@ -17,7 +17,8 @@ pub enum R1CSError {
     /// Occurs when verification of an
     /// [`R1CSProof`](::r1cs::R1CSProof) fails.
     VerificationError,
-
+    /// This error occurs when the proof encoding is malformed.
+    FormatError,
     /// Occurs when trying to use a missing variable assignment.
     /// Used by gadgets that build the constraint system to signal that
     /// a variable assignment is not provided when the prover needs it.
@@ -27,7 +28,7 @@ pub enum R1CSError {
     GadgetError {
         /// The description of the reasons for the error.
         description: String,
-    },
+    }
 }
 
 #[macro_export]

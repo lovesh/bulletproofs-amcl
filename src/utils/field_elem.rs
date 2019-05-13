@@ -8,7 +8,7 @@ use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul};
 use std::fmt;
 use core::fmt::Display;
 use crate::utils::group_elem::GroupElement;
@@ -56,6 +56,12 @@ impl FieldElement {
         Self {
             value: BigNum::new_int(1)
         }
+    }
+
+    pub fn minus_one() -> Self {
+        let mut o = Self::one();
+        o.negate();
+        o
     }
 
     /// Get a random field element of the curve order. Avoid 0.
@@ -421,6 +427,12 @@ impl<'a> Sub<&'a FieldElement> for &FieldElement {
     }
 }
 
+impl SubAssign for FieldElement {
+    fn sub_assign(&mut self, other: Self) {
+        self.sub_assign_(&other)
+    }
+}
+
 impl Mul for FieldElement {
     type Output = Self;
 
@@ -538,6 +550,10 @@ impl FieldElementVector {
 
     pub fn push(&mut self, value: FieldElement) {
         self.elems.push(value)
+    }
+
+    pub fn append(&mut self, other: &mut Self) {
+        self.elems.append(&mut other.elems)
     }
 
     /// Multiply each field element of the vector with another given field
