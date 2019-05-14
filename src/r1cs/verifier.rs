@@ -145,7 +145,7 @@ impl<'a> Verifier<'a> {
     /// but also computes the constant terms (which the prover skips
     /// because they're not needed to construct the proof).
     fn flattened_constraints(
-        &mut self,
+        &self,
         z: &FieldElement,
     ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector, FieldElement) {
         let n = self.num_vars;
@@ -184,18 +184,66 @@ impl<'a> Verifier<'a> {
         (wL, wR, wO, wV, wc)
     }
 
+    fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, FieldElement) {
+        let n = self.num_vars;
+        let m = self.V.len();
+        let q = self.constraints.len();
+        let mut WL = vec![FieldElementVector::new(n); q];
+        let mut WR = vec![FieldElementVector::new(n); q];
+        let mut WO = vec![FieldElementVector::new(n); q];
+        let mut WV = vec![FieldElementVector::new(m); q];
+        let mut wc = FieldElement::zero();
+
+        for (r, lc) in self.constraints.iter().enumerate() {
+            for (var, coeff) in &lc.terms {
+                match var {
+                    Variable::MultiplierLeft(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WL[r][i] = coeff;
+                    }
+                    Variable::MultiplierRight(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WR[r][i] = coeff;
+                    }
+                    Variable::MultiplierOutput(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WO[r][i] = coeff;
+                    }
+                    Variable::Committed(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WV[r][i] = coeff;
+                    }
+                    Variable::One() => {
+                        wc -= *coeff;
+                    }
+                }
+            }
+        }
+
+        (WL, WR, WO, WV, wc)
+    }
+
     /// Calls all remembered callbacks with an API that
     /// allows generating challenge scalars.
     fn create_randomized_constraints(mut self) -> Result<Self, R1CSError> {
-        // Note: the wrapper could've used &mut instead of ownership,
-        // but specifying lifetimes for boxed closures is not going to be nice,
-        // so we move the self into wrapper and then move it back out afterwards.
-        let mut callbacks = mem::replace(&mut self.deferred_constraints, Vec::new());
-        let mut wrapped_self = RandomizingVerifier { verifier: self };
-        for callback in callbacks.drain(..) {
-            callback(&mut wrapped_self)?;
+        // Clear the pending multiplier (if any) because it was committed into A_L/A_R/S.
+        self.pending_multiplier = None;
+
+        if self.deferred_constraints.len() == 0 {
+            self.transcript.r1cs_1phase_domain_sep();
+            Ok(self)
+        } else {
+            self.transcript.r1cs_2phase_domain_sep();
+            // Note: the wrapper could've used &mut instead of ownership,
+            // but specifying lifetimes for boxed closures is not going to be nice,
+            // so we move the self into wrapper and then move it back out afterwards.
+            let mut callbacks = mem::replace(&mut self.deferred_constraints, Vec::new());
+            let mut wrapped_self = RandomizingVerifier { verifier: self };
+            for callback in callbacks.drain(..) {
+                callback(&mut wrapped_self)?;
+            }
+            Ok(wrapped_self.verifier)
         }
-        Ok(wrapped_self.verifier)
     }
 
     /// Consume this `VerifierCS` and attempt to verify the supplied `proof`.
@@ -252,12 +300,25 @@ impl<'a> Verifier<'a> {
         let w = self.transcript.challenge_scalar(b"w");
 
         let (wL, wR, wO, wV, wc) = self.flattened_constraints(&z);
+        /*println!("{:?}", &wL);
+        println!("{:?}", &wR);
+        println!("{:?}", &wO);
+        println!("{:?}", &wV);
+        println!("{:?}", &wc);
+        let (WL, WR, WO, WV, wc_) = self.get_weight_matrices();
+        println!("{:?}", &WL);
+        println!("{:?}", &WR);
+        println!("{:?}", &WO);
+        println!("{:?}", &WV);
+        println!("{:?}", &wc_);*/
 
         let a = proof.ipp_proof.a;
         let b = proof.ipp_proof.b;
 
         let y_inv = y.inverse();
         let y_inv_vec = FieldElementVector::new_vandermonde_vector(&y_inv, padded_n);
+        /*let mut yneg_wR = wR.hadamard_product(&y_inv_vec).unwrap();
+        yneg_wR.append(&mut FieldElementVector::new(pad));*/
         let yneg_wR = wR
             .into_iter()
             .zip(y_inv_vec.iter())
@@ -265,7 +326,8 @@ impl<'a> Verifier<'a> {
             .chain(iter::repeat(FieldElement::zero()).take(pad))
             .collect::<Vec<FieldElement>>();
 
-        let delta = FieldElementVector::from(&yneg_wR[0..n]).inner_product(&wL).unwrap();
+
+        let delta = FieldElementVector::from(&yneg_wR.as_slice()[0..n]).inner_product(&wL).unwrap();
         // Get IPP variables
         let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(&proof.ipp_proof.L, &proof.ipp_proof.R, padded_n, self.transcript)
             .map_err(|_| R1CSError::VerificationError)?;
@@ -324,11 +386,11 @@ impl<'a> Verifier<'a> {
             u * x_sqr,
             u * x_cube
         ];
-        arg1.extend(wV.iter().map(|wVi| wVi * r_x_sqr));
+        arg1.extend(wV.scaled_by(&r_x_sqr));
         arg1.extend(&T_scalars);
 
         // w * (proof.t_x - a * b) + r * (x_sqr * (wc + delta) - proof.t_x)
-        arg1.push(w * (proof.t_x - a * b) + r * (x_sqr * (wc + delta) - proof.t_x));
+        arg1.push(w * (proof.t_x - (a * b)) + r * ((x_sqr * (wc + delta)) - proof.t_x));
 
         // -proof.e_blinding - r * proof.t_x_blinding
         arg1.push((proof.e_blinding + r * proof.t_x_blinding).negation());

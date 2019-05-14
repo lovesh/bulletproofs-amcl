@@ -52,7 +52,7 @@ impl<'a> RangeProofProtocol<'a> {
     // Generate a range proof of `v` for randomness `lambda`
     pub fn gen_proof(&self, v: &FieldElement, lambda: &FieldElement) -> Result<RangeProof, ValueError> {
         if v < &FieldElement::zero() {
-            return Err(ValueError::NegativeValue(*v.as_bignum()));
+            return Err(ValueError::NegativeValue(v.to_bignum()));
         }
 
         let mut _bitvectors = v.to_bitvectors();

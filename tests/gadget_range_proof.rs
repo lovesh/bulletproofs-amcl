@@ -151,4 +151,5 @@ mod tests {
         // Verifier verifies proof
         Ok(verifier.verify(&proof)?)
     }
-}*/
+}
+*/

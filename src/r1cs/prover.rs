@@ -1,5 +1,5 @@
 use crate::utils::group_elem::{GroupElement, GroupElementVector};
-use crate::utils::field_elem::{FieldElement, FieldElementVector};
+use crate::utils::field_elem::{FieldElement, FieldElementVector, multiply_row_vector_with_matrix};
 
 use merlin::Transcript;
 use crate::transcript::TranscriptProtocol;
@@ -141,7 +141,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// ```
     /// where `w{L,R,O}` is \\( z \cdot z^Q \cdot W_{L,R,O} \\).
     fn flattened_constraints(
-        &mut self,
+        &self,
         z: &FieldElement,
     ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector) {
         let n = self.a_L.len();
@@ -175,6 +175,79 @@ impl<'a, 'b> Prover<'a, 'b> {
             }
             exp_z = exp_z * z;
         }
+
+        (wL, wR, wO, wV)
+    }
+
+    fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>) {
+        let n = self.a_L.len();
+        let m = self.v.len();
+        let q = self.constraints.len();
+        let mut WL = vec![FieldElementVector::new(n); q];
+        let mut WR = vec![FieldElementVector::new(n); q];
+        let mut WO = vec![FieldElementVector::new(n); q];
+        let mut WV = vec![FieldElementVector::new(m); q];
+
+        for (r, lc) in self.constraints.iter().enumerate() {
+            for (var, coeff) in &lc.terms {
+                match var {
+                    Variable::MultiplierLeft(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WL[r][i] = coeff;
+                    }
+                    Variable::MultiplierRight(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WR[r][i] = coeff;
+                    }
+                    Variable::MultiplierOutput(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WO[r][i] = coeff;
+                    }
+                    Variable::Committed(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WV[r][i] = coeff;
+                    }
+                    Variable::One() => {
+                        // The prover doesn't need to handle constant terms
+                    }
+                }
+            }
+        }
+
+        (WL, WR, WO, WV)
+    }
+
+    fn flattened_constraints_elaborated(
+        &self,
+        z: &FieldElement,
+    ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector) {
+        let (WL, WR, WO, WV) = self.get_weight_matrices();
+
+        /*println!("Left Weight matrix");
+        util::print_2d_matrix(&WL);
+        println!("Right Weight matrix");
+        util::print_2d_matrix(&WR);
+        println!("Out Weight matrix");
+        util::print_2d_matrix(&WO);
+        println!("Comm Weight matrix");
+        util::print_2d_matrix(&WV);*/
+
+        let n = self.a_L.len();
+        let m = self.v.len();
+        let q = self.constraints.len();
+        let z_exp: FieldElementVector = FieldElementVector::new_vandermonde_vector(z, q+1).into_iter().skip(1).collect::<Vec<_>>().into();
+
+        let minus_z_exp: FieldElementVector = z_exp.iter().map(|e| (*e).negation()).collect::<Vec<_>>().into();
+        let mut wL = multiply_row_vector_with_matrix(&z_exp, &WL).unwrap();
+        let mut wR = multiply_row_vector_with_matrix(&z_exp, &WR).unwrap();
+        let mut wO = multiply_row_vector_with_matrix(&z_exp, &WO).unwrap();
+        let mut wV = multiply_row_vector_with_matrix(&minus_z_exp, &WV).unwrap();
+
+        /*println!("Flattened weights");
+        util::print_vector(&wL);
+        util::print_vector(&wR);
+        util::print_vector(&wO);
+        util::print_vector(&wV);*/
 
         (wL, wR, wO, wV)
     }
@@ -321,6 +394,21 @@ impl<'a, 'b> Prover<'a, 'b> {
         let z = self.transcript.challenge_scalar(b"z");
 
         let (wL, wR, wO, wV) = self.flattened_constraints(&z);
+        /*println!("{:?}", &wL);
+        println!("{:?}", &wR);
+        println!("{:?}", &wO);
+        println!("{:?}", &wV);
+        let (WL, WR, WO, WV) = self.get_weight_matrices();
+        println!("{:?}", &WL);
+        println!("{:?}", &WR);
+        println!("{:?}", &WO);
+        println!("{:?}", &WV);*/
+        /*let (wL_, wR_, wO_, wV_) = self.flattened_constraints_elaborated(&z);
+
+        assert_eq!(wL, wL_);
+        assert_eq!(wR, wR_);
+        assert_eq!(wO, wO_);
+        assert_eq!(wV, wV_);*/
 
         let mut l_poly = VecPoly3::zero(n);
         let mut r_poly = VecPoly3::zero(n);
@@ -344,7 +432,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             // r_poly.0 = (z * z^Q * W_O) - y^n
             r_poly.0[i] = wO[i] - exp_y;
             // r_poly.1 = y^n * a_R + (z * z^Q * W_L)
-            r_poly.1[i] = exp_y * (self.a_R[i] + &wL[i]);
+            r_poly.1[i] = (exp_y * self.a_R[i]) + &wL[i];
             // r_poly.2 = 0
             // r_poly.3 = y^n * s_R
             r_poly.3[i] = exp_y * sr;

@@ -109,7 +109,7 @@ impl GroupElement {
     /// Multiply point on the curve (element of group G1) with a scalar.
     /// field_element_a * group_element_b
     pub fn scalar_mul(&self, a: &FieldElement) -> Self {
-        self.value.mul(a.as_bignum()).into()
+        self.value.mul(&a.to_bignum()).into()
     }
 
     pub fn double(&self) -> Self {

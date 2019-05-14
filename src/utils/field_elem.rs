@@ -85,8 +85,11 @@ impl FieldElement {
         bytes.to_vec()
     }
 
-    pub fn as_bignum(&self) -> &BigNum {
-        &self.value
+    pub fn to_bignum(&self) -> BigNum {
+        let mut v = self.value.clone();
+        v.rmod(&CurveOrder);
+        v
+        //self.value
     }
 
     /// Hash message and return output as field element
@@ -159,6 +162,26 @@ impl FieldElement {
 
     pub fn inverse_mut(&mut self) {
         self.value.invmodp(&CurveOrder);
+    }
+
+    pub fn shift_right(&self, k: usize) -> Self {
+        let mut t = self.value.clone();
+        t.shr(k);
+        t.into()
+    }
+
+    pub fn shift_left(&self, k: usize) -> Self {
+        let mut t = self.value.clone();
+        t.shl(k);
+        t.into()
+    }
+
+    pub fn is_even(&self) -> bool {
+        self.value.parity() == 0
+    }
+
+    pub fn is_odd(&self) -> bool {
+        !self.is_even()
     }
 
     /// Gives vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
@@ -304,6 +327,14 @@ impl From<u8> for FieldElement {
 
 impl From<u32> for FieldElement {
     fn from(x: u32) -> Self {
+        Self {
+            value: BigNum::new_int(x as isize)
+        }
+    }
+}
+
+impl From<u64> for FieldElement {
+    fn from(x: u64) -> Self {
         Self {
             value: BigNum::new_int(x as isize)
         }
@@ -694,6 +725,18 @@ impl IntoIterator for FieldElementVector {
 // TODO: Implement add/sub/mul ops but need some way to handle error when vectors are of different length
 
 
+pub fn multiply_row_vector_with_matrix(vector: &FieldElementVector, matrix: &Vec<FieldElementVector>) -> Result<FieldElementVector, ValueError> {
+    check_vector_size_for_equality!(vector, matrix)?;
+    let out_len = matrix[0].len();
+    let mut out = FieldElementVector::new(out_len);
+    for i in 0..out_len {
+        for j in 0..vector.len() {
+            out[i] += vector[j] * matrix[j][i];
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -816,6 +859,14 @@ mod test {
         expected_sum = expected_sum - b;
         expected_sum -= c;
         assert_eq!(sum, expected_sum);
+    }
+
+    #[test]
+    fn test_static_field_elems() {
+        let zero = FieldElement::zero();
+        let one = FieldElement::one();
+        let minus_one = FieldElement::minus_one();
+        assert_eq!(one + minus_one, zero);
     }
 
     #[test]

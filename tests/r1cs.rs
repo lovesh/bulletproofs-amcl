@@ -1,5 +1,5 @@
-extern crate bulletproofs_amcl as bulletproofs;
 extern crate merlin;
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::{LinearCombination, ConstraintSystem, R1CSProof, Variable, Prover, Verifier};
 use bulletproofs::errors::R1CSError;
@@ -16,8 +16,8 @@ mod tests {
     #[test]
     fn test_2_factors_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
-        let G: GroupElementVector = get_generators("g", 8).into();
-        let H: GroupElementVector = get_generators("h", 8).into();
+        let G: GroupElementVector = get_generators("G", 8).into();
+        let H: GroupElementVector = get_generators("H", 8).into();
         let g =  GroupElement::from_msg_hash("g".as_bytes());
         let h =  GroupElement::from_msg_hash("h".as_bytes());
 
@@ -67,14 +67,14 @@ mod tests {
     #[test]
     fn test_factor_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
-        let G: GroupElementVector = get_generators("g", 8).into();
-        let H: GroupElementVector = get_generators("h", 8).into();
+        let G: GroupElementVector = get_generators("G", 8).into();
+        let H: GroupElementVector = get_generators("H", 8).into();
         let g =  GroupElement::from_msg_hash("g".as_bytes());
         let h =  GroupElement::from_msg_hash("h".as_bytes());
 
         let factors = vec![
-            (FieldElement::from(2u32), FieldElement::from(4u32), FieldElement::from(6u32), FieldElement::from(8u32)),
-            (FieldElement::from(7u32), FieldElement::from(5u32), FieldElement::from(35u32), FieldElement::from(105u32))
+            (FieldElement::from(2u32), FieldElement::from(4u32), FieldElement::from(6u32), FieldElement::from(48u32)),
+            (FieldElement::from(7u32), FieldElement::from(5u32), FieldElement::from(35u32), FieldElement::from(1225u32))
         ];
 
         let (proof, commitments) = {
