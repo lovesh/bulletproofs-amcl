@@ -8,10 +8,6 @@ use bulletproofs::errors::R1CSError;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
-/*mod util;
-mod gadget_zero_nonzero;
-use util::{constrain_lc_with_scalar};
-use gadget_zero_nonzero::is_nonzero_gadget;*/
 mod utils;
 use utils::constrain_lc_with_scalar;
 use utils::zero_non_zero::is_nonzero_gadget;
