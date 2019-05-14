@@ -2,7 +2,6 @@ use crate::utils::field_elem::FieldElement;
 
 use std::iter::FromIterator;
 use std::ops::{Add, Mul, Neg, Sub};
-use crate::utils::negate_field_element;
 
 
 #[derive(Copy, Clone, Debug)]

@@ -292,11 +292,7 @@ impl NewIPP {
 mod tests {
     use super::*;
     use merlin::Transcript;
-    use crate::utils::hash_on_GroupG1;
     use crate::utils::get_generators;
-    use crate::types::BigNum;
-    use crate::utils::random_field_element;
-    use crate::utils::field_elem_power_vector;
 
     #[test]
     fn test_ipp() {
