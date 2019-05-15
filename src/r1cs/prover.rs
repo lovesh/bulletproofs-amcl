@@ -238,10 +238,10 @@ impl<'a, 'b> Prover<'a, 'b> {
         let z_exp: FieldElementVector = FieldElementVector::new_vandermonde_vector(z, q+1).into_iter().skip(1).collect::<Vec<_>>().into();
 
         let minus_z_exp: FieldElementVector = z_exp.iter().map(|e| (*e).negation()).collect::<Vec<_>>().into();
-        let mut wL = multiply_row_vector_with_matrix(&z_exp, &WL).unwrap();
-        let mut wR = multiply_row_vector_with_matrix(&z_exp, &WR).unwrap();
-        let mut wO = multiply_row_vector_with_matrix(&z_exp, &WO).unwrap();
-        let mut wV = multiply_row_vector_with_matrix(&minus_z_exp, &WV).unwrap();
+        let wL = multiply_row_vector_with_matrix(&z_exp, &WL).unwrap();
+        let wR = multiply_row_vector_with_matrix(&z_exp, &WR).unwrap();
+        let wO = multiply_row_vector_with_matrix(&z_exp, &WO).unwrap();
+        let wV = multiply_row_vector_with_matrix(&minus_z_exp, &WV).unwrap();
 
         /*println!("Flattened weights");
         util::print_vector(&wL);

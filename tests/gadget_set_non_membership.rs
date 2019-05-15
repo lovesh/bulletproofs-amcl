@@ -64,7 +64,6 @@ mod tests {
             let mut diff_inv_vars: Vec<AllocatedQuantity> = vec![];
 
             let mut prover_transcript = Transcript::new(b"SetNonMemebershipTest");
-            let mut rng = rand::thread_rng();
 
             let mut prover = Prover::new(&g, &h, &mut prover_transcript);
             let value= FieldElement::from(value);
