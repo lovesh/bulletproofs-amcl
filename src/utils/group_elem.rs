@@ -127,7 +127,7 @@ impl GroupElement {
     /// Uses wNAF.
     pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
         // TODO: Optimization: Attach the lookup table to the struct
-        let table = NafLookupTable5::from(&self);
+        let table = NafLookupTable5::from(self);
         let wnaf = a.to_wnaf(5);
         GroupElement::wnaf_exp(&table, &wnaf)
     }
