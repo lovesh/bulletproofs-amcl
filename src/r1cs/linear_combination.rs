@@ -1,10 +1,8 @@
-use crate::types::BigNum;
+use crate::utils::field_elem::FieldElement;
 
 use std::iter::FromIterator;
 use std::ops::{Add, Mul, Neg, Sub};
-use crate::utils::negate_field_element;
 
-type Scalar = BigNum;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Variable {
@@ -23,7 +21,7 @@ pub enum Variable {
 #[derive(Copy, Clone, Debug)]
 pub struct AllocatedQuantity {
     pub variable: Variable,
-    pub assignment: Option<BigNum>
+    pub assignment: Option<FieldElement>
 }
 
 /// Represents a linear combination of
@@ -31,7 +29,7 @@ pub struct AllocatedQuantity {
 /// `(Variable, Scalar)` pair.
 #[derive(Clone, Debug)]
 pub struct LinearCombination {
-    pub terms: Vec<(Variable, Scalar)>,
+    pub terms: Vec<(Variable, FieldElement)>,
 }
 
 impl Default for LinearCombination {
@@ -42,25 +40,25 @@ impl Default for LinearCombination {
 
 impl From<Variable> for LinearCombination {
     fn from(v: Variable) -> LinearCombination {
-        let one = BigNum::new_int(1);
+        let one = FieldElement::one();
         LinearCombination {
             terms: vec![(v, one)],
         }
     }
 }
 
-impl From<Scalar> for LinearCombination {
-    fn from(s: Scalar) -> LinearCombination {
+impl From<FieldElement> for LinearCombination {
+    fn from(s: FieldElement) -> LinearCombination {
         LinearCombination {
             terms: vec![(Variable::One(), s)],
         }
     }
 }
 
-impl FromIterator<(Variable, Scalar)> for LinearCombination {
+impl FromIterator<(Variable, FieldElement)> for LinearCombination {
     fn from_iter<T>(iter: T) -> Self
         where
-            T: IntoIterator<Item = (Variable, Scalar)>,
+            T: IntoIterator<Item = (Variable, FieldElement)>,
     {
         LinearCombination {
             terms: iter.into_iter().collect(),
@@ -68,10 +66,10 @@ impl FromIterator<(Variable, Scalar)> for LinearCombination {
     }
 }
 
-impl<'a> FromIterator<&'a (Variable, Scalar)> for LinearCombination {
+impl<'a> FromIterator<&'a (Variable, FieldElement)> for LinearCombination {
     fn from_iter<T>(iter: T) -> Self
         where
-            T: IntoIterator<Item = &'a (Variable, Scalar)>,
+            T: IntoIterator<Item = &'a (Variable, FieldElement)>,
     {
         LinearCombination {
             terms: iter.into_iter().cloned().collect(),
@@ -86,7 +84,7 @@ impl Neg for LinearCombination {
 
     fn neg(mut self) -> Self::Output {
         for (_, s) in self.terms.iter_mut() {
-            *s = negate_field_element(s);
+            *s = s.negation();
         }
         self
     }
@@ -106,19 +104,19 @@ impl<L: Into<LinearCombination>> Sub<L> for LinearCombination {
 
     fn sub(mut self, rhs: L) -> Self::Output {
         self.terms
-            .extend(rhs.into().terms.iter().map(|(var, coeff)| (*var, negate_field_element(coeff))));
+            .extend(rhs.into().terms.iter().map(|(var, coeff)| (*var, coeff.negation())));
         LinearCombination { terms: self.terms }
     }
 }
 
 // Arithmetic on variables produces linear combinations
 
-impl Add<Variable> for Scalar {
+impl Add<Variable> for FieldElement {
     type Output = LinearCombination;
 
     fn add(self, other: Variable) -> Self::Output {
         LinearCombination {
-            terms: vec![(Variable::One(), self), (other, field_element_one!())],
+            terms: vec![(Variable::One(), self), (other, FieldElement::one())],
         }
     }
 }
@@ -147,19 +145,19 @@ impl<L: Into<LinearCombination>> Add<L> for Variable {
     }
 }
 
-// Arithmetic on scalars with variables produces linear combinations
+// Arithmetic on FieldElement with variables produces linear combinations
 
-impl Sub<Variable> for Scalar {
+impl Sub<Variable> for FieldElement {
     type Output = LinearCombination;
 
     fn sub(self, other: Variable) -> Self::Output {
         LinearCombination {
-            terms: vec![(Variable::One(), self), (other, field_element_neg_one!())],
+            terms: vec![(Variable::One(), self), (other, FieldElement::minus_one())],
         }
     }
 }
 
-impl Mul<Variable> for Scalar {
+impl Mul<Variable> for FieldElement {
     type Output = LinearCombination;
 
     fn mul(self, other: Variable) -> Self::Output {

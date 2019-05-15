@@ -1,8 +1,7 @@
-/*
-extern crate bulletproofs_amcl as bulletproofs;
 extern crate merlin;
+use bulletproofs_amcl as bulletproofs;
 
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier};
+use bulletproofs::r1cs::{LinearCombination, ConstraintSystem, R1CSProof, Variable, Prover, Verifier};
 use bulletproofs::errors::R1CSError;
 
 
@@ -10,34 +9,31 @@ use bulletproofs::errors::R1CSError;
 mod tests {
     use super::*;
     use merlin::Transcript;
-    use bulletproofs::types::GroupG1;
-    use bulletproofs::utils::hash_on_GroupG1;
-    use bulletproofs::utils::random_field_element;
-    use bulletproofs::types::BigNum;
-    use bulletproofs::r1cs::LinearCombination;
     use bulletproofs::utils::get_generators;
+    use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
+    use bulletproofs::utils::field_elem::FieldElement;
 
     #[test]
     fn test_2_factors_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
-        let G = get_generators("g", 8);
-        let H = get_generators("h", 8);
-        let g = hash_on_GroupG1("g".as_bytes());
-        let h = hash_on_GroupG1("h".as_bytes());
+        let G: GroupElementVector = get_generators("G", 8).into();
+        let H: GroupElementVector = get_generators("H", 8).into();
+        let g =  GroupElement::from_msg_hash("g".as_bytes());
+        let h =  GroupElement::from_msg_hash("h".as_bytes());
 
         let factors = vec![
-            (BigNum::new_int(17), BigNum::new_int(19), BigNum::new_int(323)),
-            (BigNum::new_int(7), BigNum::new_int(5), BigNum::new_int(35))
+            (FieldElement::from(17u32), FieldElement::from(19u32), FieldElement::from(323u32)),
+            (FieldElement::from(7u32), FieldElement::from(5u32), FieldElement::from(35u32))
         ];
 
         let (proof, commitments) = {
             let mut comms = vec![];
             let mut prover_transcript = Transcript::new(b"Factors");
-            let mut prover = Prover::new(&G, &H, &g, &h, &mut prover_transcript);
+            let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
             for (p, q, r) in &factors {
-                let (com_p, var_p) = prover.commit(*p, random_field_element(None));
-                let (com_q, var_q) = prover.commit(*q, random_field_element(None));
+                let (com_p, var_p) = prover.commit(*p, FieldElement::random(None));
+                let (com_q, var_q) = prover.commit(*q, FieldElement::random(None));
                 let (_, _, o) =  prover.multiply(var_p.into(), var_q.into());
                 let lc: LinearCombination = vec![(Variable::One(), *r)].iter().collect();
                 prover.constrain(o -  lc);
@@ -45,7 +41,7 @@ mod tests {
                 comms.push(com_q);
             }
 
-            let proof = prover.prove().unwrap();
+            let proof = prover.prove(&G, &H).unwrap();
 
             (proof, comms)
         };
@@ -53,7 +49,7 @@ mod tests {
         println!("Proving done");
 
         let mut verifier_transcript = Transcript::new(b"Factors");
-        let mut verifier = Verifier::new(&G, &H, &g, &h, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let mut i = 0;
         while i < factors.len() {
             let var_p = verifier.commit(commitments[2*i]);
@@ -65,31 +61,31 @@ mod tests {
             i += 1;
         }
 
-        assert!(verifier.verify(&proof).is_ok());
+        assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
     }
 
     #[test]
     fn test_factor_r1cs() {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
-        let G = get_generators("g", 8);
-        let H = get_generators("h", 8);
-        let g = hash_on_GroupG1("g".as_bytes());
-        let h = hash_on_GroupG1("h".as_bytes());
+        let G: GroupElementVector = get_generators("G", 8).into();
+        let H: GroupElementVector = get_generators("H", 8).into();
+        let g =  GroupElement::from_msg_hash("g".as_bytes());
+        let h =  GroupElement::from_msg_hash("h".as_bytes());
 
         let factors = vec![
-            (BigNum::new_int(2), BigNum::new_int(4), BigNum::new_int(6), BigNum::new_int(48)),
-            (BigNum::new_int(7), BigNum::new_int(5), BigNum::new_int(3), BigNum::new_int(105))
+            (FieldElement::from(2u32), FieldElement::from(4u32), FieldElement::from(6u32), FieldElement::from(48u32)),
+            (FieldElement::from(7u32), FieldElement::from(5u32), FieldElement::from(35u32), FieldElement::from(1225u32))
         ];
 
         let (proof, commitments) = {
             let mut comms = vec![];
             let mut prover_transcript = Transcript::new(b"Factors");
-            let mut prover = Prover::new(&G, &H, &g, &h, &mut prover_transcript);
+            let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
             for (p, q, r, s) in &factors {
-                let (com_p, var_p) = prover.commit(*p, random_field_element(None));
-                let (com_q, var_q) = prover.commit(*q, random_field_element(None));
-                let (com_r, var_r) = prover.commit(*r, random_field_element(None));
+                let (com_p, var_p) = prover.commit(*p, FieldElement::random(None));
+                let (com_q, var_q) = prover.commit(*q, FieldElement::random(None));
+                let (com_r, var_r) = prover.commit(*r, FieldElement::random(None));
                 let (_, _, o1) =  prover.multiply(var_p.into(), var_q.into());
                 let (_, _, o2) =  prover.multiply(o1.into(), var_r.into());
                 let mut lc: LinearCombination = vec![(Variable::One(), *s)].iter().collect();
@@ -99,7 +95,7 @@ mod tests {
                 comms.push(com_r);
             }
 
-            let proof = prover.prove().unwrap();
+            let proof = prover.prove(&G, &H).unwrap();
 
             (proof, comms)
         };
@@ -107,7 +103,7 @@ mod tests {
         println!("Proving done");
 
         let mut verifier_transcript = Transcript::new(b"Factors");
-        let mut verifier = Verifier::new(&G, &H, &g, &h, &mut verifier_transcript);
+        let mut verifier = Verifier::new(&mut verifier_transcript);
         let mut i = 0;
         while i < factors.len() {
             let var_p = verifier.commit(commitments[3*i]);
@@ -121,6 +117,6 @@ mod tests {
             i += 1;
         }
 
-        assert!(verifier.verify(&proof).is_ok());
+        assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
     }
-}*/
+}

@@ -19,8 +19,7 @@ pub mod constants;
 pub mod inner_product;
 pub mod range_proof;
 mod transcript;
+
 mod new_ipp;
-/*
 
 pub mod r1cs;
-*/

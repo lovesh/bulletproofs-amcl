@@ -79,7 +79,7 @@ impl VecPoly3 {
 
         let t1 = lhs.1.inner_product(&rhs.0).unwrap();
         let t2 = lhs.1.inner_product(&rhs.1).unwrap() + lhs.2.inner_product(&rhs.0).unwrap();
-        let t3 = lhs.2.inner_product(&rhs.1).unwrap() + &lhs.2.inner_product(&rhs.0).unwrap();
+        let t3 = lhs.2.inner_product(&rhs.1).unwrap() + &lhs.3.inner_product(&rhs.0).unwrap();
         let t4 = lhs.1.inner_product(&rhs.3).unwrap() + &lhs.3.inner_product(&rhs.1).unwrap();
         let t5 = lhs.2.inner_product(&rhs.3).unwrap();
         let t6 = lhs.3.inner_product(&rhs.3).unwrap();
@@ -98,7 +98,7 @@ impl VecPoly3 {
         let n = self.0.len();
         let mut out = FieldElementVector::new(n);
         for i in 0..n {
-            out[i] += self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
+            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
         }
         out
     }

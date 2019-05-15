@@ -2,18 +2,17 @@ use rand::RngCore;
 use rand::rngs::EntropyRng;
 
 use crate::amcl::rand::RAND;
-use crate::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN};
-use crate::types::{BigNum, PrimeFieldElem, GroupG1};
+use crate::constants::{MODBYTES, CurveOrder, NLEN};
+use crate::types::{BigNum, PrimeFieldElem};
 use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
-use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};
+use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul};
 use std::fmt;
 use core::fmt::Display;
 use crate::utils::group_elem::GroupElement;
 use std::slice::Iter;
-use std::path::Component::Prefix;
 
 
 #[macro_export]
@@ -41,6 +40,7 @@ impl fmt::Display for FieldElement {
 }
 
 impl FieldElement {
+    /// Creates a new field element with value 0
     pub fn new() -> Self {
         Self {
             value: PrimeFieldElem::new()
@@ -62,6 +62,12 @@ impl FieldElement {
     pub fn to_bignum(&self) -> BigNum {
         let mut t = PrimeFieldElem::new_copy(&self.value);
         t.redc()
+    }
+
+    pub fn minus_one() -> Self {
+        let mut o = Self::one();
+        o.negate();
+        o
     }
 
     /// Get a random field element of the curve order. Avoid 0.
@@ -163,8 +169,29 @@ impl FieldElement {
         inv.into()
     }
 
-    /// Gives vectors of bit-vectors for the Big number of the field element.
-    /// Each `Chunk` has a separate bit-vector, hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
+    pub fn shift_right(&self, k: usize) -> Self {
+        let mut t = self.to_bignum();
+        t.shr(k);
+        t.into()
+    }
+
+    pub fn shift_left(&self, k: usize) -> Self {
+        let mut t = self.to_bignum();
+        t.shl(k);
+        t.into()
+    }
+
+    pub fn is_even(&self) -> bool {
+        let b = self.to_bignum();
+        b.parity() == 0
+    }
+
+    pub fn is_odd(&self) -> bool {
+        !self.is_even()
+    }
+
+    /// Gives vectors of bit-vectors for the Big number. Each `Chunk` has a separate bit-vector,
+    /// hence upto NLEN bit-vectors possible. NOT SIDE CHANNEL RESISTANT
     pub fn to_bitvectors(&self) -> Vec<Vec<u8>> {
         let mut k = NLEN - 1;
         let mut s = self.to_bignum();
@@ -308,6 +335,14 @@ impl From<u32> for FieldElement {
     }
 }
 
+impl From<u64> for FieldElement {
+    fn from(x: u64) -> Self {
+        Self {
+            value: PrimeFieldElem::new_int(x as isize)
+        }
+    }
+}
+
 impl From<i32> for FieldElement {
     fn from(x: i32) -> Self {
         Self {
@@ -437,6 +472,12 @@ impl<'a> Sub<&'a FieldElement> for &FieldElement {
     }
 }
 
+impl SubAssign for FieldElement {
+    fn sub_assign(&mut self, other: Self) {
+        self.sub_assign_(&other)
+    }
+}
+
 impl Mul for FieldElement {
     type Output = Self;
 
@@ -507,6 +548,7 @@ pub struct FieldElementVector {
 }
 
 impl FieldElementVector {
+    /// Creates a new field element vector with each element being 0
     pub fn new(size: usize) -> Self {
         Self {
             elems: (0..size).map(|_| FieldElement::new()).collect()
@@ -554,6 +596,10 @@ impl FieldElementVector {
 
     pub fn push(&mut self, value: FieldElement) {
         self.elems.push(value)
+    }
+
+    pub fn append(&mut self, other: &mut Self) {
+        self.elems.append(&mut other.elems)
     }
 
     /// Multiply each field element of the vector with another given field
@@ -691,6 +737,18 @@ impl IntoIterator for FieldElementVector {
 
 // TODO: Implement add/sub/mul ops but need some way to handle error when vectors are of different length
 
+
+pub fn multiply_row_vector_with_matrix(vector: &FieldElementVector, matrix: &Vec<FieldElementVector>) -> Result<FieldElementVector, ValueError> {
+    check_vector_size_for_equality!(vector, matrix)?;
+    let out_len = matrix[0].len();
+    let mut out = FieldElementVector::new(out_len);
+    for i in 0..out_len {
+        for j in 0..vector.len() {
+            out[i] += vector[j] * matrix[j][i];
+        }
+    }
+    Ok(out)
+}
 
 #[cfg(test)]
 mod test {
@@ -831,6 +889,18 @@ mod test {
     }
 
     #[test]
+    fn test_field_elem_to_from_bytes() {
+        for _ in 0..100 {
+            let a = FieldElement::random(None);
+            let bytes = a.to_bytes();
+            let mut bs: [u8; MODBYTES] = [0; MODBYTES];
+            bs.clone_from_slice(bytes.as_slice());
+            let f = FieldElement::from(&bs);
+            assert_eq!(a, f);
+        }
+    }
+
+    #[test]
     fn test_field_elem_subtraction() {
         for _ in 0..100 {
             let a = FieldElement::random(None);
@@ -842,18 +912,26 @@ mod test {
             let neg_b = b.negation();
             assert_eq!(e, neg_b);
         }
+
+        let a = FieldElement::random(None);
+        let b = FieldElement::random(None);
+        let c = FieldElement::random(None);
+
+        let sum =  a - b - c;
+
+        let mut expected_sum = FieldElement::new();
+        expected_sum = expected_sum.plus(&a);
+        expected_sum = expected_sum - b;
+        expected_sum -= c;
+        assert_eq!(sum, expected_sum);
     }
 
     #[test]
-    fn test_field_elem_to_from_bytes() {
-        for _ in 0..100 {
-            let a = FieldElement::random(None);
-            let bytes = a.to_bytes();
-            let mut bs: [u8; MODBYTES] = [0; MODBYTES];
-            bs.clone_from_slice(bytes.as_slice());
-            let f = FieldElement::from(&bs);
-            assert_eq!(a, f);
-        }
+    fn test_static_field_elems() {
+        let zero = FieldElement::zero();
+        let one = FieldElement::one();
+        let minus_one = FieldElement::minus_one();
+        assert_eq!(one + minus_one, zero);
     }
 
     #[test]

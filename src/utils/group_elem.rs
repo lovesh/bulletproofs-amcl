@@ -265,6 +265,10 @@ impl GroupElementVector {
         self.elems.push(value)
     }
 
+    pub fn append(&mut self, other: &mut Self) {
+        self.elems.append(&mut other.elems)
+    }
+
     /// Compute sum of all elements of a vector
     pub fn sum(&self) -> GroupElement {
         let mut accum = GroupElement::new();

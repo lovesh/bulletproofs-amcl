@@ -1,12 +1,10 @@
 //! Definition of the constraint system trait.
 
 
-use crate::types::BigNum;
+use crate::utils::field_elem::FieldElement;
 use crate::r1cs::linear_combination::LinearCombination;
 use crate::r1cs::linear_combination::Variable;
 use crate::errors::R1CSError;
-
-type Scalar = BigNum;
 
 /// The interface for a constraint system, abstracting over the prover
 /// and verifier's roles.
@@ -44,6 +42,18 @@ pub trait ConstraintSystem {
         right: LinearCombination,
     ) -> (Variable, Variable, Variable);
 
+    /// Allocate a single variable.
+    ///
+    /// This either allocates a new multiplier and returns its `left` variable,
+    /// or returns a `right` variable of a multiplier previously allocated by this method.
+    /// The output of a multiplier is assigned on a even call, when `right` is assigned.
+    ///
+    /// When CS is committed at the end of the first or second phase, the half-assigned multiplier
+    /// has the `right` assigned to zero and all its variables committed.
+    ///
+    /// Returns unconstrained `Variable` for use in further constraints.
+    fn allocate(&mut self, assignment: Option<FieldElement>) -> Result<Variable, R1CSError>;
+
     /// Allocate variables `left`, `right`, and `out`
     /// with the implicit constraint that
     /// ```text
@@ -51,9 +61,10 @@ pub trait ConstraintSystem {
     /// ```
     ///
     /// Returns `(left, right, out)` for use in further constraints.
-    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
-    where
-        F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>;
+    fn allocate_multiplier(
+        &mut self,
+        input_assignments: Option<(FieldElement, FieldElement)>,
+    ) -> Result<(Variable, Variable, Variable), R1CSError>;
 
     /// Enforce the explicit constraint that
     /// ```text
@@ -61,7 +72,7 @@ pub trait ConstraintSystem {
     /// ```
     fn constrain(&mut self, lc: LinearCombination);
 
-    /// Specify additional variables and constraints randomized using a challenge scalar
+    /// Specify additional variables and constraints randomized using a challenge FieldElement
     /// bound to the assignments of the non-randomized variables.
     ///
     /// If the constraint system’s low-level variables have not been committed yet,
@@ -72,17 +83,26 @@ pub trait ConstraintSystem {
     ///
     /// ### Usage
     ///
-    /// Inside the closure you can generate one or more challenges using `challenge_scalar` method.
+    /// Inside the closure you can generate one or more challenges using `challenge_FieldElement` method.
     ///
     /// ```text
     /// cs.specify_randomized_constraints(move |cs| {
-    ///     let z = cs.challenge_scalar(b"some challenge");
+    ///     let z = cs.challenge_FieldElement(b"some challenge");
     ///     // ...
     /// })
     /// ```
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-    where
-        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
+        where
+            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
+
+    /// Evaluate a linear combination. Only prover can evaluate and return the FieldElement value, verifier returns None.
+    fn evaluate_lc(&self, lc: &LinearCombination) -> Option<FieldElement>;
+
+    /// Allocate a single variable using a closure, similar to `allocate`.
+    /// When allocating left variable, return left variable and None.
+    /// When allocating right variable, return right variable and output variable.
+    fn allocate_single(&mut self, assignment: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError>;
+
 }
 
 /// Represents a constraint system in the second phase:
@@ -91,7 +111,7 @@ pub trait ConstraintSystem {
 /// Note: this trait also includes `ConstraintSystem` trait
 /// in order to allow composition of gadgets: e.g. a shuffle gadget can be used in both phases.
 pub trait RandomizedConstraintSystem: ConstraintSystem {
-    /// Generates a challenge scalar.
+    /// Generates a challenge FieldElement.
     ///
     /// ### Usage
     ///
@@ -103,9 +123,9 @@ pub trait RandomizedConstraintSystem: ConstraintSystem {
     ///
     /// ```text
     /// cs.specify_randomized_constraints(move |cs| {
-    ///     let z = cs.challenge_scalar(b"some challenge");
+    ///     let z = cs.challenge_FieldElement(b"some challenge");
     ///     // ...
     /// })
     /// ```
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar;
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement;
 }

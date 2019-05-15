@@ -1,6 +1,9 @@
+use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::field_elem::{FieldElement, FieldElementVector};
+
 use core::mem;
 use merlin::Transcript;
-use crate::r1cs::transcript::TranscriptProtocol;
+use crate::transcript::TranscriptProtocol;
 
 use crate::r1cs::linear_combination::LinearCombination;
 use crate::errors::R1CSError;
@@ -8,23 +11,8 @@ use crate::r1cs::constraint_system::ConstraintSystem;
 use crate::r1cs::linear_combination::Variable;
 use crate::r1cs::constraint_system::RandomizedConstraintSystem;
 use crate::r1cs::proof::R1CSProof;
-use crate::types::GroupG1;
-use crate::utils::negate_field_element;
-use crate::types::BigNum;
-use crate::utils::field_elements_multiplication;
-use crate::utils::random_field_element;
-use crate::utils::subtract_field_elements;
-use crate::utils::field_element_inverse;
-use crate::utils::field_elem_power_vector;
-use crate::utils::field_element_square;
-use crate::utils::field_elements_inner_product;
-use crate::utils::scalar_point_multiplication;
-use crate::constants::CurveOrder;
-use crate::utils::multi_scalar_multiplication;
 use crate::inner_product::InnerProductArgument;
 use crate::new_ipp::NewIPP;
-
-type Scalar = BigNum;
 
 /// A [`ConstraintSystem`] implementation for use by the verifier.
 ///
@@ -35,11 +23,7 @@ type Scalar = BigNum;
 /// When all constraints are added, the verifying code calls `verify`
 /// which consumes the `Verifier` instance, samples random challenges
 /// that instantiate the randomized constraints, and verifies the proof.
-pub struct Verifier<'a, 'b> {
-    G: &'b [GroupG1],
-    H: &'b [GroupG1],
-    g: &'b GroupG1,
-    h: &'b GroupG1,
+pub struct Verifier<'a> {
     transcript: &'a mut Transcript,
     constraints: Vec<LinearCombination>,
 
@@ -51,13 +35,16 @@ pub struct Verifier<'a, 'b> {
     /// `Missing`), so the `num_vars` isn't kept implicitly in the
     /// variable assignments.
     num_vars: usize,
-    V: Vec<GroupG1>,
+    V: Vec<GroupElement>,
 
     /// This list holds closures that will be called in the second phase of the protocol,
     /// when non-randomized variables are committed.
     /// After that, the option will flip to None and additional calls to `randomize_constraints`
     /// will invoke closures immediately.
-    deferred_constraints: Vec<Box<Fn(&mut RandomizingVerifier<'a, 'b>) -> Result<(), R1CSError>>>,
+    deferred_constraints: Vec<Box<Fn(&mut RandomizingVerifier<'a>) -> Result<(), R1CSError>>>,
+
+    /// Index of a pending multiplier that's not fully assigned yet.
+    pending_multiplier: Option<usize>,
 }
 
 /// Verifier in the randomizing phase.
@@ -67,11 +54,11 @@ pub struct Verifier<'a, 'b> {
 /// monomorphize the closures for the proving and verifying code.
 /// However, this type cannot be instantiated by the user and therefore can only be used within
 /// the callback provided to `specify_randomized_constraints`.
-pub struct RandomizingVerifier<'a, 'b> {
-    verifier: Verifier<'a, 'b>,
+pub struct RandomizingVerifier<'a> {
+    verifier: Verifier<'a>,
 }
 
-impl<'a, 'b> Verifier<'a, 'b> {
+impl<'a> Verifier<'a> {
     /// Construct an empty constraint system with specified external
     /// input variables.
     ///
@@ -104,24 +91,17 @@ impl<'a, 'b> Verifier<'a, 'b> {
     /// The second element is a list of [`Variable`]s corresponding to
     /// the external inputs, which can be used to form constraints.
     pub fn new(
-        G: &'b [GroupG1],
-        H: &'b [GroupG1],
-        g: &'b GroupG1,
-        h: &'b GroupG1,
         transcript: &'a mut Transcript,
     ) -> Self {
         transcript.r1cs_domain_sep();
 
         Verifier {
-            G,
-            H,
-            g,
-            h,
             transcript,
             num_vars: 0,
             V: Vec::new(),
             constraints: Vec::new(),
             deferred_constraints: Vec::new(),
+            pending_multiplier: None,
         }
     }
 
@@ -139,7 +119,7 @@ impl<'a, 'b> Verifier<'a, 'b> {
     ///
     /// Returns a pair of a Pedersen commitment (as a compressed Ristretto point),
     /// and a [`Variable`] corresponding to it, which can be used to form constraints.
-    pub fn commit(&mut self, commitment: GroupG1) -> Variable {
+    pub fn commit(&mut self, commitment: GroupElement) -> Variable {
         let i = self.V.len();
         self.V.push(commitment);
 
@@ -165,72 +145,110 @@ impl<'a, 'b> Verifier<'a, 'b> {
     /// but also computes the constant terms (which the prover skips
     /// because they're not needed to construct the proof).
     fn flattened_constraints(
-        &mut self,
-        z: &Scalar,
-    ) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Vec<Scalar>, Scalar) {
+        &self,
+        z: &FieldElement,
+    ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector, FieldElement) {
         let n = self.num_vars;
         let m = self.V.len();
 
-        let mut wL = vec![field_element_zero!(); n];
-        let mut wR = vec![field_element_zero!(); n];
-        let mut wO = vec![field_element_zero!(); n];
-        let mut wV = vec![field_element_zero!(); m];
-        let mut wc = field_element_zero!();
+        let mut wL = FieldElementVector::new(n);
+        let mut wR = FieldElementVector::new(n);
+        let mut wO = FieldElementVector::new(n);
+        let mut wV = FieldElementVector::new(m);
+        let mut wc = FieldElement::zero();
 
         let mut exp_z = *z;
         for lc in self.constraints.iter() {
             for (var, coeff) in &lc.terms {
                 match var {
                     Variable::MultiplierLeft(i) => {
-                        // wL[*i] += exp_z * coeff;
-                        let p = field_elements_multiplication(&exp_z, &coeff);
-                        wL[*i] = add_field_elements!(&wL[*i], &p);
+                        wL[*i] += exp_z * coeff;
                     }
                     Variable::MultiplierRight(i) => {
-                        // wR[*i] += exp_z * coeff;
-                        let p = field_elements_multiplication(&exp_z, &coeff);
-                        wR[*i] = add_field_elements!(&wR[*i], &p);
+                        wR[*i] += exp_z * coeff;
                     }
                     Variable::MultiplierOutput(i) => {
-                        // wO[*i] += exp_z * coeff;
-                        let p = field_elements_multiplication(&exp_z, &coeff);
-                        wO[*i] = add_field_elements!(&wO[*i], &p);
+                        wO[*i] += exp_z * coeff;
                     }
                     Variable::Committed(i) => {
-                        // wV[*i] -= exp_z * coeff;
-                        let p = field_elements_multiplication(&exp_z, &coeff);
-                        wV[*i] = subtract_field_elements(&wV[*i], &p);
+                        wV[*i] -= exp_z * coeff;
                     }
                     Variable::One() => {
-                        // wc -= exp_z * coeff;
-                        let p = field_elements_multiplication(&exp_z, &coeff);
-                        wc = subtract_field_elements(&wc, &p);
+                        wc -= exp_z * coeff;
                     }
                 }
             }
-            // exp_z *= z;
-            exp_z = field_elements_multiplication(&exp_z, &z);
+            exp_z = exp_z * z;
         }
 
         (wL, wR, wO, wV, wc)
     }
 
+    fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, FieldElement) {
+        let n = self.num_vars;
+        let m = self.V.len();
+        let q = self.constraints.len();
+        let mut WL = vec![FieldElementVector::new(n); q];
+        let mut WR = vec![FieldElementVector::new(n); q];
+        let mut WO = vec![FieldElementVector::new(n); q];
+        let mut WV = vec![FieldElementVector::new(m); q];
+        let mut wc = FieldElement::zero();
+
+        for (r, lc) in self.constraints.iter().enumerate() {
+            for (var, coeff) in &lc.terms {
+                match var {
+                    Variable::MultiplierLeft(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WL[r][i] = coeff;
+                    }
+                    Variable::MultiplierRight(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WR[r][i] = coeff;
+                    }
+                    Variable::MultiplierOutput(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WO[r][i] = coeff;
+                    }
+                    Variable::Committed(i) => {
+                        let (i, coeff) = (*i, *coeff);
+                        WV[r][i] = coeff;
+                    }
+                    Variable::One() => {
+                        wc -= *coeff;
+                    }
+                }
+            }
+        }
+
+        (WL, WR, WO, WV, wc)
+    }
+
     /// Calls all remembered callbacks with an API that
     /// allows generating challenge scalars.
     fn create_randomized_constraints(mut self) -> Result<Self, R1CSError> {
-        // Note: the wrapper could've used &mut instead of ownership,
-        // but specifying lifetimes for boxed closures is not going to be nice,
-        // so we move the self into wrapper and then move it back out afterwards.
-        let mut callbacks = mem::replace(&mut self.deferred_constraints, Vec::new());
-        let mut wrapped_self = RandomizingVerifier { verifier: self };
-        for callback in callbacks.drain(..) {
-            callback(&mut wrapped_self)?;
+        // Clear the pending multiplier (if any) because it was committed into A_L/A_R/S.
+        self.pending_multiplier = None;
+
+        if self.deferred_constraints.len() == 0 {
+            self.transcript.r1cs_1phase_domain_sep();
+            Ok(self)
+        } else {
+            self.transcript.r1cs_2phase_domain_sep();
+            // Note: the wrapper could've used &mut instead of ownership,
+            // but specifying lifetimes for boxed closures is not going to be nice,
+            // so we move the self into wrapper and then move it back out afterwards.
+            let mut callbacks = mem::replace(&mut self.deferred_constraints, Vec::new());
+            let mut wrapped_self = RandomizingVerifier { verifier: self };
+            for callback in callbacks.drain(..) {
+                callback(&mut wrapped_self)?;
+            }
+            Ok(wrapped_self.verifier)
         }
-        Ok(wrapped_self.verifier)
     }
 
     /// Consume this `VerifierCS` and attempt to verify the supplied `proof`.
-    pub fn verify(mut self, proof: &R1CSProof) -> Result<(), R1CSError> {
+    pub fn verify(mut self, proof: &R1CSProof, g: &GroupElement, h: &GroupElement,
+                  G: &GroupElementVector, H: &GroupElementVector) -> Result<(), R1CSError> {
         // Commit a length _suffix_ for the number of high-level variables.
         // We cannot do this in advance because user can commit variables one-by-one,
         // but this suffix provides safe disambiguation because each variable
@@ -253,7 +271,7 @@ impl<'a, 'b> Verifier<'a, 'b> {
 
         use std::iter;
 
-        if self.G.len() < padded_n {
+        if G.len() < padded_n {
             return Err(R1CSError::InvalidGeneratorsLength);
         }
 
@@ -282,114 +300,100 @@ impl<'a, 'b> Verifier<'a, 'b> {
         let w = self.transcript.challenge_scalar(b"w");
 
         let (wL, wR, wO, wV, wc) = self.flattened_constraints(&z);
+        /*println!("{:?}", &wL);
+        println!("{:?}", &wR);
+        println!("{:?}", &wO);
+        println!("{:?}", &wV);
+        println!("{:?}", &wc);
+        let (WL, WR, WO, WV, wc_) = self.get_weight_matrices();
+        println!("{:?}", &WL);
+        println!("{:?}", &WR);
+        println!("{:?}", &WO);
+        println!("{:?}", &WV);
+        println!("{:?}", &wc_);*/
 
         let a = proof.ipp_proof.a;
         let b = proof.ipp_proof.b;
 
-        let y_inv = field_element_inverse(&y);
-        let y_inv_vec = field_elem_power_vector(&y_inv, padded_n);
+        let y_inv = y.inverse();
+        let y_inv_vec = FieldElementVector::new_vandermonde_vector(&y_inv, padded_n);
+        /*let mut yneg_wR = wR.hadamard_product(&y_inv_vec).unwrap();
+        yneg_wR.append(&mut FieldElementVector::new(pad));*/
         let yneg_wR = wR
             .into_iter()
             .zip(y_inv_vec.iter())
-            .map(|(wRi, exp_y_inv)| field_elements_multiplication(&wRi, &exp_y_inv))
-            .chain(iter::repeat(field_element_zero!()).take(pad))
-            .collect::<Vec<Scalar>>();
+            .map(|(wRi, exp_y_inv)| wRi * exp_y_inv)
+            .chain(iter::repeat(FieldElement::zero()).take(pad))
+            .collect::<Vec<FieldElement>>();
 
-        let delta = field_elements_inner_product(&yneg_wR[0..n], &wL).unwrap();
 
+        let delta = FieldElementVector::from(&yneg_wR.as_slice()[0..n]).inner_product(&wL).unwrap();
         // Get IPP variables
         let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(&proof.ipp_proof.L, &proof.ipp_proof.R, padded_n, self.transcript)
             .map_err(|_| R1CSError::VerificationError)?;
 
-        let u_for_g = iter::repeat(field_element_one!())
+        let u_for_g = iter::repeat(FieldElement::one())
             .take(n1)
             .chain(iter::repeat(u).take(n2 + pad));
         let u_for_h = u_for_g.clone();
 
         // define parameters for P check
-        let g_scalars: Vec<Scalar> = yneg_wR
+        let g_scalars: Vec<FieldElement> = yneg_wR
             .iter()
             .zip(u_for_g)
             .zip(s.iter().take(padded_n))
             .map(|((yneg_wRi, u_or_1), s_i)| {
-                // u_or_1 * (x * yneg_wRi - a * s_i)
-                field_elements_multiplication(&u_or_1,
-                                              &subtract_field_elements(
-                                                  &field_elements_multiplication(&x, &yneg_wRi),
-                                                  &field_elements_multiplication(&a, &s_i)
-                                              ))
+                u_or_1 * (x * yneg_wRi - a * s_i)
             }).collect();
 
-        let h_scalars: Vec<Scalar> = y_inv_vec
+        let h_scalars: Vec<FieldElement> = y_inv_vec
             .iter()
             .zip(u_for_h)
             .zip(s.iter().rev().take(padded_n))
-            .zip(wL.into_iter().chain(iter::repeat(field_element_zero!()).take(pad)))
-            .zip(wO.into_iter().chain(iter::repeat(field_element_zero!()).take(pad)))
-            .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)| {
-                // u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - 1)
-                field_elements_multiplication(&u_or_1,
-                                              &subtract_field_elements(
-                                                  &field_elements_multiplication(
-                                                        &y_inv_i,
-                                                        &subtract_field_elements(
-                                                            &add_field_elements!(&field_elements_multiplication(&x, &wLi), &wOi),
-                                                            &field_elements_multiplication(&b, &s_i_inv))
-                                                        ),
-                                                  &field_element_one!()
-                                              )
-                )
-            }).collect();
+            .zip(wL.into_iter().chain(iter::repeat(FieldElement::zero()).take(pad)))
+            .zip(wO.into_iter().chain(iter::repeat(FieldElement::zero()).take(pad)))
+            .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)|
+                u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - FieldElement::one())).collect();
 
-        /*let Q = scalar_point_multiplication(&w, &self.g);
-        let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &proof.P).unwrap();
+        /*let Q = g * w;
+        let ipa = InnerProductArgument::new(&G.as_slice()[0..padded_n].into(),
+                                            &H.as_slice()[0..padded_n].into(), &Q, &proof.P).unwrap();
         let res = ipa.verify_proof_recursively(&proof.ipp_proof).unwrap();
         if !res {
             return Err(R1CSError::VerificationError);
         }*/
-        let r = random_scalar!();
 
-        let x_sqr = field_element_square(&x);
-        let x_cube = field_elements_multiplication(&x, &x_sqr);
-        let r_x_sqr = field_elements_multiplication(&r, &x_sqr);
+        let r = FieldElement::random(None);
+
+        let x_sqr = x.square();
+        let x_cube = x * x_sqr;
+        let r_x_sqr = r * x_sqr;
 
         // group the T_scalars and T_points together
-        let T_scalars = [
-            field_elements_multiplication(&r, &x),  // rx
-            field_elements_multiplication(&r, &x_cube), // rx^3
-            field_elements_multiplication(&r_x_sqr, &x_sqr), // rx^4
-            field_elements_multiplication(&r_x_sqr, &x_cube), // rx^5
-            field_elements_multiplication(&r_x_sqr, &field_elements_multiplication(&x_sqr, &x_sqr))  // rx^6
-        ];
+        // T_scalars = [rx, rx^3, rx^4, rx^5, rx^6]
+        let mut T_scalars = vec![r * x, r * x_cube];
+        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^4
+        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^5
+        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^6
+
         let T_points = [proof.T_1, proof.T_3, proof.T_4, proof.T_5, proof.T_6];
 
         let mut arg1 = vec![
             x,
             x_sqr,
             x_cube,
-            field_elements_multiplication(&u, &x),
-            field_elements_multiplication(&u, &x_sqr),
-            field_elements_multiplication(&u, &x_cube)
+            u * x,
+            u * x_sqr,
+            u * x_cube
         ];
-        arg1.extend(wV.iter().map(|wVi| field_elements_multiplication(&wVi, &r_x_sqr)));
+        arg1.extend(wV.scaled_by(&r_x_sqr));
         arg1.extend(&T_scalars);
 
         // w * (proof.t_x - a * b) + r * (x_sqr * (wc + delta) - proof.t_x)
-        arg1.push(add_field_elements!(
-            &field_elements_multiplication(
-                &w,
-                &subtract_field_elements(&proof.t_x, &field_elements_multiplication(&a, &b))),
-            &field_elements_multiplication(
-                &r,
-                &subtract_field_elements(
-                    &field_elements_multiplication(&x_sqr, &add_field_elements!(&wc, &delta)),
-                    &proof.t_x)
-            )
-        ));
+        arg1.push(w * (proof.t_x - (a * b)) + r * ((x_sqr * (wc + delta)) - proof.t_x));
 
         // -proof.e_blinding - r * proof.t_x_blinding
-        arg1.push(negate_field_element(&add_field_elements!(&proof.e_blinding,
-                                                                    &field_elements_multiplication(&r, &proof.t_x_blinding))));
+        arg1.push((proof.e_blinding + r * proof.t_x_blinding).negation());
         arg1.extend(&g_scalars);
         arg1.extend(&h_scalars);
         arg1.extend(&u_sq);
@@ -405,14 +409,14 @@ impl<'a, 'b> Verifier<'a, 'b> {
 
         arg2.extend(&self.V);
         arg2.extend(&T_points);
-        arg2.extend(&[*self.g, *self.h]);
-        arg2.extend(&self.G[0..padded_n]);
-        arg2.extend(&self.H[0..padded_n]);
-        arg2.extend(&proof.ipp_proof.L);
-        arg2.extend(&proof.ipp_proof.R);
+        arg2.extend(&[*g, *h]);
+        arg2.extend(&G.as_slice()[0..padded_n]);
+        arg2.extend(&H.as_slice()[0..padded_n]);
+        arg2.extend(proof.ipp_proof.L.as_slice());
+        arg2.extend(proof.ipp_proof.R.as_slice());
 
-        let res = multi_scalar_multiplication(&arg1,&arg2).unwrap();
-        if !res.is_infinity() {
+        let res = GroupElementVector::from(arg2).inner_product_var_time(&FieldElementVector::from(arg1)).unwrap();
+        if !res.is_identity() {
             return Err(R1CSError::VerificationError);
         }
 
@@ -420,8 +424,9 @@ impl<'a, 'b> Verifier<'a, 'b> {
     }
 }
 
-impl<'a, 'b> ConstraintSystem for Verifier<'a, 'b> {
-    type RandomizedCS = RandomizingVerifier<'a, 'b>;
+
+impl<'a, 'b> ConstraintSystem for Verifier<'a> {
+    type RandomizedCS = RandomizingVerifier<'a>;
 
     fn multiply(
         &mut self,
@@ -432,19 +437,42 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a, 'b> {
         let (l_var, r_var, o_var) = _allocate_vars(self);
 
         // Constrain l,r,o:
-        left.terms.push((l_var, field_element_neg_one!()));
-        right.terms.push((r_var, field_element_neg_one!()));
+        left.terms.push((l_var, FieldElement::minus_one()));
+        right.terms.push((r_var, FieldElement::minus_one()));
         self.constrain(left);
         self.constrain(right);
 
         (l_var, r_var, o_var)
     }
 
-    fn allocate<F>(&mut self, _: F) -> Result<(Variable, Variable, Variable), R1CSError>
-        where
-            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        Ok(_allocate_vars(self))
+    fn allocate(&mut self, _: Option<FieldElement>) -> Result<Variable, R1CSError> {
+        match self.pending_multiplier {
+            None => {
+                let i = self.num_vars;
+                self.num_vars += 1;
+                self.pending_multiplier = Some(i);
+                Ok(Variable::MultiplierLeft(i))
+            }
+            Some(i) => {
+                self.pending_multiplier = None;
+                Ok(Variable::MultiplierRight(i))
+            }
+        }
+    }
+
+    fn allocate_multiplier(
+        &mut self,
+        _: Option<(FieldElement, FieldElement)>,
+    ) -> Result<(Variable, Variable, Variable), R1CSError> {
+        let var = self.num_vars;
+        self.num_vars += 1;
+
+        // Create variables for l,r,o
+        let l_var = Variable::MultiplierLeft(var);
+        let r_var = Variable::MultiplierRight(var);
+        let o_var = Variable::MultiplierOutput(var);
+
+        Ok((l_var, r_var, o_var))
     }
 
     fn constrain(&mut self, lc: LinearCombination) {
@@ -461,9 +489,22 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a, 'b> {
         self.deferred_constraints.push(Box::new(callback));
         Ok(())
     }
+
+    fn evaluate_lc(&self, _: &LinearCombination) -> Option<FieldElement> {
+        None
+    }
+
+    fn allocate_single(&mut self, _: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+        let var = self.allocate(None)?;
+        match var {
+            Variable::MultiplierLeft(i) => Ok((Variable::MultiplierLeft(i), None)),
+            Variable::MultiplierRight(i) => Ok((Variable::MultiplierRight(i), Some(Variable::MultiplierOutput(i)))),
+            _ => Err(R1CSError::FormatError)
+        }
+    }
 }
 
-impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a, 'b> {
+impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a> {
     type RandomizedCS = Self;
 
     fn multiply(
@@ -474,11 +515,15 @@ impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a, 'b> {
         self.verifier.multiply(left, right)
     }
 
-    fn allocate<F>(&mut self, assign_fn: F) -> Result<(Variable, Variable, Variable), R1CSError>
-        where
-            F: FnOnce() -> Result<(Scalar, Scalar, Scalar), R1CSError>,
-    {
-        self.verifier.allocate(assign_fn)
+    fn allocate(&mut self, assignment: Option<FieldElement>) -> Result<Variable, R1CSError> {
+        self.verifier.allocate(assignment)
+    }
+
+    fn allocate_multiplier(
+        &mut self,
+        input_assignments: Option<(FieldElement, FieldElement)>,
+    ) -> Result<(Variable, Variable, Variable), R1CSError> {
+        self.verifier.allocate_multiplier(input_assignments)
     }
 
     fn constrain(&mut self, lc: LinearCombination) {
@@ -491,10 +536,18 @@ impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a, 'b> {
     {
         callback(self)
     }
+
+    fn evaluate_lc(&self, _: &LinearCombination) -> Option<FieldElement> {
+        None
+    }
+
+    fn allocate_single(&mut self, _: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+        self.verifier.allocate_single(None)
+    }
 }
 
-impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a, 'b> {
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
+impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a> {
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement {
         self.verifier.transcript.challenge_scalar(label)
     }
 }
