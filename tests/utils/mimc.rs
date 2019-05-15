@@ -6,7 +6,7 @@ use bulletproofs::errors::R1CSError;
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 
-use utils::constrain_lc_with_scalar;
+use crate::utils::constrain_lc_with_scalar;
 
 //pub const MIMC_ROUNDS: usize = 322;
 pub const MIMC_ROUNDS: usize = 10;
