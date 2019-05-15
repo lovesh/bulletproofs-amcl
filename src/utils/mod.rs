@@ -67,3 +67,101 @@ pub fn gen_challenges(input: &[&GroupElement], state: &mut Vec<u8>, n: usize) ->
     }
     r
 }
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::time::{Duration, Instant};
+    use amcl::bls381::big::BIG;
+    use crate::amcl::bls381::fp::FP;
+    use crate::amcl::bls381::ecp::ECP;
+
+    #[test]
+    fn timing_fp_big() {
+
+        let count = 100;
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
+        let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
+        let mut res_mul = BIG::new_int(1 as isize);
+        let mut start = Instant::now();
+        for b in &bigs {
+            res_mul = BigNum::modmul(&res_mul, &b, &CurveOrder);
+        }
+        println!("Multiplication time for {} BIGs = {:?}", count, start.elapsed());
+
+        let mut res_mul = FP::new_int(1 as isize);
+        start = Instant::now();
+        for f in &fs {
+            res_mul.mul(&f);
+        }
+        println!("Multiplication time for {} FPs = {:?}", count, start.elapsed());
+
+        let mut inverses_b: Vec<BigNum> = vec![];
+        let mut inverses_f: Vec<FP> = vec![];
+
+        start = Instant::now();
+        for b in &bigs {
+            let mut i = b.clone();
+            i.invmodp(&CurveOrder);
+            inverses_b.push(i);
+        }
+        println!("Inverse time for {} BIGs = {:?}", count, start.elapsed());
+        for i in 0..count {
+            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CurveOrder);
+            assert_eq!(BigNum::comp(&r, &BigNum::new_int(1 as isize)), 0);
+        }
+
+        start = Instant::now();
+        for f in &fs {
+            let mut i = f.clone();
+            i.inverse();
+            inverses_f.push(i);
+        }
+        println!("Inverse time for {} FPs = {:?}", count, start.elapsed());
+        for i in 0..count {
+            let mut c = inverses_f[i].clone();
+            c.mul(&fs[i]);
+            assert!(c.equals(&FP::new_int(1 as isize)));
+        }
+    }
+
+    #[test]
+    fn timing_ecp() {
+        let count = 100;
+        let mut a = vec![];
+        let mut b = vec![];
+        let mut g = vec![];
+        let mut h = vec![];
+
+        let mut r1 = vec![];
+        let mut r2 = vec![];
+
+        for _ in 0..count {
+            a.push(FieldElement::random(None).to_bignum());
+            b.push(FieldElement::random(None).to_bignum());
+            g.push(GroupElement::random(None).to_ecp());
+            h.push(GroupElement::random(None).to_ecp());
+        }
+
+        let mut start = Instant::now();
+        for i in 0..count {
+            r1.push(g[i].mul2(&a[i], &h[i], &b[i]));
+        }
+        println!("mul2 time for {} = {:?}", count, start.elapsed());
+
+        start = Instant::now();
+        for i in 0..count {
+            let mut _1 = g[i].mul(&a[i]);
+            _1.add(&h[i].mul(&b[i]));
+            r2.push( _1);
+        }
+        println!("mul+add time for {} = {:?}", count, start.elapsed());
+
+        for i in 0..count {
+            assert!(r1[i].equals(&mut r2[i]))
+        }
+    }
+}
+

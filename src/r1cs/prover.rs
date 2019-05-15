@@ -179,6 +179,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         (wL, wR, wO, wV)
     }
 
+    // This is used only for debugging
     fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>) {
         let n = self.a_L.len();
         let m = self.v.len();
@@ -217,6 +218,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         (WL, WR, WO, WV)
     }
 
+    // This is used only for debugging
     fn flattened_constraints_elaborated(
         &self,
         z: &FieldElement,

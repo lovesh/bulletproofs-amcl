@@ -295,6 +295,8 @@ impl FieldElement {
 
         let k = elems.len();
 
+        // TODO: Multiplications below can be sped up by using montgomery multiplication.
+
         // Construct c as [elems[0], elems[0]*elems[1], elems[0]*elems[1]*elems[2], .... elems[0]*elems[1]*elems[2]*...elems[k-1]]
         let mut c: Vec<Self> = vec![elems[0].clone()];
         for i in 1..k {
@@ -501,7 +503,7 @@ impl Mul<GroupElement> for FieldElement {
     type Output = GroupElement;
 
     fn mul(self, other: GroupElement) -> GroupElement {
-        other.scalar_mul(&self)
+        other.scalar_mul_const_time(&self)
     }
 }
 
@@ -509,7 +511,7 @@ impl Mul<&GroupElement> for FieldElement {
     type Output = GroupElement;
 
     fn mul(self, other: &GroupElement) -> GroupElement {
-        other.scalar_mul(&self)
+        other.scalar_mul_const_time(&self)
     }
 }
 
@@ -517,7 +519,7 @@ impl Mul<GroupElement> for &FieldElement {
     type Output = GroupElement;
 
     fn mul(self, other: GroupElement) -> GroupElement {
-        other.scalar_mul(self)
+        other.scalar_mul_const_time(self)
     }
 }
 
@@ -525,7 +527,7 @@ impl Mul<&GroupElement> for &FieldElement {
     type Output = GroupElement;
 
     fn mul(self, other: &GroupElement) -> GroupElement {
-        other.scalar_mul(self)
+        other.scalar_mul_const_time(self)
     }
 }
 
@@ -900,56 +902,5 @@ mod test {
         }
 
         assert_eq!(expected_inv_product, all_inv);
-    }
-
-    #[test]
-    fn timing_fp_big() {
-        use crate::amcl::bls381::fp::FP;
-
-        let count = 100;
-        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
-        let bigs: Vec<_> = elems.iter().map(|f|f.value).collect();
-        let fs: Vec<_> = bigs.iter().map(|b| FP::new_big(&b)).collect();
-        let mut res_mul = BIG::new_int(1 as isize);
-        let mut start = Instant::now();
-        for b in &bigs {
-            res_mul = BigNum::modmul(&res_mul, &b, &CurveOrder);
-        }
-        println!("Multiplication time for {} BIGs = {:?}", count, start.elapsed());
-
-        let mut res_mul = FP::new_int(1 as isize);
-        start = Instant::now();
-        for f in &fs {
-            res_mul.mul(&f);
-        }
-        println!("Multiplication time for {} FPs = {:?}", count, start.elapsed());
-
-        let mut inverses_b: Vec<BigNum> = vec![];
-        let mut inverses_f: Vec<FP> = vec![];
-
-        start = Instant::now();
-        for b in &bigs {
-            let mut i = b.clone();
-            i.invmodp(&CurveOrder);
-            inverses_b.push(i);
-        }
-        println!("Inverse time for {} BIGs = {:?}", count, start.elapsed());
-        for i in 0..count {
-            let r = BigNum::modmul(&inverses_b[i], &bigs[i], &CurveOrder);
-            assert_eq!(BigNum::comp(&r, &BigNum::new_int(1 as isize)), 0);
-        }
-
-        start = Instant::now();
-        for f in &fs {
-            let mut i = f.clone();
-            i.inverse();
-            inverses_f.push(i);
-        }
-        println!("Inverse time for {} FPs = {:?}", count, start.elapsed());
-        for i in 0..count {
-            let mut c = inverses_f[i].clone();
-            c.mul(&fs[i]);
-            assert!(c.equals(&FP::new_int(1 as isize)));
-        }
     }
 }

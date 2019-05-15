@@ -5,9 +5,7 @@ use crate::errors::ValueError;
 // Commit to field element `elem` with randomness `r` given groups elements `g` and `h`, i.e. compute g^elem.h^r
 pub fn commit_to_field_element(g: &GroupElement, h: &GroupElement, elem: &FieldElement,
                                r: &FieldElement) -> GroupElement {
-    let elem_g = g * elem;
-    let r_h = h * r;
-    elem_g + r_h
+    g.binary_scalar_mul(h, elem, r)
 }
 
 /// Commit to field element vectors `a` and `b` with random field element `c`

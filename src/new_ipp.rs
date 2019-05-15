@@ -107,8 +107,10 @@ impl NewIPP {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = (u_inv * G_factors_L[i])*G_L[i] + (u * G_factors_R[i])* G_R[i];
-                H_L[i] = (u * H_factors_L[i])*H_L[i] + (u_inv * H_factors_R[i])*H_R[i];
+                // G_L[i] = (u_inv * G_factors_L[i])*G_L[i] + (u * G_factors_R[i])* G_R[i];
+                G_L[i] = G_L[i].binary_scalar_mul(&G_R[i], &(u_inv * G_factors_L[i]), &(u * G_factors_R[i]));
+                // H_L[i] = (u * H_factors_L[i])*H_L[i] + (u_inv * H_factors_R[i])*H_R[i];
+                H_L[i] = H_L[i].binary_scalar_mul(&H_R[i], &(u * H_factors_L[i]), &(u_inv * H_factors_R[i]));
             }
 
             a = a_L;
@@ -161,8 +163,10 @@ impl NewIPP {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = (u_inv * G_L[i]) + (u * G_R[i]);
-                H_L[i] = (u * H_L[i]) + (u_inv * H_R[i]);
+                // G_L[i] = (u_inv * G_L[i]) + (u * G_R[i]);
+                G_L[i] = G_L[i].binary_scalar_mul(&G_R[i], &u_inv, &u);
+                // H_L[i] = (u * H_L[i]) + (u_inv * H_R[i]);
+                H_L[i] = H_L[i].binary_scalar_mul(&H_R[i], &u, &u_inv);
             }
 
             a = a_L;

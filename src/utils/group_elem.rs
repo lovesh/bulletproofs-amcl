@@ -58,7 +58,7 @@ impl GroupElement {
 
     pub fn random(order: Option<&BigNum>) -> Self {
         let n = FieldElement::random(order);
-        Self::generator().scalar_mul(&n)
+        Self::generator().scalar_mul_const_time(&n)
     }
 
     pub fn is_identity(&self) -> bool {
@@ -80,6 +80,10 @@ impl GroupElement {
         let mut bytes: [u8; GroupG1_SIZE] = [0; GroupG1_SIZE];
         temp.tobytes(&mut bytes, false);
         bytes.to_vec()
+    }
+
+    pub fn to_ecp(&self) -> GroupG1 {
+        self.value.clone()
     }
 
     /// Add a group element to itself. `self = self + b`
@@ -106,10 +110,26 @@ impl GroupElement {
         diff.into()
     }
 
-    /// Multiply point on the curve (element of group G1) with a scalar.
-    /// field_element_a * group_element_b
-    pub fn scalar_mul(&self, a: &FieldElement) -> Self {
+    /// Multiply point on the curve (element of group G1) with a scalar. Constant time operation.
+    /// self * field_element_a.
+    pub fn scalar_mul_const_time(&self, a: &FieldElement) -> Self {
         self.value.mul(&a.to_bignum()).into()
+    }
+
+    /// Computes sum of 2 scalar multiplications.
+    /// Faster than doing the scalar multiplications individually and then adding them. Uses lookup table
+    /// returns self*a + h*b
+    pub fn binary_scalar_mul(&self, h: &Self, a: &FieldElement, b: &FieldElement) -> Self {
+        self.value.mul2(&a.to_bignum(), &h.to_ecp(), &b.to_bignum()).into()
+    }
+
+    /// Multiply point on the curve (element of group G1) with a scalar. Variable time operation
+    /// Uses wNAF.
+    pub fn scalar_mul_variable_time(&self, a: &FieldElement) -> Self {
+        // TODO: Optimization: Attach the lookup table to the struct
+        let table = NafLookupTable5::from(&self);
+        let wnaf = a.to_wnaf(5);
+        GroupElement::wnaf_exp(&table, &wnaf)
     }
 
     pub fn double(&self) -> Self {
@@ -207,7 +227,7 @@ impl Mul<FieldElement> for GroupElement {
     type Output = Self;
 
     fn mul(self, other: FieldElement) -> Self {
-        self.scalar_mul(&other)
+        self.scalar_mul_const_time(&other)
     }
 }
 
@@ -215,7 +235,7 @@ impl Mul<&FieldElement> for GroupElement {
     type Output = Self;
 
     fn mul(self, other: &FieldElement) -> Self {
-        self.scalar_mul(other)
+        self.scalar_mul_const_time(other)
     }
 }
 
@@ -223,7 +243,7 @@ impl Mul<FieldElement> for &GroupElement {
     type Output = GroupElement;
 
     fn mul(self, other: FieldElement) -> GroupElement {
-        self.scalar_mul(&other)
+        self.scalar_mul_const_time(&other)
     }
 }
 
@@ -231,7 +251,7 @@ impl Mul<&FieldElement> for &GroupElement {
     type Output = GroupElement;
 
     fn mul(self, other: &FieldElement) -> GroupElement {
-        self.scalar_mul(other)
+        self.scalar_mul_const_time(other)
     }
 }
 
@@ -471,10 +491,21 @@ mod test {
         for _ in 0..10 {
             let g = GroupElement::random(None);
             let f = FieldElement::random(None);
-            let m = g.scalar_mul(&f);
+            let m = g.scalar_mul_const_time(&f);
             // Operands can be in any order
             assert_eq!(m, g * f);
             assert_eq!(m, f * g);
+        }
+    }
+
+    #[test]
+    fn test_binary_scalar_mul() {
+        for _ in 0..10 {
+            let a = FieldElement::random(None);
+            let b = FieldElement::random(None);
+            let g = GroupElement::random(None);
+            let h = GroupElement::random(None);
+            assert_eq!(g * a + h * b, g.binary_scalar_mul(&h, &a, &b))
         }
     }
 
@@ -528,7 +559,7 @@ mod test {
 
         for i in 0..10 {
             fs.push(FieldElement::random(None));
-            gs.push(gen.scalar_mul(&fs[i]));
+            gs.push(gen.scalar_mul_const_time(&fs[i]));
         }
 
         let gv = GroupElementVector::from(gs.as_slice());
@@ -540,7 +571,7 @@ mod test {
         let mut expected = GroupElement::new();
         let mut expected_1 = GroupElement::new();
         for i in 0..fs.len() {
-            expected.add_assign_(&gs[i].scalar_mul(&fs[i]));
+            expected.add_assign_(&gs[i].scalar_mul_const_time(&fs[i]));
             expected_1.add_assign_(&(gs[i] * &fs[i]));
         }
 
