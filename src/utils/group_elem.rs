@@ -653,4 +653,16 @@ mod test {
         }
         println!("Time for {} scalar multiplications using wnaf: {:?}", n, start.elapsed());
     }
+
+    #[test]
+    fn timing_group_elem_addition() {
+        let count = 100;
+        let points: Vec<GroupElement> = (0..100).map(|_| GroupElement::random(None)).collect();
+        let mut R = GroupElement::random(None);
+        let mut start = Instant::now();
+        for i in 0..count {
+            R = R + points[i];
+        }
+        println!("Addition time for {} elems = {:?}", count, start.elapsed());
+    }
 }

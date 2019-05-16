@@ -903,4 +903,16 @@ mod test {
 
         assert_eq!(expected_inv_product, all_inv);
     }
+
+    #[test]
+    fn timing_field_elem_addition() {
+        let count = 100;
+        let points: Vec<FieldElement> = (0..100).map(|_| FieldElement::random(None)).collect();
+        let mut R = FieldElement::random(None);
+        let mut start = Instant::now();
+        for i in 0..count {
+            R = R + points[i];
+        }
+        println!("Addition time for {} elems = {:?}", count, start.elapsed());
+    }
 }
