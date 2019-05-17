@@ -1,8 +1,7 @@
-use crate::amcl::rand::RAND;
-use crate::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, FieldElementZero};
+use crate::constants::{MODBYTES, GroupG1_SIZE};
 use crate::types::{BigNum, GroupG1};
 use amcl::sha3::{SHAKE256, SHA3};
-use crate::utils::{get_seeded_RNG, hash_msg};
+use crate::utils::hash_msg;
 use crate::errors::ValueError;
 use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, Mul};

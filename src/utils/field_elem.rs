@@ -1,9 +1,8 @@
 use rand::RngCore;
 use rand::rngs::EntropyRng;
 
-use crate::amcl::rand::RAND;
-use crate::constants::{MODBYTES, CurveOrder, GeneratorG1, GroupG1_SIZE, NLEN, FieldElementZero};
-use crate::types::{BigNum, GroupG1};
+use crate::constants::{MODBYTES, CurveOrder, NLEN};
+use crate::types::BigNum;
 use amcl::sha3::{SHAKE256, SHA3};
 use crate::utils::{get_seeded_RNG, hash_msg};
 use crate::errors::ValueError;

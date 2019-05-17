@@ -80,6 +80,7 @@ mod test {
     #[test]
     fn timing_fp_big() {
 
+        // TODO: Compare adding raw BIGs and FieldElement to check the overhead of the abstraction
         let count = 100;
         let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
         let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
@@ -125,6 +126,23 @@ mod test {
             c.mul(&fs[i]);
             assert!(c.equals(&FP::new_int(1 as isize)));
         }
+
+        // Fixme: add in FP crashes while adding 100 elems, maybe my amcl code is old
+        let c = 50;
+        start = Instant::now();
+        let mut r = bigs[0];
+        for i in 0..c {
+            r.add(&bigs[i]);
+            r.rmod(&CurveOrder);
+        }
+        println!("Addition time for {} BIGs = {:?}", c, start.elapsed());
+
+        let mut r1 = fs[0];
+        start = Instant::now();
+        for i in 0..c {
+            r1.add(&fs[i]);
+        }
+        println!("Addition time for {} FPs = {:?}", c, start.elapsed());
     }
 
     #[test]
