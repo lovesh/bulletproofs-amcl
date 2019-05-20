@@ -22,8 +22,16 @@ use crate::arch::Chunk;
 use crate::bn254::big;
 use crate::bn254::big::BIG;
 
+#[derive(Copy)]
+#[derive(Debug)]
 pub struct DBIG {
     pub w: [Chunk; big::DNLEN],
+}
+
+impl Clone for DBIG {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 impl DBIG {
@@ -241,6 +249,17 @@ impl DBIG {
             k -= 1;
         }
         return a;
+    }
+
+    /* set x = x mod 2^m */
+    pub fn mod2m(&mut self, m: usize) {
+        let wd = m / big::BASEBITS;
+        let bt = m % big::BASEBITS;
+        let msk = (1 << bt) - 1;
+        self.w[wd] &= msk;
+        for i in wd + 1..big::DNLEN {
+            self.w[i] = 0
+        }
     }
 
     /* return number of bits */

@@ -45,7 +45,7 @@ pub struct BIG {
 }
 
 impl Clone for BIG {
-    fn clone(&self) -> BIG {
+    fn clone(&self) -> Self {
         *self
     }
 }
