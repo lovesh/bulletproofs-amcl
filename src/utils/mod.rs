@@ -69,6 +69,75 @@ pub fn gen_challenges(input: &[&GroupElement], state: &mut Vec<u8>, n: usize) ->
 }
 
 
+/// Perform Barrett reduction given the params computed from `barrett_reduction_params`. Algorithm 14.42 from Handbook of Applied Cryptography
+pub fn barrett_reduction(x: &DoubleBigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
+    // q1 = floor(x / 2^{k-1})
+    let mut q1 = x.clone();
+    q1.shr(k - 1);
+    // Above right shift will convert q from DBIG to BIG
+    let q1 = BigNum::new_dcopy(&q1);
+
+    let q2 = BigNum::mul(&q1, &u);
+
+    // q3 = floor(q2 / 2^{k+1})
+    let mut q3 = q2.clone();
+    q3.shr(k + 1);
+    let q3 = BigNum::new_dcopy(&q3);
+
+    // r1 = x % 2^{k+1}
+    let mut r1 = x.clone();
+    r1.mod2m(k + 1);
+    let r1 = BigNum::new_dcopy(&r1);
+
+    // r2 = (q3 * modulus) % 2^{k+1}
+    let mut r2 = BigNum::mul(&q3, modulus);
+    r2.mod2m(k + 1);
+    let r2 = BigNum::new_dcopy(&r2);
+
+    // if r1 > r2, r = r1 - r2 else r = r1 - r2 + v
+    // Since negative numbers are not supported, use r2 - r1. This holds since r = r1 - r2 + v = v - (r2 - r1)
+    let diff = BigNum::comp(&r1, &r2);
+    //println!("diff={}", &diff);
+    let mut r = if diff < 0 {
+        let m = r2.minus(&r1);
+        v.minus(&m)
+    } else {
+        r1.minus(&r2)
+    };
+    r.norm();
+
+    // while r >= modulus, r = r - modulus
+    while BigNum::comp(&r, modulus) >= 0 {
+        r = BigNum::minus(&r, modulus);
+        r.norm();
+    }
+    r
+}
+
+
+/// For a modulus returns
+/// k = number of bits in modulus
+/// u = floor(2^2k / modulus)
+/// v = 2^(k+1)
+pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
+    let k = modulus.nbits();
+
+    // u = floor(2^2k/CurveOrder)
+    let mut u = DoubleBigNum::new();
+    u.w[0] = 1;
+    // `u.shl(2*k)` crashes, so perform shl(k) twice
+    u.shl(k);
+    u.shl(k);
+    // div returns floored value
+    let u = u.div(&CurveOrder);
+
+    // v = 2^(k+1)
+    let mut v = BigNum::new_int(1isize);
+    v.shl(k+1);
+
+    (k, u, v)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -184,68 +253,6 @@ mod test {
         }
     }
 
-    /// For a modulus returns
-    /// k = number of bits in modulus
-    /// u = floor(2^2k / modulus)
-    /// v = 2^(k+1)
-    pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
-        let k = modulus.nbits();
-
-        // u = floor(2^2k/CurveOrder)
-        let mut u = DBIG::new();
-        u.w[0] = 1;
-        // `u.shl(2*k)` crashes, so perform shl(k) twice
-        u.shl(k);
-        u.shl(k);
-        // div returns floored value
-        let u = u.div(&CurveOrder);
-
-        // v = 2^(k+1)
-        let mut v = BigNum::new_int(1isize);
-        v.shl(k+1);
-
-        (k, u, v)
-    }
-
-    /// Perform Barrett reduction given the params
-    pub fn barrett_reduction(x: &DoubleBigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
-        let mut q1 = x.clone();
-        q1.shr(k - 1);
-        // Above right shift will convert q from DBIG to BIG
-        let q1 = BigNum::new_dcopy(&q1);
-
-        let q2 = BigNum::mul(&q1, &u);
-
-        let mut q3 = q2.clone();
-        q3.shr(k + 1);
-        let q3 = BigNum::new_dcopy(&q3);
-
-        let mut r1 = x.clone();
-        r1.mod2m(k + 1);
-        let r1 = BigNum::new_dcopy(&r1);
-
-        let mut r2 = BigNum::mul(&q3, modulus);
-        r2.mod2m(k + 1);
-        let r2 = BigNum::new_dcopy(&r2);
-
-        // if r1 > r2, r = r1 - r2 else r = r1 - r2 + v => r = v - (r2 - r1)
-        let diff = BigNum::comp(&r1, &r2);
-        //println!("diff={}", &diff);
-        let mut r = if diff < 0 {
-            let m = r2.minus(&r1);
-            v.minus(&m)
-        } else {
-            r1.minus(&r2)
-        };
-        r.norm();
-
-        while BigNum::comp(&r, modulus) >= 0 {
-            r = BigNum::minus(&r, modulus);
-            r.norm();
-        }
-        r
-    }
-
     #[test]
     fn timing_barrett_reduction() {
         let (k, u, v) = barrett_reduction_params(&CurveOrder);
@@ -254,7 +261,7 @@ mod test {
         let mut reduced1 = vec![];
         let mut reduced2 = vec![];
         let mut rng = rand::thread_rng();
-        let count = 100;
+        let count = 1000;
         for _ in 0..count {
             let a: u32 = rng.gen();
             let s = BigNum::new_int(a as isize);
