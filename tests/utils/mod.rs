@@ -14,3 +14,4 @@ pub fn constrain_lc_with_scalar<CS: ConstraintSystem>(cs: &mut CS, lc: LinearCom
 pub mod positive_no;
 pub mod zero_non_zero;
 pub mod mimc;
+pub mod sharkmimc;
