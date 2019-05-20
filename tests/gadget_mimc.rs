@@ -53,12 +53,12 @@ mod tests {
                 let (com_l, var_l) = prover.commit(xl, FieldElement::random(None));
                 let (com_r, var_r) = prover.commit(xr, FieldElement::random(None));
 
-                let mut left_alloc_scalar = AllocatedQuantity {
+                let left_alloc_scalar = AllocatedQuantity {
                     variable: var_l,
                     assignment: Some(xl),
                 };
 
-                let mut right_alloc_scalar = AllocatedQuantity {
+                let right_alloc_scalar = AllocatedQuantity {
                     variable: var_r,
                     assignment: Some(xr),
                 };

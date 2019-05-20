@@ -30,7 +30,6 @@ mod tests {
         // To prove/verify value == 0, set y = 0 and inv = 0
         // To prove/verify value != 0, set y = 1 and inv = value^-1
 
-        let mut rng = rand::thread_rng();
 
         {
             let inv = 0;

@@ -114,6 +114,48 @@ pub fn barrett_reduction(x: &DoubleBigNum, modulus: &BigNum, k: usize, u: &BigNu
     r
 }
 
+// Reducing BigNum for comparison with `rmod`
+pub fn __barrett_reduction__(x: &BigNum, modulus: &BigNum, k: usize, u: &BigNum, v: &BigNum) -> BigNum {
+    // q1 = floor(x / 2^{k-1})
+    let mut q1 = x.clone();
+    q1.shr(k - 1);
+
+    let q2 = BigNum::mul(&q1, &u);
+
+    // q3 = floor(q2 / 2^{k+1})
+    let mut q3 = q2.clone();
+    q3.shr(k + 1);
+    let q3 = BigNum::new_dcopy(&q3);
+
+    // r1 = x % 2^{k+1}
+    let mut r1 = x.clone();
+    r1.mod2m(k + 1);
+
+    // r2 = (q3 * modulus) % 2^{k+1}
+    let mut r2 = BigNum::mul(&q3, modulus);
+    r2.mod2m(k + 1);
+    let r2 = BigNum::new_dcopy(&r2);
+
+    // if r1 > r2, r = r1 - r2 else r = r1 - r2 + v
+    // Since negative numbers are not supported, use r2 - r1. This holds since r = r1 - r2 + v = v - (r2 - r1)
+    let diff = BigNum::comp(&r1, &r2);
+    //println!("diff={}", &diff);
+    let mut r = if diff < 0 {
+        let m = r2.minus(&r1);
+        v.minus(&m)
+    } else {
+        r1.minus(&r2)
+    };
+    r.norm();
+
+    // while r >= modulus, r = r - modulus
+    while BigNum::comp(&r, modulus) >= 0 {
+        r = BigNum::minus(&r, modulus);
+        r.norm();
+    }
+    r
+}
+
 
 /// For a modulus returns
 /// k = number of bits in modulus
@@ -129,6 +171,7 @@ pub fn barrett_reduction_params(modulus: &BigNum) -> (usize, BigNum, BigNum) {
     u.shl(k);
     u.shl(k);
     // div returns floored value
+    // div can be replaced with bitwise ops but since this is seldom done, its fine.
     let u = u.div(&CurveOrder);
 
     // v = 2^(k+1)
@@ -147,6 +190,7 @@ mod test {
     use crate::amcl::bls381::fp::FP;
     use crate::amcl::bls381::ecp::ECP;
     use crate::utils::rand::Rng;
+    use crate::constants;
 
     #[test]
     fn timing_fp_big() {
@@ -255,8 +299,8 @@ mod test {
 
     #[test]
     fn timing_barrett_reduction() {
-        let (k, u, v) = barrett_reduction_params(&CurveOrder);
-
+        //let (k, u, v) = barrett_reduction_params(&CurveOrder);
+        let (k, u, v) = (*constants::BarrettRedc_k, *constants::BarrettRedc_u, *constants::BarrettRedc_v);
         let mut xs = vec![];
         let mut reduced1 = vec![];
         let mut reduced2 = vec![];
@@ -289,6 +333,32 @@ mod test {
         for i in 0..count {
             assert_eq!(BigNum::comp(&reduced1[i], &reduced2[i]), 0);
         }
+    }
+
+    #[test]
+    fn timing_rmod_with_barrett_reduction() {
+        let (k, u, v) = (*constants::BarrettRedc_k, *constants::BarrettRedc_u, *constants::BarrettRedc_v);
+        let count = 100;
+        let elems: Vec<_> = (0..count).map(|_| FieldElement::random(None)).collect();
+        let bigs: Vec<_> = elems.iter().map(|f|f.to_bignum()).collect();
+
+        let mut sum = bigs[0].clone();
+        let mut start = Instant::now();
+        for i in 0..count {
+            sum = BigNum::plus(&sum, &bigs[i]);
+            sum.rmod(&CurveOrder)
+        }
+        println!("rmod time = {:?}", start.elapsed());
+
+        let mut sum_b = bigs[0].clone();
+        start = Instant::now();
+        for i in 0..count {
+            sum_b = BigNum::plus(&sum_b, &bigs[i]);
+            sum_b = __barrett_reduction__(&sum_b, &CurveOrder, k, &u, &v)
+        }
+        println!("Barrett time = {:?}", start.elapsed());
+
+        assert_eq!(BigNum::comp(&sum, &sum_b), 0)
     }
 }
 

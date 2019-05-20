@@ -1,10 +1,10 @@
 use rand::RngCore;
 use rand::rngs::EntropyRng;
 
-use crate::constants::{MODBYTES, CurveOrder, NLEN};
-use crate::types::BigNum;
+use crate::constants::{MODBYTES, CurveOrder, NLEN, BarrettRedc_k, BarrettRedc_u, BarrettRedc_v};
+use crate::types::{BigNum, DoubleBigNum};
 use amcl::sha3::{SHAKE256, SHA3};
-use crate::utils::{get_seeded_RNG, hash_msg};
+use crate::utils::{get_seeded_RNG, hash_msg, barrett_reduction};
 use crate::errors::ValueError;
 use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul};
@@ -12,6 +12,7 @@ use std::fmt;
 use core::fmt::Display;
 use crate::utils::group_elem::GroupElement;
 use std::slice::Iter;
+use byteorder::BigEndian;
 
 
 #[macro_export]
@@ -88,7 +89,6 @@ impl FieldElement {
         let mut v = self.value.clone();
         v.rmod(&CurveOrder);
         v
-        //self.value
     }
 
     /// Hash message and return output as field element
@@ -130,14 +130,24 @@ impl FieldElement {
     }
 
     /// Multiply 2 field elements modulus the order of the curve.
-    /// field_element_a * field_element_b % curve_order
+    /// (field_element_a * field_element_b) % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
-        BigNum::modmul(&self.value, &b.value, &CurveOrder).into()
+        //BigNum::modmul(&self.value, &b.value, &CurveOrder).into()
+        let mut a = self.value.clone();
+        a.rmod(&CurveOrder);
+        let mut b = b.value.clone();
+        b.rmod(&CurveOrder);
+        let d = BigNum::mul(&a, &b);
+        Self::reduce_dmod_curve_order(&d).into()
     }
 
     /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
-        BigNum::modsqr(&self.value, &CurveOrder).into()
+        //BigNum::modsqr(&self.value, &CurveOrder).into()
+        let mut a = self.value.clone();
+        a.rmod(&CurveOrder);
+        let d = BigNum::sqr(&a);
+        Self::reduce_dmod_curve_order(&d).into()
     }
 
     /// Return negative of field element
@@ -315,6 +325,12 @@ impl FieldElement {
         inverses[0] = u;
 
         (inverses, all_inv)
+    }
+
+    /// Useful for reducing product of BigNums. Uses Barrett reduction
+    pub fn reduce_dmod_curve_order(x: &DoubleBigNum) -> BigNum {
+        let (k, u, v) = (*BarrettRedc_k, *BarrettRedc_u, *BarrettRedc_v);
+        barrett_reduction(&x, &CurveOrder, k, &u, &v)
     }
 }
 
