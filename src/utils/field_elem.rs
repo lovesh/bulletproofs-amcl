@@ -132,7 +132,6 @@ impl FieldElement {
     /// Multiply 2 field elements modulus the order of the curve.
     /// (field_element_a * field_element_b) % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
-        //BigNum::modmul(&self.value, &b.value, &CurveOrder).into()
         let mut a = self.value.clone();
         a.rmod(&CurveOrder);
         let mut b = b.value.clone();
@@ -143,7 +142,6 @@ impl FieldElement {
 
     /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
-        //BigNum::modsqr(&self.value, &CurveOrder).into()
         let mut a = self.value.clone();
         a.rmod(&CurveOrder);
         let d = BigNum::sqr(&a);
@@ -296,10 +294,6 @@ impl FieldElement {
     /// eg `batch_invert([a, b, c, d])` returns ([1/a, 1/b, 1/c, 1/d], 1/a * 1/b * 1/c * 1/d)
     /// Algorithm taken from Guide to Elliptic Curve Cryptography book, "Algorithm 2.26 Simultaneous inversion"
     pub fn batch_invert(elems: &[Self]) -> (Vec<Self>, Self) {
-        // TODO: Currently inversion seems to happen faster than multiplication as one of the test below shows.
-        // This might be due to the fact that the current field element multiplication algorithm is constant time.
-        // Check and add a faster multiplication algorithm if needed.
-
         debug_assert!( elems.len() > 0 );
 
         let k = elems.len();

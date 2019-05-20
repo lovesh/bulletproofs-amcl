@@ -271,12 +271,11 @@ impl NewIPP {
 
         let mut challenges_sq = Vec::with_capacity(lg_n);
         let mut challenges_inv_sq = Vec::with_capacity(lg_n);
-        let mut product_chal_inv = FieldElement::one();
-        for c in &challenges {
-            let inv = c.inverse();
-            challenges_sq.push(c.square());
-            challenges_inv_sq.push(inv.square());
-            product_chal_inv = product_chal_inv * inv;
+
+        let (challenges_inv, product_chal_inv) = FieldElement::batch_invert(&challenges);
+        for i in 0..challenges.len() {
+            challenges_sq.push(challenges[i].square());
+            challenges_inv_sq.push(challenges_inv[i].square());
         }
 
         // 3. Compute s values inductively.
