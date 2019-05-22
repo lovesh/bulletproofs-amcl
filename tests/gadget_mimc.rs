@@ -1,5 +1,7 @@
 extern crate merlin;
 extern crate rand;
+extern crate flame;
+extern crate cpuprofiler;
 
 use bulletproofs_amcl as bulletproofs;
 use bulletproofs::utils::field_elem::FieldElement;
@@ -22,6 +24,8 @@ mod tests {
     use bulletproofs::utils::get_generators;
     use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
     use bulletproofs::utils::field_elem::FieldElement;
+    use std::fs::File;
+    use cpuprofiler::PROFILER;
 
     #[test]
     fn test_mimc() {
@@ -35,7 +39,7 @@ mod tests {
         let g =  GroupElement::from_msg_hash("g".as_bytes());
         let h =  GroupElement::from_msg_hash("h".as_bytes());
 
-        const SAMPLES: u32 = 10;
+        const SAMPLES: u32 = 1;
         let mut total_proving = Duration::new(0, 0);
         let mut total_verifying = Duration::new(0, 0);
 
@@ -63,6 +67,8 @@ mod tests {
                     assignment: Some(xr),
                 };
 
+                //flame::start("proving");
+                PROFILER.lock().unwrap().start("./proving.profile").unwrap();
                 let start = Instant::now();
                 assert!(mimc_gadget(&mut prover,
                                     left_alloc_scalar,
@@ -72,9 +78,10 @@ mod tests {
                                     &image).is_ok());
 
                 //println!("For MiMC rounds {}, no of constraints is {}", &MIMC_ROUNDS, &prover.num_constraints());
-
                 let proof = prover.prove(&G, &H).unwrap();
                 total_proving += start.elapsed();
+                //flame::end("proving");
+                PROFILER.lock().unwrap().stop().unwrap();
 
                 (proof, (com_l, com_r))
             };
@@ -94,6 +101,8 @@ mod tests {
                 assignment: None,
             };
 
+            //flame::start("verifying");
+            PROFILER.lock().unwrap().start("./verifying.profile").unwrap();
             let start = Instant::now();
             assert!(mimc_gadget(&mut verifier,
                                 left_alloc_scalar,
@@ -104,10 +113,13 @@ mod tests {
 
             assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
             total_verifying += start.elapsed();
+            //flame::end("verifying");
+            PROFILER.lock().unwrap().stop().unwrap();
         }
 
         println!("Total proving time for {} samples: {:?} seconds", SAMPLES, total_proving);
         println!("Total verifying time for {} samples: {:?} seconds", SAMPLES, total_verifying);
+        flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
     }
 
 }
