@@ -206,12 +206,12 @@ mod tests {
     }
 
     #[test]
-    fn test_sharkmimc_cube_sbox() {
+    fn test_poseidon_perm_cube_sbox() {
         poseidon_perm(&SboxType::Cube, b"Poseidon_perm_cube");
     }
 
     #[test]
-    fn test_sharkmimc_inverse_sbox() {
+    fn test_poseidon_perm_inverse_sbox() {
         poseidon_perm(&SboxType::Inverse, b"Poseidon_perm_inverse");
     }
 
