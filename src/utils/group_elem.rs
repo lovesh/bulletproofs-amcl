@@ -425,10 +425,10 @@ impl GroupElementVector {
     fn _multi_scalar_mul_const_time(group_elems: &GroupElementVector, field_elems: &FieldElementVector) -> Result<GroupElement, ValueError> {
         check_vector_size_for_equality!(field_elems, group_elems)?;
 
-        // Choosing window of size 2.
+        // Choosing window of size 3.
         let group_elem_multiples: Vec<_> = group_elems.as_slice()
             .into_iter()
-            .map(|e| e.get_multiples(3))       // 2^2 - 1
+            .map(|e| e.get_multiples(7))       // 2^3 - 1
             .collect();
 
         Self::multi_scalar_mul_const_time_with_precomputation_done(&group_elem_multiples, field_elems)
@@ -441,20 +441,21 @@ impl GroupElementVector {
 
         // TODO: The test shows that precomputing multiples does not help much. Experiment with bigger window.
 
-        let mut field_elems_base_4: Vec<_> = field_elems.as_slice()
+        let mut field_elems_base_repr: Vec<_> = field_elems.as_slice()
             .into_iter()
-            .map(|e| e.to_base_4())
+            .map(|e| e.to_power_of_2_base(3))
             .collect();
 
-        // Pad the base 4 representations with 0 so that all are of same length
-        let new_length = pad_collection!(field_elems_base_4, 0);
+        // Pad the representations with 0 so that all are of same length
+        let new_length = pad_collection!(field_elems_base_repr, 0);
 
         let mut r = GroupElement::new();
         for i in (0..new_length).rev() {
-            // r = r * 2^2
+            // r = r * 2^3
             r.double_mut();
             r.double_mut();
-            for (b, m) in field_elems_base_4.iter().zip(group_elem_multiples.iter()) {
+            r.double_mut();
+            for (b, m) in field_elems_base_repr.iter().zip(group_elem_multiples.iter()) {
                 // TODO: The following can be replaced with a pre-computation.
                 if b[i] != 0 {
                     r = r + m[(b[i]-1) as usize]
@@ -632,12 +633,12 @@ mod test {
 
     #[test]
     fn test_multi_scalar_multiplication() {
-        for _ in 0..10 {
+        for _ in 0..2 {
             let mut fs = vec![];
             let mut gs = vec![];
             let gen: GroupElement = GroupElement::generator();
 
-            for i in 0..30 {
+            for i in 0..1000 {
                 fs.push(FieldElement::random(None));
                 gs.push(gen.scalar_mul_const_time(&fs[i]));
             }
@@ -708,7 +709,7 @@ mod test {
 
         let group_elem_multiples: Vec<_> = gv.as_slice()
             .into_iter()
-            .map(|e| e.get_multiples(3))
+            .map(|e| e.get_multiples(7))
             .collect();
 
         start = Instant::now();

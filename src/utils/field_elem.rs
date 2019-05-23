@@ -269,22 +269,24 @@ impl FieldElement {
         naf
     }
 
-    // Convert to base 4. Does not handle negative nos.
-    pub fn to_base_4(&self) -> Vec<u8> {
+    /// Convert to base that is power of 2. Does not handle negative nos or `base` higher than 7
+    pub fn to_power_of_2_base(&self, n: usize) -> Vec<u8> {
+        debug_assert!(n <= 7);
+        
         if self.is_zero() {
             return vec![0u8];
         }
         let mut t = self.to_bignum();
         t.norm();
 
-        let mut base_4 = vec![];
+        let mut base_repr = vec![];
         while !t.iszilch() {
             let mut d = t.clone();
-            d.mod2m(2);
-            base_4.push(d.w[0] as u8);
-            t.fshr(2);
+            d.mod2m(n);
+            base_repr.push(d.w[0] as u8);
+            t.fshr(n);
         }
-        base_4
+        base_repr
     }
 
     /// Takes a bunch of field elements and returns the inverse of all field elements.
@@ -880,14 +882,20 @@ mod test {
     }
 
     #[test]
-    fn test_field_elem_to_base_4() {
+    fn test_field_elem_to_base() {
         for i in 0..4 {
             let x = FieldElement::from(i as u8);
-            let b = x.to_base_4();
+            let b = x.to_power_of_2_base(2);
             assert_eq!(b, vec![i]);
         }
 
-        for (n, expected) in vec![
+        for i in 0..8 {
+            let x = FieldElement::from(i as u8);
+            let b = x.to_power_of_2_base(3);
+            assert_eq!(b, vec![i]);
+        }
+
+        for (n, expected_4) in vec![
             (4, vec![0, 1]),
             (5, vec![1, 1]),
             (6, vec![2, 1]),
@@ -897,7 +905,16 @@ mod test {
             (6719, vec![3, 3, 3, 0, 2, 2, 1]),
             (8911009812u64, vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2]),
         ] {
-            assert_eq!(FieldElement::from(n as u64).to_base_4(), expected);
+            assert_eq!(FieldElement::from(n as u64).to_power_of_2_base(2), expected_4);
+        }
+
+        for (n, expected_8) in vec![
+            (8, vec![0, 1]),
+            (63, vec![7, 7]),
+            (6719, vec![7, 7, 0, 5, 1]),
+            (8911009812u64, vec![4, 2, 0, 4, 3, 6, 0, 1, 3, 2, 0, 1]),
+        ] {
+            assert_eq!(FieldElement::from(n as u64).to_power_of_2_base(3), expected_8);
         }
     }
 
