@@ -2,6 +2,8 @@ extern crate rand;
 extern crate amcl;
 
 #[macro_use]
+pub mod macros;
+#[macro_use]
 pub mod field_elem;
 #[macro_use]
 pub mod group_elem;

@@ -229,63 +229,62 @@ impl FieldElement {
         if n.iszilch() { Self::random_field_element(order) } else { n }
     }
 
+    /// Conversion to wNAF, i.e. windowed Non Adjacent form
+    /// Taken from Guide to Elliptic Curve Cryptography book, "Algorithm 3.35 Computing the width-w NAF of a positive integer" with modification
+    /// at step 2.1, if k_i >= 2^(w-1), k_i = k_i - 2^w
     pub fn to_wnaf(&self, w: usize) -> Vec<i8> {
         // required by the NAF definition
         debug_assert!( w >= 2 );
         // required so that the NAF digits fit in i8
         debug_assert!( w <= 8 );
 
-        use byteorder::{ByteOrder, LittleEndian};
+        // Working on the the underlying BIG to save the cost of to and from conversion with FieldElement
+        let mut k = self.to_bignum();
+        let mut naf: Vec<i8> = vec![];
 
-        let mut naf = vec![0i8; MODBYTES * 8];
+        let two_w_1 = 1 << (w - 1);    // 2^(w-1)
+        let two_w = 1 << w;            // 2^w
 
-        let mut x_u64 = vec![0u64; NLEN];
-        let mut bytes = self.to_bytes();
-        bytes.reverse();
-        LittleEndian::read_u64_into(&bytes, &mut x_u64[0..NLEN-1]);
+        // While k is not zero
+        while !k.iszilch() {
+            // If k is odd
+            let t = if k.parity() == 1 {
+                let mut b = k.clone();
+                // b = b % 2^w
+                b.mod2m(w);
 
-        let width = 1 << w;
-        let window_mask = width - 1;
+                // Only the first limb is useful as b <2^w
+                let mut u = b.w[0];
+                if u >= two_w_1 {
+                    u = u - two_w;
+                }
 
-        let mut pos = 0;
-        let mut carry = 0;
-        while pos < naf.len() {
-            // Construct a buffer of bits of the scalar, starting at bit `pos`
-            let u64_idx = pos / 64;
-            let bit_idx = pos % 64;
-            let bit_buf: u64;
-            if bit_idx < 64 - w {
-                // This window's bits are contained in a single u64
-                bit_buf = x_u64[u64_idx] >> bit_idx;
-            } else {
-                // Combine the current u64's bits with the bits from the next u64
-                bit_buf = (x_u64[u64_idx] >> bit_idx) | (x_u64[1+u64_idx] << (64 - bit_idx));
-            }
-
-            // Add the carry into the current window
-            let window = carry + (bit_buf & window_mask);
-
-            if window & 1 == 0 {
-                // If the window value is even, preserve the carry and continue.
-                // Why is the carry preserved?
-                // If carry == 0 and window & 1 == 0, then the next carry should be 0
-                // If carry == 1 and window & 1 == 0, then bit_buf & 1 == 1 so the next carry should be 1
-                pos += 1;
-                continue;
-            }
-
-            if window < width/2 {
-                carry = 0;
-                naf[pos] = window as i8;
-            } else {
-                carry = 1;
-                naf[pos] = (window as i8) - (width as i8);
-            }
-
-            pos += w;
+                k.w[0] = k.w[0] - u;
+                u as i8
+            } else { 0i8 };
+            naf.push(t);
+            k.fshr(1usize);
         }
 
         naf
+    }
+
+    // Convert to base 4. Does not handle negative nos.
+    pub fn to_base_4(&self) -> Vec<u8> {
+        if self.is_zero() {
+            return vec![0u8];
+        }
+        let mut t = self.to_bignum();
+        t.norm();
+
+        let mut base_4 = vec![];
+        while !t.iszilch() {
+            let mut d = t.clone();
+            d.mod2m(2);
+            base_4.push(d.w[0] as u8);
+            t.fshr(2);
+        }
+        base_4
     }
 
     /// Takes a bunch of field elements and returns the inverse of all field elements.
@@ -878,6 +877,28 @@ mod test {
         let one = FieldElement::one();
         let minus_one = FieldElement::minus_one();
         assert_eq!(one + minus_one, zero);
+    }
+
+    #[test]
+    fn test_field_elem_to_base_4() {
+        for i in 0..4 {
+            let x = FieldElement::from(i as u8);
+            let b = x.to_base_4();
+            assert_eq!(b, vec![i]);
+        }
+
+        for (n, expected) in vec![
+            (4, vec![0, 1]),
+            (5, vec![1, 1]),
+            (6, vec![2, 1]),
+            (7, vec![3, 1]),
+            (8, vec![0, 2]),
+            (63, vec![3, 3, 3]),
+            (6719, vec![3, 3, 3, 0, 2, 2, 1]),
+            (8911009812u64, vec![0, 1, 1, 0, 0, 2, 3, 0, 3, 0, 2, 0, 3, 0, 1, 0, 2]),
+        ] {
+            assert_eq!(FieldElement::from(n as u64).to_base_4(), expected);
+        }
     }
 
     #[test]
