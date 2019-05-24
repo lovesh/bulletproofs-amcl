@@ -146,6 +146,7 @@ mod tests {
                 });
             }
 
+            let start = Instant::now();
             assert!(Poseidon_hash_2_gadget(&mut prover,
                                            l_alloc,
                                            r_alloc,
@@ -155,6 +156,7 @@ mod tests {
                                            &expected_output).is_ok());
 
             println!("For Poseidon hash rounds {}, no of constraints is {}", total_rounds, &prover.num_constraints());
+            println!("Proving time is: {:?}", start.elapsed());
 
             let proof =  prover.prove(&G, &H).unwrap();
             (proof, comms)
@@ -194,6 +196,8 @@ mod tests {
                 assignment: None,
             });
         }
+
+        let start = Instant::now();
         assert!(Poseidon_hash_2_gadget(&mut verifier,
                                        l_alloc,
                                        r_alloc,
@@ -203,6 +207,7 @@ mod tests {
                                        &expected_output).is_ok());
 
         assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
+        println!("Verification time is: {:?}", start.elapsed());
     }
 
     #[test]
