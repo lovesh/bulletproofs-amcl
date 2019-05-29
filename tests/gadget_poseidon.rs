@@ -92,7 +92,7 @@ mod tests {
         assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
     }
     
-    fn poseidon_hash(sbox_type: &SboxType, transcript_label: &'static [u8]) {
+    fn poseidon_2_hash(sbox_type: &SboxType, transcript_label: &'static [u8]) {
         let width = 6;
         let (full_b, full_e) = (4, 4);
         let partial_rounds = 144;
@@ -221,12 +221,12 @@ mod tests {
     }
 
     #[test]
-    fn test_poseidon_hash_cube_sbox() {
-        poseidon_hash(&SboxType::Cube, b"Poseidon_hash_cube");
+    fn test_poseidon_hash_2_cube_sbox() {
+        poseidon_2_hash(&SboxType::Cube, b"Poseidon_hash_cube");
     }
 
     #[test]
-    fn test_poseidon_hash_inverse_sbox() {
-        poseidon_hash(&SboxType::Inverse, b"Poseidon_hash_inverse");
+    fn test_poseidon_hash_2_inverse_sbox() {
+        poseidon_2_hash(&SboxType::Inverse, b"Poseidon_hash_inverse");
     }
 }

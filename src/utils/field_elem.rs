@@ -39,6 +39,8 @@ impl fmt::Display for FieldElement {
     }
 }
 
+
+/// Represents an element of the prime field of the curve. All operations are done modulo the curve order
 impl FieldElement {
     /// Creates a new field element with value 0
     pub fn new() -> Self {
@@ -320,6 +322,10 @@ impl FieldElement {
         inverses[0] = u;
 
         (inverses, all_inv)
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.to_bignum().tostring()
     }
 
     /// Useful for reducing product of BigNums. Uses Barrett reduction

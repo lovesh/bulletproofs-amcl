@@ -2,7 +2,7 @@ use crate::utils::group_elem::{GroupElement, GroupElementVector};
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 use crate::errors::ValueError;
 
-// Commit to field element `elem` with randomness `r` given groups elements `g` and `h`, i.e. compute g^elem.h^r
+/// Commit to field element `elem` with randomness `r` given groups elements `g` and `h`, i.e. compute g^elem.h^r
 pub fn commit_to_field_element(g: &GroupElement, h: &GroupElement, elem: &FieldElement,
                                r: &FieldElement) -> GroupElement {
     g.binary_scalar_mul(h, elem, r)

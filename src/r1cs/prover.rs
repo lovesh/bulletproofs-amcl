@@ -580,6 +580,10 @@ impl<'a, 'b> Prover<'a, 'b> {
     pub fn num_constraints(&self) -> usize {
         self.constraints.len()
     }
+
+    pub fn num_multipliers(&self) -> usize {
+        self.a_O.len()
+    }
 }
 
 

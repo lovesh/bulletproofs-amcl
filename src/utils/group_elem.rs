@@ -37,6 +37,7 @@ impl fmt::Display for GroupElement {
     }
 }
 
+/// Represents an element of the group on the elliptic curve
 impl GroupElement {
     pub fn new() -> Self {
         Self {
@@ -173,6 +174,10 @@ impl GroupElement {
         }
 
         result
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.to_ecp().tostring()
     }
 }
 
