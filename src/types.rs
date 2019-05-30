@@ -1,8 +1,8 @@
 extern crate amcl;
 
-use super::BLSCurve::big::BIG;
-use super::BLSCurve::dbig::DBIG;
-use super::BLSCurve::ecp::ECP;
+use super::ECCurve::big::BIG;
+use super::ECCurve::dbig::DBIG;
+use super::ECCurve::ecp::ECP;
 
 pub type BigNum = BIG;
 pub type DoubleBigNum = DBIG;

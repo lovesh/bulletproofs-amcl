@@ -5,8 +5,8 @@ extern crate amcl;
 #[macro_use]
 extern crate lazy_static;
 
-pub use self::amcl::bls381 as BLSCurve;
-//pub use self::amcl::bn254 as BLSCurve;
+pub use self::amcl::bls381 as ECCurve;
+//pub use self::amcl::bn254 as ECCurve;
 
 #[macro_use]
 pub mod errors;
