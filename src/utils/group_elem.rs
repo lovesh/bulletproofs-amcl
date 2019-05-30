@@ -603,7 +603,7 @@ mod test {
         for _ in 0..10 {
             let a = GroupElement::random(None);
             let mults = a.get_multiples(17);
-            for i in 1..=20 {
+            for i in 1..=17 {
                 assert_eq!(mults[i-1], a * FieldElement::from(i as u8));
             }
         }

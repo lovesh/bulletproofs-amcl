@@ -81,7 +81,6 @@ impl NewIPP {
             L_1.extend(H_L.iter());
             L_1.push(Q.clone());
 
-            //let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
             let L = GroupElementVector::from(L_1).multi_scalar_mul_var_time(&L_0.into()).unwrap();
 
             let mut R_0 = vec![];
@@ -94,7 +93,6 @@ impl NewIPP {
             R_1.extend(H_R.iter());
             R_1.push(Q.clone());
 
-            //let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
             let R = GroupElementVector::from(R_1).multi_scalar_mul_var_time(&R_0.into()).unwrap();
 
             L_vec.push(L);
@@ -140,7 +138,6 @@ impl NewIPP {
             L_0.extend(b_R.iter());
             L_0.push(c_L);
 
-            //let L = GroupElementVector::from(L_1).multi_scalar_mul_const_time(&L_0.into()).unwrap();
             let L = GroupElementVector::from(L_1).multi_scalar_mul_var_time(&L_0.into()).unwrap();
 
             let mut R_1 = vec![];
@@ -152,7 +149,6 @@ impl NewIPP {
             R_0.extend(b_L.iter());
             R_0.push(c_R);
 
-            //let R = GroupElementVector::from(R_1).multi_scalar_mul_const_time(&R_0.into()).unwrap();
             let R = GroupElementVector::from(R_1).multi_scalar_mul_var_time(&R_0.into()).unwrap();
 
             L_vec.push(L);

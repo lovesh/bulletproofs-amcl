@@ -134,19 +134,13 @@ impl FieldElement {
     /// Multiply 2 field elements modulus the order of the curve.
     /// (field_element_a * field_element_b) % curve_order
     pub fn multiply(&self, b: &Self) -> Self {
-        let mut a = self.value.clone();
-        a.rmod(&CurveOrder);
-        let mut b = b.value.clone();
-        b.rmod(&CurveOrder);
-        let d = BigNum::mul(&a, &b);
+        let d = BigNum::mul(&self.value, &b.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
     /// Calculate square of a field element modulo the curve order, i.e `a^2 % curve_order`
     pub fn square(&self) -> Self {
-        let mut a = self.value.clone();
-        a.rmod(&CurveOrder);
-        let d = BigNum::sqr(&a);
+        let d = BigNum::sqr(&self.value);
         Self::reduce_dmod_curve_order(&d).into()
     }
 
