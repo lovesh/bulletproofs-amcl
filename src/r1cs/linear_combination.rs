@@ -1,9 +1,8 @@
-use crate::utils::field_elem::FieldElement;
+use amcl_wrapper::field_elem::FieldElement;
 
+use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::ops::{Add, Mul, Neg, Sub};
-use std::collections::HashMap;
-
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Variable {
@@ -22,7 +21,7 @@ pub enum Variable {
 #[derive(Copy, Clone, Debug)]
 pub struct AllocatedQuantity {
     pub variable: Variable,
-    pub assignment: Option<FieldElement>
+    pub assignment: Option<FieldElement>,
 }
 
 /// Represents a linear combination of
@@ -83,8 +82,8 @@ impl From<FieldElement> for LinearCombination {
 
 impl FromIterator<(Variable, FieldElement)> for LinearCombination {
     fn from_iter<T>(iter: T) -> Self
-        where
-            T: IntoIterator<Item = (Variable, FieldElement)>,
+    where
+        T: IntoIterator<Item = (Variable, FieldElement)>,
     {
         LinearCombination {
             terms: iter.into_iter().collect(),
@@ -94,8 +93,8 @@ impl FromIterator<(Variable, FieldElement)> for LinearCombination {
 
 impl<'a> FromIterator<&'a (Variable, FieldElement)> for LinearCombination {
     fn from_iter<T>(iter: T) -> Self
-        where
-            T: IntoIterator<Item = &'a (Variable, FieldElement)>,
+    where
+        T: IntoIterator<Item = &'a (Variable, FieldElement)>,
     {
         LinearCombination {
             terms: iter.into_iter().cloned().collect(),
@@ -142,8 +141,12 @@ impl<L: Into<LinearCombination>> Sub<L> for LinearCombination {
     type Output = Self;
 
     fn sub(mut self, rhs: L) -> Self::Output {
-        self.terms
-            .extend(rhs.into().terms.iter().map(|(var, coeff)| (*var, coeff.negation())));
+        self.terms.extend(
+            rhs.into()
+                .terms
+                .iter()
+                .map(|(var, coeff)| (*var, coeff.negation())),
+        );
         LinearCombination { terms: self.terms }
     }
 }
@@ -205,4 +208,3 @@ impl Mul<Variable> for FieldElement {
         }
     }
 }
-

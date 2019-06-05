@@ -1,8 +1,8 @@
 //! Definition of the proof struct.
 
-use crate::utils::field_elem::FieldElement; 
-use crate::utils::group_elem::G1;
 use crate::inner_product::InnerProductArgumentProof;
+use amcl_wrapper::field_elem::FieldElement;
+use amcl_wrapper::group_elem_g1::G1;
 
 /// A proof of some statement specified by a
 /// [`ConstraintSystem`](::r1cs::ConstraintSystem).
@@ -54,7 +54,6 @@ pub struct R1CSProof {
     pub(super) e_blinding: FieldElement,
     /// Proof data for the inner-product argument.
     pub(super) ipp_proof: InnerProductArgumentProof,
-
     // Only for debugging; Don't inlcude P in proof as the prover can cheat
     // pub(super) P: GroupElement,
 }

@@ -1,4 +1,4 @@
-use crate::utils::field_elem::{FieldElement, FieldElementVector};
+use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 
 /// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
 pub struct VecPoly1(pub FieldElementVector, pub FieldElementVector);
@@ -66,7 +66,7 @@ impl VecPoly3 {
             FieldElementVector::new(n),
             FieldElementVector::new(n),
             FieldElementVector::new(n),
-            FieldElementVector::new(n)
+            FieldElementVector::new(n),
         )
     }
 

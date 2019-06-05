@@ -1,23 +1,24 @@
-use super::errors::ValueError;
 use super::utils::gen_challenges;
-use crate::utils::field_elem::{FieldElement, FieldElementVector};
-use crate::utils::group_elem::{G1, GroupElementVector};
-use crate::utils::commitment::*;
-use crate::constants::{GeneratorG1, CurveOrder};
 use crate::inner_product::{InnerProductArgument, InnerProductArgumentProof};
+use amcl_wrapper::commitment::*;
+use amcl_wrapper::constants::{CurveOrder, GeneratorG1};
+use amcl_wrapper::errors::ValueError;
+use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
+use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 
 // TODO: Sidechannel resistance. Make sure that range proof for a value with 1 bit set
 // takes same time and memory as a value with all bits set.
 
 pub struct RangeProofProtocol<'a> {
-    G: &'a GroupElementVector,
-    H: &'a GroupElementVector,
+    G: &'a G1Vector,
+    H: &'a G1Vector,
     g: &'a G1,
     h: &'a G1,
     V: &'a G1,
     size: usize,
     one_vandm_vec: FieldElementVector,
-    two_vandm_vec: FieldElementVector
+    two_vandm_vec: FieldElementVector,
 }
 
 pub struct RangeProof {
@@ -35,22 +36,42 @@ pub struct RangeProof {
 }
 
 impl<'a> RangeProofProtocol<'a> {
-    pub fn new(G: &'a GroupElementVector, H: &'a GroupElementVector, g: &'a G1, h: &'a G1,
-               V: &'a G1) -> Result<RangeProofProtocol<'a>, ValueError> {
+    pub fn new(
+        G: &'a G1Vector,
+        H: &'a G1Vector,
+        g: &'a G1,
+        h: &'a G1,
+        V: &'a G1,
+    ) -> Result<RangeProofProtocol<'a>, ValueError> {
         check_vector_size_for_equality!(G, H)?;
         if !G.len().is_power_of_two() {
-            return Err(ValueError::NonPowerOf2(G.len()))
+            return Err(ValueError::NonPowerOf2(G.len()));
         }
 
         let size = G.len();
-        let one_vandm_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::from(1), size);
-        let two_vandm_vec = FieldElementVector::new_vandermonde_vector(&FieldElement::from(2), size);
+        let one_vandm_vec =
+            FieldElementVector::new_vandermonde_vector(&FieldElement::from(1), size);
+        let two_vandm_vec =
+            FieldElementVector::new_vandermonde_vector(&FieldElement::from(2), size);
 
-        Ok(RangeProofProtocol { G, H, g, h, V, size, one_vandm_vec, two_vandm_vec})
+        Ok(RangeProofProtocol {
+            G,
+            H,
+            g,
+            h,
+            V,
+            size,
+            one_vandm_vec,
+            two_vandm_vec,
+        })
     }
 
     // Generate a range proof of `v` for randomness `lambda`
-    pub fn gen_proof(&self, v: &FieldElement, lambda: &FieldElement) -> Result<RangeProof, ValueError> {
+    pub fn gen_proof(
+        &self,
+        v: &FieldElement,
+        lambda: &FieldElement,
+    ) -> Result<RangeProof, ValueError> {
         if v < &FieldElement::zero() {
             return Err(ValueError::NegativeValue(v.to_bignum()));
         }
@@ -59,18 +80,22 @@ impl<'a> RangeProofProtocol<'a> {
         let mut _a_L = match _bitvectors.len() {
             0 => vec![0],
             1 => _bitvectors.pop().unwrap(),
-            _ => panic!("Won't handle numbers greater than 1 limb")
+            _ => panic!("Won't handle numbers greater than 1 limb"),
         };
 
         if _a_L.len() > self.size {
-            return Err(ValueError::OutOfRange(_a_L.len()))
+            return Err(ValueError::OutOfRange(_a_L.len()));
         } else if _a_L.len() < self.size {
             _a_L.extend(vec![0; self.size - _a_L.len()])
         }
 
         let mut state: Vec<u8> = vec![];
 
-        let a_L: FieldElementVector = _a_L.iter().map(| a | FieldElement::from(*a)).collect::<Vec<FieldElement>>().into();
+        let a_L: FieldElementVector = _a_L
+            .iter()
+            .map(|a| FieldElement::from(*a))
+            .collect::<Vec<FieldElement>>()
+            .into();
         let a_R = a_L.minus(&self.one_vandm_vec)?;
 
         // For debugging only, comment in production
@@ -84,17 +109,16 @@ impl<'a> RangeProofProtocol<'a> {
         }*/
 
         // Commit to vectors `a_L` and `a_R`
-        let alpha = FieldElement::random(None);
+        let alpha = FieldElement::random();
         let A = commit_to_field_element_vectors(&self.G, &self.H, &self.h, &a_L, &a_R, &alpha)?;
 
         // Generate blinding vectors `s_L` and `s_R` to blind `a_L` and `a_R` respectively
-        let s_L = FieldElementVector::random(self.size, None);
-        let s_R = FieldElementVector::random(self.size, None);
+        let s_L = FieldElementVector::random(self.size);
+        let s_R = FieldElementVector::random(self.size);
 
         // Commit to vectors `s_L` and `s_R`
-        let rho = FieldElement::random(None);
-        let S = commit_to_field_element_vectors(&self.G, &self.H, &self.h,
-                                                &s_L, &s_R, &rho)?;
+        let rho = FieldElement::random();
+        let S = commit_to_field_element_vectors(&self.G, &self.H, &self.h, &s_L, &s_R, &rho)?;
 
         let challenges = gen_challenges(&[&A, &S], &mut state, 2);
         let y = challenges[0];
@@ -154,9 +178,9 @@ impl<'a> RangeProofProtocol<'a> {
         let t2 = s_L.inner_product(&r_X_linear)?;
 
         // Commit to `t1` and `t2`, as `T1` and `T2`
-        let tau1 = FieldElement::random(None);
+        let tau1 = FieldElement::random();
         let T1 = commit_to_field_element(&self.g, &self.h, &t1, &tau1);
-        let tau2 = FieldElement::random(None);
+        let tau2 = FieldElement::random();
         let T2 = commit_to_field_element(&self.g, &self.h, &t2, &tau2);
 
         let x = gen_challenges(&[&T1, &T2], &mut state, 1)[0];
@@ -180,7 +204,7 @@ impl<'a> RangeProofProtocol<'a> {
         let tau2_x_sqr = tau2.multiply(&x_sqr);
         let tau1_x = tau1.multiply(&x);
         let z_sqr_lambda = z_sqr.multiply(lambda);
-        let tau_x: FieldElement =  tau2_x_sqr + tau1_x + z_sqr_lambda;
+        let tau_x: FieldElement = tau2_x_sqr + tau1_x + z_sqr_lambda;
 
         let mu: FieldElement = alpha + rho.multiply(&x);
 
@@ -247,7 +271,7 @@ impl<'a> RangeProofProtocol<'a> {
 
         if lhs != rhs {
             println!("Polynomial evaluation not satisfied");
-            return Ok(false)
+            return Ok(false);
         }
 
         // Calculate P = A.S^x.G^-z.H_prime^(z.y^n+z^2.2^n)
@@ -280,10 +304,15 @@ impl<'a> RangeProofProtocol<'a> {
         }*/
 
         // Compute P.h^-mu
-        let h_neg_mu = self.h  * proof.mu.negation();
+        let h_neg_mu = self.h * proof.mu.negation();
         let mut newP = P + h_neg_mu;
 
-        let u = Self::compute_gen_for_inner_product_arg(&proof.t_hat, &proof.tau_x, &proof.mu, &mut state);
+        let u = Self::compute_gen_for_inner_product_arg(
+            &proof.t_hat,
+            &proof.tau_x,
+            &proof.mu,
+            &mut state,
+        );
         //println!("During verify, u is {}", &u);
 
         // Compute P.h^-mu.u^t_hat
@@ -295,7 +324,7 @@ impl<'a> RangeProofProtocol<'a> {
     }
 
     /*// Construct H' = H^(y^-n)
-    fn compute_h_prime(&self, y: &FieldElement) -> GroupElementVector {
+    fn compute_h_prime(&self, y: &FieldElement) -> G1Vector {
         let y_inv = field_element_inverse(y);
         let y_inv_pow_vec = field_elem_power_vector(&y_inv, self.size);
 
@@ -307,14 +336,23 @@ impl<'a> RangeProofProtocol<'a> {
         H_prime
     }*/
 
-    fn compute_gen_for_inner_product_arg(t_hat: &FieldElement, tau_x: &FieldElement, mu: &FieldElement, state: &mut Vec<u8>) -> G1 {
+    fn compute_gen_for_inner_product_arg(
+        t_hat: &FieldElement,
+        tau_x: &FieldElement,
+        mu: &FieldElement,
+        state: &mut Vec<u8>,
+    ) -> G1 {
         let gen = G1::generator();
         let input = gen * (t_hat + tau_x + mu);
         let _u = gen_challenges(&[&input], state, 1)[0];
         gen * _u
     }
 
-    fn calc_delta_y_z(&self, y: &FieldElement, z: &FieldElement) -> Result<FieldElement, ValueError>{
+    fn calc_delta_y_z(
+        &self,
+        y: &FieldElement,
+        z: &FieldElement,
+    ) -> Result<FieldElement, ValueError> {
         let z_sqr = z.square();
         let z_cube = z_sqr.multiply(&z);
 
@@ -343,14 +381,22 @@ mod test {
     #[test]
     fn test_range_proof_4() {
         let n = 4;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let G: G1Vector = vec!["g1", "g2", "g3", "g4"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
+        let H: G1Vector = vec!["h1", "h2", "h3", "h4"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
 
         for i in 0..15 {
             let v = FieldElement::from(i);
-            let lambda = FieldElement::random(None);
+            let lambda = FieldElement::random();
             let V = commit_to_field_element(&g, &h, &v, &lambda);
 
             let rpp = RangeProofProtocol::new(&G, &H, &g, &h, &V).unwrap();
@@ -368,14 +414,22 @@ mod test {
     #[test]
     fn test_range_proof_8() {
         let n = 8;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let G: G1Vector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
+        let H: G1Vector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
 
         for i in 0..127 {
             let v = FieldElement::from(i);
-            let lambda = FieldElement::random(None);
+            let lambda = FieldElement::random();
             let V = commit_to_field_element(&g, &h, &v, &lambda);
 
             let rpp = RangeProofProtocol::new(&G, &H, &g, &h, &V).unwrap();
@@ -392,11 +446,17 @@ mod test {
     #[test]
     fn test_range_proof_bounds() {
         let n = 8;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(|s| G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(|s| G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let G: G1Vector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
+        let H: G1Vector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"]
+            .iter()
+            .map(|s| G1::from_msg_hash(s.as_bytes()))
+            .collect::<Vec<G1>>()
+            .into();
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
-
-
     }
 }

@@ -1,35 +1,37 @@
 extern crate merlin;
 extern crate rand;
 
-use bulletproofs_amcl as bulletproofs;
-use bulletproofs::utils::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier, LinearCombination};
+use amcl_wrapper::field_elem::FieldElement;
 use bulletproofs::errors::R1CSError;
+use bulletproofs::r1cs::{
+    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
+};
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 mod utils;
 use utils::constrain_lc_with_scalar;
-use utils::zero_non_zero::{is_zero_gadget, is_nonzero_gadget};
+use utils::zero_non_zero::{is_nonzero_gadget, is_zero_gadget};
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use merlin::Transcript;
+    use amcl_wrapper::field_elem::FieldElement;
+    use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+    use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
-    use bulletproofs::utils::field_elem::FieldElement;
+    use merlin::Transcript;
 
     #[test]
     fn test_is_zero_non_zero() {
-        let G: GroupElementVector = get_generators("G", 128).into();
-        let H: GroupElementVector = get_generators("H", 128).into();
-        let g =  G1::from_msg_hash("g".as_bytes());
-        let h =  G1::from_msg_hash("h".as_bytes());
+        let G: G1Vector = get_generators("G", 128).into();
+        let H: G1Vector = get_generators("H", 128).into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         // To prove/verify value == 0, set y = 0 and inv = 0
         // To prove/verify value != 0, set y = 1 and inv = value^-1
-
 
         {
             let inv = 0;
@@ -40,7 +42,7 @@ mod tests {
                 let mut prover_transcript = Transcript::new(b"ZeroTest");
                 let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
-                let (com_val, var_val) = prover.commit(value.clone(), FieldElement::random(None));
+                let (com_val, var_val) = prover.commit(value.clone(), FieldElement::random());
                 let alloc_scal = AllocatedQuantity {
                     variable: var_val,
                     assignment: Some(value),
@@ -67,19 +69,18 @@ mod tests {
 
         {
             let (proof, commitments) = {
-
-                let value = FieldElement::random(None);
+                let value = FieldElement::random();
                 let inv = value.inverse();
                 let mut prover_transcript = Transcript::new(b"NonZeroTest");
                 let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
-                let (com_val, var_val) = prover.commit(value.clone(), FieldElement::random(None));
+                let (com_val, var_val) = prover.commit(value.clone(), FieldElement::random());
                 let alloc_scal = AllocatedQuantity {
                     variable: var_val,
                     assignment: Some(value),
                 };
 
-                let (com_val_inv, var_val_inv) = prover.commit(inv.clone(), FieldElement::random(None));
+                let (com_val_inv, var_val_inv) = prover.commit(inv.clone(), FieldElement::random());
                 let alloc_scal_inv = AllocatedQuantity {
                     variable: var_val_inv,
                     assignment: Some(inv),

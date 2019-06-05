@@ -1,21 +1,22 @@
-use crate::utils::group_elem::{G1, GroupElementVector};
-use crate::utils::field_elem::{FieldElement, FieldElementVector, multiply_row_vector_with_matrix};
+use amcl_wrapper::field_elem::{multiply_row_vector_with_matrix, FieldElement, FieldElementVector};
+use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 
-use merlin::Transcript;
 use crate::transcript::TranscriptProtocol;
+use merlin::Transcript;
 
 use crate::errors::R1CSError;
-use crate::r1cs::linear_combination::LinearCombination;
-use crate::r1cs::constraint_system::ConstraintSystem;
-use crate::r1cs::linear_combination::Variable;
-use crate::r1cs::constraint_system::RandomizedConstraintSystem;
-use crate::r1cs::proof::R1CSProof;
-use core::mem;
-use crate::utils::vector_poly::*;
 use crate::inner_product::InnerProductArgument;
-use core::iter;
 use crate::new_ipp::NewIPP;
-use crate::utils::commitment::{commit_to_field_element, commit_to_field_element_vectors};
+use crate::r1cs::constraint_system::ConstraintSystem;
+use crate::r1cs::constraint_system::RandomizedConstraintSystem;
+use crate::r1cs::linear_combination::LinearCombination;
+use crate::r1cs::linear_combination::Variable;
+use crate::r1cs::proof::R1CSProof;
+use crate::utils::vector_poly::*;
+use amcl_wrapper::commitment::{commit_to_field_element, commit_to_field_element_vectors};
+use core::iter;
+use core::mem;
 
 /// A [`ConstraintSystem`] implementation for use by the prover.
 ///
@@ -77,11 +78,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// # Returns
     ///
     /// Returns a new `Prover` instance.
-    pub fn new(
-        g: &'b G1,
-        h: &'b G1,
-        transcript: &'a mut Transcript,
-    ) -> Self {
+    pub fn new(g: &'b G1, h: &'b G1, transcript: &'a mut Transcript) -> Self {
         transcript.r1cs_domain_sep();
 
         Prover {
@@ -95,7 +92,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             a_R: FieldElementVector::new(0),
             a_O: FieldElementVector::new(0),
             deferred_constraints: Vec::new(),
-            pending_multiplier: None
+            pending_multiplier: None,
         }
     }
 
@@ -143,7 +140,12 @@ impl<'a, 'b> Prover<'a, 'b> {
     fn flattened_constraints(
         &self,
         z: &FieldElement,
-    ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector) {
+    ) -> (
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+    ) {
         let n = self.a_L.len();
         let m = self.v.len();
 
@@ -180,7 +182,14 @@ impl<'a, 'b> Prover<'a, 'b> {
     }
 
     // This is used only for debugging
-    fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>) {
+    fn get_weight_matrices(
+        &self,
+    ) -> (
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+    ) {
         let n = self.a_L.len();
         let m = self.v.len();
         let q = self.constraints.len();
@@ -222,7 +231,12 @@ impl<'a, 'b> Prover<'a, 'b> {
     fn flattened_constraints_elaborated(
         &self,
         z: &FieldElement,
-    ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector) {
+    ) -> (
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+    ) {
         let (WL, WR, WO, WV) = self.get_weight_matrices();
 
         /*println!("Left Weight matrix");
@@ -237,9 +251,17 @@ impl<'a, 'b> Prover<'a, 'b> {
         let n = self.a_L.len();
         let m = self.v.len();
         let q = self.constraints.len();
-        let z_exp: FieldElementVector = FieldElementVector::new_vandermonde_vector(z, q+1).into_iter().skip(1).collect::<Vec<_>>().into();
+        let z_exp: FieldElementVector = FieldElementVector::new_vandermonde_vector(z, q + 1)
+            .into_iter()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .into();
 
-        let minus_z_exp: FieldElementVector = z_exp.iter().map(|e| (*e).negation()).collect::<Vec<_>>().into();
+        let minus_z_exp: FieldElementVector = z_exp
+            .iter()
+            .map(|e| (*e).negation())
+            .collect::<Vec<_>>()
+            .into();
         let wL = multiply_row_vector_with_matrix(&z_exp, &WL).unwrap();
         let wR = multiply_row_vector_with_matrix(&z_exp, &WR).unwrap();
         let wO = multiply_row_vector_with_matrix(&z_exp, &WO).unwrap();
@@ -257,7 +279,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     fn eval(&self, lc: &LinearCombination) -> FieldElement {
         lc.terms
             .iter()
-            .fold(FieldElement::zero(),|sum, (var, coeff)| {
+            .fold(FieldElement::zero(), |sum, (var, coeff)| {
                 let val = match var {
                     Variable::MultiplierLeft(i) => self.a_L[*i],
                     Variable::MultiplierRight(i) => self.a_R[*i],
@@ -293,8 +315,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     }
 
     /// Consume this `ConstraintSystem` to produce a proof.
-    pub fn prove(mut self, G: &GroupElementVector, H: &GroupElementVector) -> Result<R1CSProof, R1CSError> {
-
+    pub fn prove(mut self, G: &G1Vector, H: &G1Vector) -> Result<R1CSProof, R1CSError> {
         // Commit a length _suffix_ for the number of high-level variables.
         // We cannot do this in advance because user can commit variables one-by-one,
         // but this suffix provides safe disambiguation because each variable
@@ -308,24 +329,33 @@ impl<'a, 'b> Prover<'a, 'b> {
             return Err(R1CSError::InvalidGeneratorsLength);
         }
 
-        let i_blinding1 = FieldElement::random(None);
-        let o_blinding1 = FieldElement::random(None);
-        let s_blinding1 = FieldElement::random(None);
+        let i_blinding1 = FieldElement::random();
+        let o_blinding1 = FieldElement::random();
+        let s_blinding1 = FieldElement::random();
 
-        let s_L1 = FieldElementVector::random(n1, None);
-        let s_R1 = FieldElementVector::random(n1, None);
+        let s_L1 = FieldElementVector::random(n1);
+        let s_R1 = FieldElementVector::random(n1);
 
-        let G_n1: GroupElementVector = G.as_slice()[0..n1].into();
-        let H_n1: GroupElementVector = H.as_slice()[0..n1].into();
+        let G_n1: G1Vector = G.as_slice()[0..n1].into();
+        let H_n1: G1Vector = H.as_slice()[0..n1].into();
 
         // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
-        let A_I1 = commit_to_field_element_vectors(&G_n1, &H_n1, &self.h, &self.a_L, &self.a_R, &i_blinding1).unwrap();
+        let A_I1 = commit_to_field_element_vectors(
+            &G_n1,
+            &H_n1,
+            &self.h,
+            &self.a_L,
+            &self.a_R,
+            &i_blinding1,
+        )
+        .unwrap();
 
         // A_O = <a_O, G> + o_blinding * B_blinding
         let A_O1 = G_n1.inner_product_const_time(&self.a_O).unwrap() + self.h * o_blinding1;
 
         // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-        let S1 = commit_to_field_element_vectors(&G_n1, &H_n1, &self.h, &s_L1, &s_R1, &s_blinding1).unwrap();
+        let S1 = commit_to_field_element_vectors(&G_n1, &H_n1, &self.h, &s_L1, &s_R1, &s_blinding1)
+            .unwrap();
 
         self.transcript.commit_point(b"A_I1", &A_I1);
         self.transcript.commit_point(b"A_O1", &A_O1);
@@ -352,38 +382,47 @@ impl<'a, 'b> Prover<'a, 'b> {
 
         let (i_blinding2, o_blinding2, s_blinding2) = if has_2nd_phase_commitments {
             (
-                FieldElement::random(None),
-                FieldElement::random(None),
-                FieldElement::random(None),
+                FieldElement::random(),
+                FieldElement::random(),
+                FieldElement::random(),
             )
         } else {
-            (FieldElement::zero(), FieldElement::zero(), FieldElement::zero())
+            (
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+            )
         };
 
-        let s_L2 = FieldElementVector::random(n2, None);
-        let s_R2 = FieldElementVector::random(n2, None);
+        let s_L2 = FieldElementVector::random(n2);
+        let s_R2 = FieldElementVector::random(n2);
 
         let (A_I2, A_O2, S2) = if has_2nd_phase_commitments {
-            let G_n2: GroupElementVector = G.as_slice()[n1..n].into();
-            let H_n2: GroupElementVector = H.as_slice()[n1..n].into();
+            let G_n2: G1Vector = G.as_slice()[n1..n].into();
+            let H_n2: G1Vector = H.as_slice()[n1..n].into();
             let a_L_n2: FieldElementVector = self.a_L.as_slice()[n1..].into();
             let a_R_n2: FieldElementVector = self.a_R.as_slice()[n1..].into();
             let a_O_n2: FieldElementVector = self.a_O.as_slice()[n1..].into();
 
             (
                 // A_I = <a_L, G> + <a_R, H> + i_blinding * B_blinding
-                commit_to_field_element_vectors(&G_n2, &H_n2, self.h, &a_L_n2, &a_R_n2, &i_blinding2).unwrap(),
-
+                commit_to_field_element_vectors(
+                    &G_n2,
+                    &H_n2,
+                    self.h,
+                    &a_L_n2,
+                    &a_R_n2,
+                    &i_blinding2,
+                )
+                .unwrap(),
                 // A_O = <a_O, G> + o_blinding * B_blinding
                 G_n2.inner_product_const_time(&a_O_n2).unwrap() + self.h * o_blinding2,
-
                 // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
-                commit_to_field_element_vectors(&G_n2, &H_n2, self.h, &s_L2, &s_R2, &s_blinding2).unwrap()
+                commit_to_field_element_vectors(&G_n2, &H_n2, self.h, &s_L2, &s_R2, &s_blinding2)
+                    .unwrap(),
             )
         } else {
-            (
-                G1::identity(), G1::identity(), G1::identity()
-            )
+            (G1::identity(), G1::identity(), G1::identity())
         };
 
         self.transcript.commit_point(b"A_I2", &A_I2);
@@ -444,11 +483,11 @@ impl<'a, 'b> Prover<'a, 'b> {
 
         let t_poly = VecPoly3::special_inner_product(&l_poly, &r_poly);
 
-        let t_1_blinding = FieldElement::random(None);
-        let t_3_blinding = FieldElement::random(None);
-        let t_4_blinding = FieldElement::random(None);
-        let t_5_blinding = FieldElement::random(None);
-        let t_6_blinding = FieldElement::random(None);
+        let t_1_blinding = FieldElement::random();
+        let t_3_blinding = FieldElement::random();
+        let t_4_blinding = FieldElement::random();
+        let t_5_blinding = FieldElement::random();
+        let t_6_blinding = FieldElement::random();
 
         let T_1 = commit_to_field_element(&self.g, &self.h, &t_poly.t1, &t_1_blinding);
         let T_3 = commit_to_field_element(&self.g, &self.h, &t_poly.t3, &t_3_blinding);
@@ -518,12 +557,15 @@ impl<'a, 'b> Prover<'a, 'b> {
         let G_factors: FieldElementVector = iter::repeat(FieldElement::one())
             .take(n1)
             .chain(iter::repeat(u).take(n2 + pad))
-            .collect::<Vec<_>>().into();
-        let H_factors: FieldElementVector = exp_y_inv.clone()
+            .collect::<Vec<_>>()
+            .into();
+        let H_factors: FieldElementVector = exp_y_inv
+            .clone()
             .into_iter()
             .zip(G_factors.iter())
             .map(|(y, u_or_1)| y * u_or_1)
-            .collect::<Vec<_>>().into();
+            .collect::<Vec<_>>()
+            .into();
 
         //let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = NewIPP::create_ipp(
@@ -585,7 +627,6 @@ impl<'a, 'b> Prover<'a, 'b> {
         self.a_O.len()
     }
 }
-
 
 impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
     type RandomizedCS = RandomizingProver<'a, 'b>;
@@ -658,8 +699,8 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
     }
 
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    where
+        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
     {
         self.deferred_constraints.push(Box::new(callback));
         Ok(())
@@ -669,16 +710,21 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
         Some(self.eval(lc))
     }
 
-    fn allocate_single(&mut self, assignment: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+    fn allocate_single(
+        &mut self,
+        assignment: Option<FieldElement>,
+    ) -> Result<(Variable, Option<Variable>), R1CSError> {
         let var = self.allocate(assignment)?;
         match var {
             Variable::MultiplierLeft(i) => Ok((Variable::MultiplierLeft(i), None)),
-            Variable::MultiplierRight(i) => Ok((Variable::MultiplierRight(i), Some(Variable::MultiplierOutput(i)))),
-            _ => Err(R1CSError::FormatError)
+            Variable::MultiplierRight(i) => Ok((
+                Variable::MultiplierRight(i),
+                Some(Variable::MultiplierOutput(i)),
+            )),
+            _ => Err(R1CSError::FormatError),
         }
     }
 }
-
 
 impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
     type RandomizedCS = Self;
@@ -707,8 +753,8 @@ impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
     }
 
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    where
+        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
     {
         callback(self)
     }
@@ -717,7 +763,10 @@ impl<'a, 'b> ConstraintSystem for RandomizingProver<'a, 'b> {
         self.prover.evaluate_lc(lc)
     }
 
-    fn allocate_single(&mut self, assignment: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+    fn allocate_single(
+        &mut self,
+        assignment: Option<FieldElement>,
+    ) -> Result<(Variable, Option<Variable>), R1CSError> {
         self.prover.allocate_single(assignment)
     }
 }
@@ -729,7 +778,12 @@ impl<'a, 'b> RandomizedConstraintSystem for RandomizingProver<'a, 'b> {
 }
 
 // Allocate variables for l, r and o and assign values
-fn _allocate_vars(prover: &mut Prover, l: FieldElement, r: FieldElement, o: FieldElement) -> (Variable, Variable, Variable) {
+fn _allocate_vars(
+    prover: &mut Prover,
+    l: FieldElement,
+    r: FieldElement,
+    o: FieldElement,
+) -> (Variable, Variable, Variable) {
     // Create variables for l,r,o ...
     let l_var = Variable::MultiplierLeft(prover.a_L.len());
     let r_var = Variable::MultiplierRight(prover.a_R.len());
@@ -741,4 +795,3 @@ fn _allocate_vars(prover: &mut Prover, l: FieldElement, r: FieldElement, o: Fiel
 
     (l_var, r_var, o_var)
 }
-

@@ -1,9 +1,9 @@
 //! Defines a `TranscriptProtocol` trait for using a Merlin transcript.
+use amcl_wrapper::constants::MODBYTES;
+use amcl_wrapper::field_elem::FieldElement;
+use amcl_wrapper::group_elem::GroupElement;
+use amcl_wrapper::group_elem_g1::G1;
 use merlin::Transcript;
-use crate::utils::field_elem::FieldElement;
-use crate::utils::group_elem::G1;
-use crate::constants::MODBYTES;
-
 
 pub trait TranscriptProtocol {
     /// Commit a domain separator for a length-`n` inner product proof.
@@ -21,7 +21,6 @@ pub trait TranscriptProtocol {
     /// Compute a `label`ed challenge variable.
     fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement;
 }
-
 
 impl TranscriptProtocol for Transcript {
     fn innerproduct_domain_sep(&mut self, n: u64) {

@@ -1,28 +1,33 @@
 extern crate merlin;
 extern crate rand;
 
-use bulletproofs_amcl as bulletproofs;
-use bulletproofs::utils::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier, LinearCombination};
+use amcl_wrapper::field_elem::FieldElement;
 use bulletproofs::errors::R1CSError;
+use bulletproofs::r1cs::{
+    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
+};
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 
 mod utils;
-use utils::poseidon::{PoseidonParams, Poseidon_permutation, Poseidon_permutation_gadget, Poseidon_hash_2, Poseidon_hash_2_gadget, SboxType, PADDING_CONST};
-
+use utils::poseidon::{
+    PoseidonParams, Poseidon_hash_2, Poseidon_hash_2_gadget, Poseidon_permutation,
+    Poseidon_permutation_gadget, SboxType, PADDING_CONST,
+};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use amcl_wrapper::field_elem::FieldElement;
+    use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+    use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
-    use bulletproofs::utils::field_elem::FieldElement;
-    
+
     // For benchmarking
+    use amcl_wrapper::commitment::commit_to_field_element;
     use std::time::{Duration, Instant};
-    use bulletproofs_amcl::utils::commitment::commit_to_field_element;
 
     fn poseidon_perm(sbox_type: &SboxType, transcript_label: &'static [u8]) {
         let width = 6;
@@ -31,7 +36,9 @@ mod tests {
         let s_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
         let total_rounds = full_b + full_e + partial_rounds;
 
-        let input = (0..width).map(|_| FieldElement::random(None)).collect::<Vec<_>>();
+        let input = (0..width)
+            .map(|_| FieldElement::random())
+            .collect::<Vec<_>>();
         let expected_output = Poseidon_permutation(&input, &s_params, sbox_type);
 
         println!("Input:\n");
@@ -39,10 +46,10 @@ mod tests {
         println!("Expected output:\n");
         println!("{:?}", &expected_output);
 
-        let G: GroupElementVector = get_generators("G", 2048).into();
-        let H: GroupElementVector = get_generators("H", 2048).into();
-        let g =  G1::from_msg_hash("g".as_bytes());
-        let h =  G1::from_msg_hash("h".as_bytes());
+        let G: G1Vector = get_generators("G", 2048).into();
+        let H: G1Vector = get_generators("H", 2048).into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         println!("Proving");
         let (proof, commitments) = {
@@ -53,7 +60,7 @@ mod tests {
             let mut allocs = vec![];
 
             for i in 0..width {
-                let (com, var) = prover.commit(input[i].clone(), FieldElement::random(None));
+                let (com, var) = prover.commit(input[i].clone(), FieldElement::random());
                 comms.push(com);
                 allocs.push(AllocatedQuantity {
                     variable: var,
@@ -61,11 +68,14 @@ mod tests {
                 });
             }
 
-            assert!(Poseidon_permutation_gadget(&mut prover,
-                                                     allocs,
-                                                     &s_params,
-                                                sbox_type,
-                                                     &expected_output).is_ok());
+            assert!(Poseidon_permutation_gadget(
+                &mut prover,
+                allocs,
+                &s_params,
+                sbox_type,
+                &expected_output
+            )
+            .is_ok());
 
             let proof = prover.prove(&G, &H).unwrap();
             (proof, comms)
@@ -83,15 +93,18 @@ mod tests {
                 assignment: None,
             });
         }
-        assert!(Poseidon_permutation_gadget(&mut verifier,
-                                                 allocs,
-                                                 &s_params,
-                                            sbox_type,
-                                                 &expected_output).is_ok());
+        assert!(Poseidon_permutation_gadget(
+            &mut verifier,
+            allocs,
+            &s_params,
+            sbox_type,
+            &expected_output
+        )
+        .is_ok());
 
         assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
     }
-    
+
     fn poseidon_2_hash(sbox_type: &SboxType, transcript_label: &'static [u8]) {
         let width = 6;
         let (full_b, full_e) = (4, 4);
@@ -99,14 +112,14 @@ mod tests {
         let s_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
         let total_rounds = full_b + full_e + partial_rounds;
 
-        let xl = FieldElement::random(None);
-        let xr = FieldElement::random(None);
+        let xl = FieldElement::random();
+        let xr = FieldElement::random();
         let expected_output = Poseidon_hash_2(xl, xr, &s_params, sbox_type);
 
-        let G: GroupElementVector = get_generators("G", 2048).into();
-        let H: GroupElementVector = get_generators("H", 2048).into();
-        let g =  G1::from_msg_hash("g".as_bytes());
-        let h =  G1::from_msg_hash("h".as_bytes());
+        let G: G1Vector = get_generators("G", 2048).into();
+        let H: G1Vector = get_generators("H", 2048).into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         println!("Proving");
         let (proof, commitments) = {
@@ -116,14 +129,14 @@ mod tests {
             let mut comms = vec![];
             let mut statics = vec![];
 
-            let (com_l, var_l) = prover.commit(xl.clone(), FieldElement::random(None));
+            let (com_l, var_l) = prover.commit(xl.clone(), FieldElement::random());
             comms.push(com_l);
             let l_alloc = AllocatedQuantity {
                 variable: var_l,
                 assignment: Some(xl),
             };
 
-            let (com_r, var_r) = prover.commit(xr.clone(), FieldElement::random(None));
+            let (com_r, var_r) = prover.commit(xr.clone(), FieldElement::random());
             comms.push(com_r);
             let r_alloc = AllocatedQuantity {
                 variable: var_r,
@@ -147,18 +160,25 @@ mod tests {
             }
 
             let start = Instant::now();
-            assert!(Poseidon_hash_2_gadget(&mut prover,
-                                           l_alloc,
-                                           r_alloc,
-                                           statics,
-                                           &s_params,
-                                           sbox_type,
-                                           &expected_output).is_ok());
+            assert!(Poseidon_hash_2_gadget(
+                &mut prover,
+                l_alloc,
+                r_alloc,
+                statics,
+                &s_params,
+                sbox_type,
+                &expected_output
+            )
+            .is_ok());
 
-            println!("For Poseidon hash rounds {}, no of constraints is {}", total_rounds, &prover.num_constraints());
+            println!(
+                "For Poseidon hash rounds {}, no of constraints is {}",
+                total_rounds,
+                &prover.num_constraints()
+            );
             println!("Proving time is: {:?}", start.elapsed());
 
-            let proof =  prover.prove(&G, &H).unwrap();
+            let proof = prover.prove(&G, &H).unwrap();
             (proof, comms)
         };
 
@@ -179,7 +199,12 @@ mod tests {
         };
 
         // Commitment to PADDING_CONST with blinding as 0
-        let pad_comm = commit_to_field_element(&g, &h, &FieldElement::from(PADDING_CONST), &FieldElement::zero());
+        let pad_comm = commit_to_field_element(
+            &g,
+            &h,
+            &FieldElement::from(PADDING_CONST),
+            &FieldElement::zero(),
+        );
         let v = verifier.commit(pad_comm);
         statics.push(AllocatedQuantity {
             variable: v,
@@ -187,7 +212,8 @@ mod tests {
         });
 
         // Commitment to 0 with blinding as 0
-        let zero_comm = commit_to_field_element(&g, &h, &FieldElement::zero(), &FieldElement::zero());
+        let zero_comm =
+            commit_to_field_element(&g, &h, &FieldElement::zero(), &FieldElement::zero());
 
         for i in 3..width {
             let v = verifier.commit(zero_comm.clone());
@@ -198,13 +224,16 @@ mod tests {
         }
 
         let start = Instant::now();
-        assert!(Poseidon_hash_2_gadget(&mut verifier,
-                                       l_alloc,
-                                       r_alloc,
-                                       statics,
-                                       &s_params,
-                                       sbox_type,
-                                       &expected_output).is_ok());
+        assert!(Poseidon_hash_2_gadget(
+            &mut verifier,
+            l_alloc,
+            r_alloc,
+            statics,
+            &s_params,
+            sbox_type,
+            &expected_output
+        )
+        .is_ok());
 
         assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
         println!("Verification time is: {:?}", start.elapsed());

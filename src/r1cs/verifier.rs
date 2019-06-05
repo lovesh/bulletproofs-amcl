@@ -1,18 +1,19 @@
-use crate::utils::group_elem::{G1, GroupElementVector};
-use crate::utils::field_elem::{FieldElement, FieldElementVector};
+use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
+use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 
+use crate::transcript::TranscriptProtocol;
 use core::mem;
 use merlin::Transcript;
-use crate::transcript::TranscriptProtocol;
 
-use crate::r1cs::linear_combination::LinearCombination;
 use crate::errors::R1CSError;
-use crate::r1cs::constraint_system::ConstraintSystem;
-use crate::r1cs::linear_combination::Variable;
-use crate::r1cs::constraint_system::RandomizedConstraintSystem;
-use crate::r1cs::proof::R1CSProof;
 use crate::inner_product::InnerProductArgument;
 use crate::new_ipp::NewIPP;
+use crate::r1cs::constraint_system::ConstraintSystem;
+use crate::r1cs::constraint_system::RandomizedConstraintSystem;
+use crate::r1cs::linear_combination::LinearCombination;
+use crate::r1cs::linear_combination::Variable;
+use crate::r1cs::proof::R1CSProof;
 
 /// A [`ConstraintSystem`] implementation for use by the verifier.
 ///
@@ -90,9 +91,7 @@ impl<'a> Verifier<'a> {
     ///
     /// The second element is a list of [`Variable`]s corresponding to
     /// the external inputs, which can be used to form constraints.
-    pub fn new(
-        transcript: &'a mut Transcript,
-    ) -> Self {
+    pub fn new(transcript: &'a mut Transcript) -> Self {
         transcript.r1cs_domain_sep();
 
         Verifier {
@@ -147,7 +146,13 @@ impl<'a> Verifier<'a> {
     fn flattened_constraints(
         &self,
         z: &FieldElement,
-    ) -> (FieldElementVector, FieldElementVector, FieldElementVector, FieldElementVector, FieldElement) {
+    ) -> (
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+        FieldElementVector,
+        FieldElement,
+    ) {
         let n = self.num_vars;
         let m = self.V.len();
 
@@ -184,7 +189,15 @@ impl<'a> Verifier<'a> {
         (wL, wR, wO, wV, wc)
     }
 
-    fn get_weight_matrices(&self) -> (Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, Vec<FieldElementVector>, FieldElement) {
+    fn get_weight_matrices(
+        &self,
+    ) -> (
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+        Vec<FieldElementVector>,
+        FieldElement,
+    ) {
         let n = self.num_vars;
         let m = self.V.len();
         let q = self.constraints.len();
@@ -247,8 +260,14 @@ impl<'a> Verifier<'a> {
     }
 
     /// Consume this `VerifierCS` and attempt to verify the supplied `proof`.
-    pub fn verify(mut self, proof: &R1CSProof, g: &G1, h: &G1,
-                  G: &GroupElementVector, H: &GroupElementVector) -> Result<(), R1CSError> {
+    pub fn verify(
+        mut self,
+        proof: &R1CSProof,
+        g: &G1,
+        h: &G1,
+        G: &G1Vector,
+        H: &G1Vector,
+    ) -> Result<(), R1CSError> {
         // Commit a length _suffix_ for the number of high-level variables.
         // We cannot do this in advance because user can commit variables one-by-one,
         // but this suffix provides safe disambiguation because each variable
@@ -326,11 +345,17 @@ impl<'a> Verifier<'a> {
             .chain(iter::repeat(FieldElement::zero()).take(pad))
             .collect::<Vec<FieldElement>>();
 
-
-        let delta = FieldElementVector::from(&yneg_wR.as_slice()[0..n]).inner_product(&wL).unwrap();
+        let delta = FieldElementVector::from(&yneg_wR.as_slice()[0..n])
+            .inner_product(&wL)
+            .unwrap();
         // Get IPP variables
-        let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(&proof.ipp_proof.L, &proof.ipp_proof.R, padded_n, self.transcript)
-            .map_err(|_| R1CSError::VerificationError)?;
+        let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(
+            &proof.ipp_proof.L,
+            &proof.ipp_proof.R,
+            padded_n,
+            self.transcript,
+        )
+        .map_err(|_| R1CSError::VerificationError)?;
 
         let u_for_g = iter::repeat(FieldElement::one())
             .take(n1)
@@ -342,18 +367,25 @@ impl<'a> Verifier<'a> {
             .iter()
             .zip(u_for_g)
             .zip(s.iter().take(padded_n))
-            .map(|((yneg_wRi, u_or_1), s_i)| {
-                u_or_1 * (x * yneg_wRi - a * s_i)
-            }).collect();
+            .map(|((yneg_wRi, u_or_1), s_i)| u_or_1 * (x * yneg_wRi - a * s_i))
+            .collect();
 
         let h_scalars: Vec<FieldElement> = y_inv_vec
             .iter()
             .zip(u_for_h)
             .zip(s.iter().rev().take(padded_n))
-            .zip(wL.into_iter().chain(iter::repeat(FieldElement::zero()).take(pad)))
-            .zip(wO.into_iter().chain(iter::repeat(FieldElement::zero()).take(pad)))
-            .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)|
-                u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - FieldElement::one())).collect();
+            .zip(
+                wL.into_iter()
+                    .chain(iter::repeat(FieldElement::zero()).take(pad)),
+            )
+            .zip(
+                wO.into_iter()
+                    .chain(iter::repeat(FieldElement::zero()).take(pad)),
+            )
+            .map(|((((y_inv_i, u_or_1), s_i_inv), wLi), wOi)| {
+                u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - FieldElement::one())
+            })
+            .collect();
 
         /*let Q = g * w;
         let ipa = InnerProductArgument::new(&G.as_slice()[0..padded_n].into(),
@@ -363,7 +395,7 @@ impl<'a> Verifier<'a> {
             return Err(R1CSError::VerificationError);
         }*/
 
-        let r = FieldElement::random(None);
+        let r = FieldElement::random();
 
         let x_sqr = x.square();
         let x_cube = x * x_sqr;
@@ -372,20 +404,13 @@ impl<'a> Verifier<'a> {
         // group the T_scalars and T_points together
         // T_scalars = [rx, rx^3, rx^4, rx^5, rx^6]
         let mut T_scalars = vec![r * x, r * x_cube];
-        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^4
-        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^5
-        T_scalars.push(T_scalars[T_scalars.len()-1] * x);   // rx^6
+        T_scalars.push(T_scalars[T_scalars.len() - 1] * x); // rx^4
+        T_scalars.push(T_scalars[T_scalars.len() - 1] * x); // rx^5
+        T_scalars.push(T_scalars[T_scalars.len() - 1] * x); // rx^6
 
         let T_points = [proof.T_1, proof.T_3, proof.T_4, proof.T_5, proof.T_6];
 
-        let mut arg1 = vec![
-            x,
-            x_sqr,
-            x_cube,
-            u * x,
-            u * x_sqr,
-            u * x_cube
-        ];
+        let mut arg1 = vec![x, x_sqr, x_cube, u * x, u * x_sqr, u * x_cube];
         arg1.extend(wV.scaled_by(&r_x_sqr));
         arg1.extend(&T_scalars);
 
@@ -400,12 +425,8 @@ impl<'a> Verifier<'a> {
         arg1.extend(&u_inv_sq);
 
         let mut arg2 = vec![
-            proof.A_I1,
-            proof.A_O1,
-            proof.S1,
-            proof.A_I2,
-            proof.A_O2,
-            proof.S2];
+            proof.A_I1, proof.A_O1, proof.S1, proof.A_I2, proof.A_O2, proof.S2,
+        ];
 
         arg2.extend(&self.V);
         arg2.extend(&T_points);
@@ -415,7 +436,9 @@ impl<'a> Verifier<'a> {
         arg2.extend(proof.ipp_proof.L.as_slice());
         arg2.extend(proof.ipp_proof.R.as_slice());
 
-        let res = GroupElementVector::from(arg2).inner_product_var_time(&FieldElementVector::from(arg1)).unwrap();
+        let res = G1Vector::from(arg2)
+            .inner_product_var_time(&FieldElementVector::from(arg1))
+            .unwrap();
         if !res.is_identity() {
             return Err(R1CSError::VerificationError);
         }
@@ -423,7 +446,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 }
-
 
 impl<'a, 'b> ConstraintSystem for Verifier<'a> {
     type RandomizedCS = RandomizingVerifier<'a>;
@@ -433,7 +455,6 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
         mut left: LinearCombination,
         mut right: LinearCombination,
     ) -> (Variable, Variable, Variable) {
-
         let (l_var, r_var, o_var) = _allocate_vars(self);
 
         // Constrain l,r,o:
@@ -483,8 +504,8 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
     }
 
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    where
+        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
     {
         self.deferred_constraints.push(Box::new(callback));
         Ok(())
@@ -494,12 +515,18 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
         None
     }
 
-    fn allocate_single(&mut self, _: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+    fn allocate_single(
+        &mut self,
+        _: Option<FieldElement>,
+    ) -> Result<(Variable, Option<Variable>), R1CSError> {
         let var = self.allocate(None)?;
         match var {
             Variable::MultiplierLeft(i) => Ok((Variable::MultiplierLeft(i), None)),
-            Variable::MultiplierRight(i) => Ok((Variable::MultiplierRight(i), Some(Variable::MultiplierOutput(i)))),
-            _ => Err(R1CSError::FormatError)
+            Variable::MultiplierRight(i) => Ok((
+                Variable::MultiplierRight(i),
+                Some(Variable::MultiplierOutput(i)),
+            )),
+            _ => Err(R1CSError::FormatError),
         }
     }
 }
@@ -531,8 +558,8 @@ impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a> {
     }
 
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
+    where
+        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>,
     {
         callback(self)
     }
@@ -541,7 +568,10 @@ impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a> {
         None
     }
 
-    fn allocate_single(&mut self, _: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError> {
+    fn allocate_single(
+        &mut self,
+        _: Option<FieldElement>,
+    ) -> Result<(Variable, Option<Variable>), R1CSError> {
         self.verifier.allocate_single(None)
     }
 }
@@ -553,7 +583,7 @@ impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a> {
 }
 
 // Allocate variables
-fn _allocate_vars(verifier: &mut Verifier,) -> (Variable, Variable, Variable) {
+fn _allocate_vars(verifier: &mut Verifier) -> (Variable, Variable, Variable) {
     let next_var_idx = verifier.num_vars;
     verifier.num_vars += 1;
 

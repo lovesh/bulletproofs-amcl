@@ -1,12 +1,10 @@
 #![allow(non_snake_case)]
 
-extern crate amcl;
-
 #[macro_use]
 extern crate lazy_static;
 
-pub use self::amcl::bls381 as ECCurve;
-//pub use self::amcl::bn254 as ECCurve;
+#[macro_use]
+extern crate amcl_wrapper;
 
 #[macro_use]
 pub mod errors;
@@ -14,9 +12,8 @@ pub mod errors;
 #[macro_use]
 pub mod utils;
 
-pub mod types;
-pub mod constants;
 pub mod inner_product;
+#[macro_use]
 pub mod range_proof;
 mod transcript;
 

@@ -1,7 +1,9 @@
-use bulletproofs_amcl as bulletproofs;
-use bulletproofs::utils::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier, LinearCombination};
+use amcl_wrapper::field_elem::FieldElement;
 use bulletproofs::errors::R1CSError;
+use bulletproofs::r1cs::{
+    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
+};
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
@@ -10,8 +12,8 @@ use merlin::Transcript;
 pub fn positive_no_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,
-    n: usize
-    ,) -> Result<(), R1CSError> {
+    n: usize,
+) -> Result<(), R1CSError> {
     let mut constraint_v = vec![(v.variable, FieldElement::minus_one())];
     let mut exp_2 = FieldElement::one();
     for i in 0..n {
@@ -31,7 +33,7 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
         // Enforce that a = 1 - b, so they both are 1 or 0.
         cs.constrain(a + (b - FieldElement::one()));
 
-        constraint_v.push((b, exp_2)  );
+        constraint_v.push((b, exp_2));
         exp_2 = exp_2 + exp_2;
     }
 

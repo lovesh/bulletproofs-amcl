@@ -1,30 +1,32 @@
 extern crate merlin;
 extern crate rand;
 
-use bulletproofs_amcl as bulletproofs;
-use bulletproofs::utils::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier, LinearCombination};
+use amcl_wrapper::field_elem::FieldElement;
 use bulletproofs::errors::R1CSError;
+use bulletproofs::r1cs::{
+    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
+};
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 mod utils;
 use utils::constrain_lc_with_scalar;
 
-
 // Ensure `v` is a bit, hence 0 or 1
 pub fn bit_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
-    v: AllocatedQuantity
+    v: AllocatedQuantity,
 ) -> Result<(), R1CSError> {
     // TODO: Possible to save reallocation of `v` in `bit`?
-    let (a, b, o) = cs.allocate_multiplier(v.assignment.map(|bit| {
-        ((FieldElement::one() - bit), bit)
-    }))?;
+    let (a, b, o) =
+        cs.allocate_multiplier(v.assignment.map(|bit| ((FieldElement::one() - bit), bit)))?;
 
     // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b + (-v) = 0
-    let neg_v: LinearCombination = vec![(v.variable, FieldElement::minus_one())].iter().collect();
+    let neg_v: LinearCombination = vec![(v.variable, FieldElement::minus_one())]
+        .iter()
+        .collect();
     cs.constrain(b + neg_v);
 
     // Enforce a * b = 0, so one of (a,b) is zero
@@ -41,7 +43,7 @@ pub fn bit_gadget<CS: ConstraintSystem>(
 pub fn vector_sum_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     vector: &[AllocatedQuantity],
-    sum: u64
+    sum: u64,
 ) -> Result<(), R1CSError> {
     let mut constraints = vec![(Variable::One(), FieldElement::from(sum).negation())];
     for i in vector {
@@ -59,16 +61,14 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     items: &[u64],
     vector: &[AllocatedQuantity],
-    value: &AllocatedQuantity
+    value: &AllocatedQuantity,
 ) -> Result<(), R1CSError> {
     let mut constraints = vec![(value.variable, FieldElement::minus_one())];
 
     for i in 0..items.len() {
-
         // TODO: Possible to save reallocation of elements of `vector` in `bit`? If circuit variables for vector are passed, then yes.
-        let (bit_var, item_var, o1) = cs.allocate_multiplier(vector[i].assignment.map( |bit| {
-            (bit, items[i].into())
-        }))?;
+        let (bit_var, item_var, o1) =
+            cs.allocate_multiplier(vector[i].assignment.map(|bit| (bit, items[i].into())))?;
         constrain_lc_with_scalar::<CS>(cs, item_var.into(), &items[i].into());
 
         let (_, _, o2) = cs.multiply(bit_var.into(), value.variable.into());
@@ -76,7 +76,6 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
         cs.constrain(o1 - o2);
 
         constraints.push((o1, FieldElement::one()));
-
     }
 
     // Constrain the sum of output variables to be equal to the value of committed variable
@@ -88,10 +87,11 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use merlin::Transcript;
+    use amcl_wrapper::field_elem::FieldElement;
+    use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+    use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
-    use bulletproofs::utils::field_elem::FieldElement;
+    use merlin::Transcript;
 
     #[test]
     fn set_membership_check_gadget() {
@@ -106,18 +106,19 @@ mod tests {
     // and the relation set[i] * bitmap[i] = bitmap[i] * value.
     // Taken from https://github.com/HarryR/ethsnarks/blob/master/src/gadgets/one_of_n.hpp
     fn set_membership_check_helper(value: u64, set: Vec<u64>) -> Result<(), R1CSError> {
-        let G: GroupElementVector = get_generators("G", 64).into();
-        let H: GroupElementVector = get_generators("H", 64).into();
-        let g =  G1::from_msg_hash("g".as_bytes());
-        let h =  G1::from_msg_hash("h".as_bytes());
+        let G: G1Vector = get_generators("G", 64).into();
+        let H: G1Vector = get_generators("H", 64).into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         let set_length = set.len();
 
         let (proof, commitments) = {
             // Set all indices to 0 except the one where `value` is
-            let bit_map: Vec<u64> = set.iter().map(|elem| {
-                if *elem == value { 1 } else { 0 }
-            }).collect();
+            let bit_map: Vec<u64> = set
+                .iter()
+                .map(|elem| if *elem == value { 1 } else { 0 })
+                .collect();
 
             let mut comms = vec![];
 
@@ -128,7 +129,7 @@ mod tests {
             let mut bit_vars = vec![];
             for b in bit_map {
                 let _b = FieldElement::from(b);
-                let (com, var) = prover.commit(_b.clone(), FieldElement::random(None));
+                let (com, var) = prover.commit(_b.clone(), FieldElement::random());
                 let quantity = AllocatedQuantity {
                     variable: var,
                     assignment: Some(_b),
@@ -142,7 +143,7 @@ mod tests {
             assert!(vector_sum_gadget(&mut prover, &bit_vars, 1).is_ok());
 
             let _value = FieldElement::from(value);
-            let (com_value, var_value) = prover.commit(_value, FieldElement::random(None));
+            let (com_value, var_value) = prover.commit(_value, FieldElement::random());
             let quantity_value = AllocatedQuantity {
                 variable: var_value,
                 assignment: Some(_value),
@@ -150,8 +151,12 @@ mod tests {
             assert!(vector_product_gadget(&mut prover, &set, &bit_vars, &quantity_value).is_ok());
             comms.push(com_value);
 
-            println!("For set size {}, no of constraints is {}", &set_length, &prover.num_constraints());
-//            println!("Prover commitments {:?}", &comms);
+            println!(
+                "For set size {}, no of constraints is {}",
+                &set_length,
+                &prover.num_constraints()
+            );
+            //            println!("Prover commitments {:?}", &comms);
             let proof = prover.prove(&G, &H)?;
 
             (proof, comms)
@@ -183,7 +188,7 @@ mod tests {
 
         assert!(vector_product_gadget(&mut verifier, &set, &bit_vars, &quantity_value).is_ok());
 
-//        println!("Verifier commitments {:?}", &commitments);
+        //        println!("Verifier commitments {:?}", &commitments);
 
         Ok(verifier.verify(&proof, &g, &h, &G, &H)?)
     }

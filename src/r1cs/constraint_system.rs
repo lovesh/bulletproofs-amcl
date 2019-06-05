@@ -1,10 +1,9 @@
 //! Definition of the constraint system trait.
 
-
-use crate::utils::field_elem::FieldElement;
+use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::LinearCombination;
 use crate::r1cs::linear_combination::Variable;
-use crate::errors::R1CSError;
+use amcl_wrapper::field_elem::FieldElement;
 
 /// The interface for a constraint system, abstracting over the prover
 /// and verifier's roles.
@@ -92,8 +91,8 @@ pub trait ConstraintSystem {
     /// })
     /// ```
     fn specify_randomized_constraints<F>(&mut self, callback: F) -> Result<(), R1CSError>
-        where
-            F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
+    where
+        F: 'static + Fn(&mut Self::RandomizedCS) -> Result<(), R1CSError>;
 
     /// Evaluate a linear combination. Only prover can evaluate and return the FieldElement value, verifier returns None.
     fn evaluate_lc(&self, lc: &LinearCombination) -> Option<FieldElement>;
@@ -101,8 +100,10 @@ pub trait ConstraintSystem {
     /// Allocate a single variable using a closure, similar to `allocate`.
     /// When allocating left variable, return left variable and None.
     /// When allocating right variable, return right variable and output variable.
-    fn allocate_single(&mut self, assignment: Option<FieldElement>) -> Result<(Variable, Option<Variable>), R1CSError>;
-
+    fn allocate_single(
+        &mut self,
+        assignment: Option<FieldElement>,
+    ) -> Result<(Variable, Option<Variable>), R1CSError>;
 }
 
 /// Represents a constraint system in the second phase:

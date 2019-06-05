@@ -1,17 +1,18 @@
 extern crate merlin;
 extern crate rand;
 
-use bulletproofs_amcl as bulletproofs;
-use bulletproofs::utils::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, R1CSProof, Variable, Prover, Verifier, LinearCombination};
+use amcl_wrapper::field_elem::FieldElement;
 use bulletproofs::errors::R1CSError;
+use bulletproofs::r1cs::{
+    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
+};
+use bulletproofs_amcl as bulletproofs;
 
 use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 mod utils;
 use utils::constrain_lc_with_scalar;
 use utils::positive_no::positive_no_gadget;
-
 
 pub fn bound_check_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -20,9 +21,8 @@ pub fn bound_check_gadget<CS: ConstraintSystem>(
     b: AllocatedQuantity,
     max: u64,
     min: u64,
-    n: usize
+    n: usize,
 ) -> Result<(), R1CSError> {
-
     // a = v - min
     // b = max - v
     // a + b = max - min
@@ -45,11 +45,11 @@ pub fn bound_check_gadget<CS: ConstraintSystem>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use merlin::Transcript;
+    use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+    use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
-    use bulletproofs::utils::field_elem::FieldElement;
-    
+    use merlin::Transcript;
+
     #[test]
     fn test_bound_check_gadget() {
         use rand::rngs::OsRng;
@@ -65,10 +65,10 @@ mod tests {
     }
 
     fn bound_check_helper(v: u64, min: u64, max: u64) -> Result<(), R1CSError> {
-        let G: GroupElementVector = get_generators("G", 128).into();
-        let H: GroupElementVector = get_generators("H", 128).into();
-        let g =  G1::from_msg_hash("g".as_bytes());
-        let h =  G1::from_msg_hash("h".as_bytes());
+        let G: G1Vector = get_generators("G", 128).into();
+        let H: G1Vector = get_generators("H", 128).into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         // TODO: Use correct bit size of the field
         let n = 32;
@@ -84,28 +84,37 @@ mod tests {
             let mut prover_transcript = Transcript::new(b"BoundsTest");
             let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
-            let (com_v, var_v) = prover.commit(v.clone(), FieldElement::random(None));
+            let (com_v, var_v) = prover.commit(v.clone(), FieldElement::random());
             let quantity_v = AllocatedQuantity {
                 variable: var_v,
                 assignment: Some(v),
             };
             comms.push(com_v);
 
-            let (com_a, var_a) = prover.commit(a.clone(), FieldElement::random(None));
+            let (com_a, var_a) = prover.commit(a.clone(), FieldElement::random());
             let quantity_a = AllocatedQuantity {
                 variable: var_a,
                 assignment: Some(a),
             };
             comms.push(com_a);
 
-            let (com_b, var_b) = prover.commit(b.clone(), FieldElement::random(None));
+            let (com_b, var_b) = prover.commit(b.clone(), FieldElement::random());
             let quantity_b = AllocatedQuantity {
                 variable: var_b,
                 assignment: Some(b),
             };
             comms.push(com_b);
 
-            assert!(bound_check_gadget(&mut prover, quantity_v, quantity_a, quantity_b, max, min, n).is_ok());
+            assert!(bound_check_gadget(
+                &mut prover,
+                quantity_v,
+                quantity_a,
+                quantity_b,
+                max,
+                min,
+                n
+            )
+            .is_ok());
 
             let proof = prover.prove(&G, &H)?;
 
@@ -133,7 +142,16 @@ mod tests {
             assignment: None,
         };
 
-        assert!(bound_check_gadget(&mut verifier, quantity_v, quantity_a, quantity_b, max, min, n).is_ok());
+        assert!(bound_check_gadget(
+            &mut verifier,
+            quantity_v,
+            quantity_a,
+            quantity_b,
+            max,
+            min,
+            n
+        )
+        .is_ok());
 
         Ok(verifier.verify(&proof, &g, &h, &G, &H)?)
     }
