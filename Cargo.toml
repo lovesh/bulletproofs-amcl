@@ -15,7 +15,6 @@ git = "https://github.com/lovesh/amcl_rust_wrapper"
 branch = "master"
 features = ["bls381"]
 
-
 [dev-dependencies]
 flame = "*"
 cpuprofiler = "0.0.3"
