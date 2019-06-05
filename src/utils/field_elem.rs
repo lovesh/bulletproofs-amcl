@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::ops::{Index, IndexMut, Add, AddAssign, Sub, SubAssign, Mul};
 use std::fmt;
 use core::fmt::Display;
-use crate::utils::group_elem::GroupElement;
+use crate::utils::group_elem::G1;
 use std::slice::Iter;
 use byteorder::BigEndian;
 
@@ -509,34 +509,34 @@ impl<'a> Mul<&'a FieldElement> for &FieldElement {
     }
 }
 
-impl Mul<GroupElement> for FieldElement {
-    type Output = GroupElement;
+impl Mul<G1> for FieldElement {
+    type Output = G1;
 
-    fn mul(self, other: GroupElement) -> GroupElement {
+    fn mul(self, other: G1) -> G1 {
         other.scalar_mul_const_time(&self)
     }
 }
 
-impl Mul<&GroupElement> for FieldElement {
-    type Output = GroupElement;
+impl Mul<&G1> for FieldElement {
+    type Output = G1;
 
-    fn mul(self, other: &GroupElement) -> GroupElement {
+    fn mul(self, other: &G1) -> G1 {
         other.scalar_mul_const_time(&self)
     }
 }
 
-impl Mul<GroupElement> for &FieldElement {
-    type Output = GroupElement;
+impl Mul<G1> for &FieldElement {
+    type Output = G1;
 
-    fn mul(self, other: GroupElement) -> GroupElement {
+    fn mul(self, other: G1) -> G1 {
         other.scalar_mul_const_time(self)
     }
 }
 
-impl Mul<&GroupElement> for &FieldElement {
-    type Output = GroupElement;
+impl Mul<&G1> for &FieldElement {
+    type Output = G1;
 
-    fn mul(self, other: &GroupElement) -> GroupElement {
+    fn mul(self, other: &G1) -> G1 {
         other.scalar_mul_const_time(self)
     }
 }

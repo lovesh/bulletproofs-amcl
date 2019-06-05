@@ -1,4 +1,4 @@
-use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::group_elem::{G1, GroupElementVector};
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
 
 use core::mem;
@@ -35,7 +35,7 @@ pub struct Verifier<'a> {
     /// `Missing`), so the `num_vars` isn't kept implicitly in the
     /// variable assignments.
     num_vars: usize,
-    V: Vec<GroupElement>,
+    V: Vec<G1>,
 
     /// This list holds closures that will be called in the second phase of the protocol,
     /// when non-randomized variables are committed.
@@ -119,7 +119,7 @@ impl<'a> Verifier<'a> {
     ///
     /// Returns a pair of a Pedersen commitment (as a compressed Ristretto point),
     /// and a [`Variable`] corresponding to it, which can be used to form constraints.
-    pub fn commit(&mut self, commitment: GroupElement) -> Variable {
+    pub fn commit(&mut self, commitment: G1) -> Variable {
         let i = self.V.len();
         self.V.push(commitment);
 
@@ -247,7 +247,7 @@ impl<'a> Verifier<'a> {
     }
 
     /// Consume this `VerifierCS` and attempt to verify the supplied `proof`.
-    pub fn verify(mut self, proof: &R1CSProof, g: &GroupElement, h: &GroupElement,
+    pub fn verify(mut self, proof: &R1CSProof, g: &G1, h: &G1,
                   G: &GroupElementVector, H: &GroupElementVector) -> Result<(), R1CSError> {
         // Commit a length _suffix_ for the number of high-level variables.
         // We cannot do this in advance because user can commit variables one-by-one,

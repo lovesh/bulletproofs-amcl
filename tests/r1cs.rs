@@ -10,7 +10,7 @@ mod tests {
     use super::*;
     use merlin::Transcript;
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
+    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
     use bulletproofs::utils::field_elem::FieldElement;
 
     #[test]
@@ -18,8 +18,8 @@ mod tests {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
         let G: GroupElementVector = get_generators("G", 8).into();
         let H: GroupElementVector = get_generators("H", 8).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         let factors = vec![
             (FieldElement::from(17u32), FieldElement::from(19u32), FieldElement::from(323u32)),
@@ -69,8 +69,8 @@ mod tests {
         // Prove knowledge of `p` and `q` such that given an `r`, `p * q = r`
         let G: GroupElementVector = get_generators("G", 8).into();
         let H: GroupElementVector = get_generators("H", 8).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         let factors = vec![
             (FieldElement::from(2u32), FieldElement::from(4u32), FieldElement::from(6u32), FieldElement::from(48u32)),

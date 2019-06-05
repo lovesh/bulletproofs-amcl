@@ -2,7 +2,7 @@ use merlin::Transcript;
 use crate::transcript::TranscriptProtocol;
 use crate::inner_product::InnerProductArgumentProof;
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
-use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::group_elem::{G1, GroupElementVector};
 use core::iter;
 use crate::errors::R1CSError;
 use crate::constants::CurveOrder;
@@ -22,7 +22,7 @@ impl NewIPP {
     /// either 0 or a power of 2.
     pub fn create_ipp(
         transcript: &mut Transcript,
-        Q: &GroupElement,
+        Q: &G1,
         G_factors: &FieldElementVector,
         H_factors: &FieldElementVector,
         G_vec: &GroupElementVector,
@@ -188,8 +188,8 @@ impl NewIPP {
         transcript: &mut Transcript,
         G_factors: &FieldElementVector,
         H_factors: &FieldElementVector,
-        P: &GroupElement,
-        Q: &GroupElement,
+        P: &G1,
+        Q: &G1,
         G: &GroupElementVector,
         H: &GroupElementVector,
         a: &FieldElement,
@@ -223,7 +223,7 @@ impl NewIPP {
             .chain(neg_u_sq)
             .chain(neg_u_inv_sq).collect();
 
-        let mut _2: Vec<GroupElement> = vec![];
+        let mut _2: Vec<G1> = vec![];
         _2.push(*Q);
         _2.extend(G.iter());
         _2.extend(H.iter());
@@ -302,7 +302,7 @@ mod tests {
         let n = 4;
         let G: GroupElementVector = get_generators("g", n).into();
         let H: GroupElementVector = get_generators("h", n).into();
-        let Q = GroupElement::from_msg_hash("Q".as_bytes());
+        let Q = G1::from_msg_hash("Q".as_bytes());
 
         let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
         let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();

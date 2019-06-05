@@ -1,7 +1,7 @@
 use super::errors::ValueError;
 use super::utils::gen_challenges;
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
-use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::group_elem::{G1, GroupElementVector};
 use crate::utils::commitment::*;
 use crate::constants::{GeneratorG1, CurveOrder};
 use crate::inner_product::{InnerProductArgument, InnerProductArgumentProof};
@@ -12,19 +12,19 @@ use crate::inner_product::{InnerProductArgument, InnerProductArgumentProof};
 pub struct RangeProofProtocol<'a> {
     G: &'a GroupElementVector,
     H: &'a GroupElementVector,
-    g: &'a GroupElement,
-    h: &'a GroupElement,
-    V: &'a GroupElement,
+    g: &'a G1,
+    h: &'a G1,
+    V: &'a G1,
     size: usize,
     one_vandm_vec: FieldElementVector,
     two_vandm_vec: FieldElementVector
 }
 
 pub struct RangeProof {
-    A: GroupElement,
-    S: GroupElement,
-    T1: GroupElement,
-    T2: GroupElement,
+    A: G1,
+    S: G1,
+    T1: G1,
+    T2: G1,
     tau_x: FieldElement,
     mu: FieldElement,
     t_hat: FieldElement,
@@ -35,8 +35,8 @@ pub struct RangeProof {
 }
 
 impl<'a> RangeProofProtocol<'a> {
-    pub fn new(G: &'a GroupElementVector, H: &'a GroupElementVector, g: &'a GroupElement, h: &'a GroupElement,
-               V: &'a GroupElement) -> Result<RangeProofProtocol<'a>, ValueError> {
+    pub fn new(G: &'a GroupElementVector, H: &'a GroupElementVector, g: &'a G1, h: &'a G1,
+               V: &'a G1) -> Result<RangeProofProtocol<'a>, ValueError> {
         check_vector_size_for_equality!(G, H)?;
         if !G.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(G.len()))
@@ -307,8 +307,8 @@ impl<'a> RangeProofProtocol<'a> {
         H_prime
     }*/
 
-    fn compute_gen_for_inner_product_arg(t_hat: &FieldElement, tau_x: &FieldElement, mu: &FieldElement, state: &mut Vec<u8>) -> GroupElement {
-        let gen = GroupElement::generator();
+    fn compute_gen_for_inner_product_arg(t_hat: &FieldElement, tau_x: &FieldElement, mu: &FieldElement, state: &mut Vec<u8>) -> G1 {
+        let gen = G1::generator();
         let input = gen * (t_hat + tau_x + mu);
         let _u = gen_challenges(&[&input], state, 1)[0];
         gen * _u
@@ -343,10 +343,10 @@ mod test {
     #[test]
     fn test_range_proof_4() {
         let n = 4;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let g = GroupElement::from_msg_hash("g".as_bytes());
-        let h = GroupElement::from_msg_hash("h".as_bytes());
+        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         for i in 0..15 {
             let v = FieldElement::from(i);
@@ -368,10 +368,10 @@ mod test {
     #[test]
     fn test_range_proof_8() {
         let n = 8;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let g = GroupElement::from_msg_hash("g".as_bytes());
-        let h = GroupElement::from_msg_hash("h".as_bytes());
+        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
         for i in 0..127 {
             let v = FieldElement::from(i);
@@ -392,10 +392,10 @@ mod test {
     #[test]
     fn test_range_proof_bounds() {
         let n = 8;
-        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(|s| GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(|s| GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let g = GroupElement::from_msg_hash("g".as_bytes());
-        let h = GroupElement::from_msg_hash("h".as_bytes());
+        let G: GroupElementVector = vec!["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"].iter().map(|s| G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let H: GroupElementVector = vec!["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"].iter().map(|s| G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let g = G1::from_msg_hash("g".as_bytes());
+        let h = G1::from_msg_hash("h".as_bytes());
 
 
     }

@@ -1,4 +1,4 @@
-use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::group_elem::{G1, GroupElementVector};
 use crate::utils::field_elem::{FieldElement, FieldElementVector, multiply_row_vector_with_matrix};
 
 use merlin::Transcript;
@@ -27,8 +27,8 @@ use crate::utils::commitment::{commit_to_field_element, commit_to_field_element_
 /// which consumes the `Prover` instance, samples random challenges
 /// that instantiate the randomized constraints, and creates a complete proof.
 pub struct Prover<'a, 'b> {
-    g: &'b GroupElement,
-    h: &'b GroupElement,
+    g: &'b G1,
+    h: &'b G1,
     transcript: &'a mut Transcript,
     /// The constraints accumulated so far.
     constraints: Vec<LinearCombination>,
@@ -78,8 +78,8 @@ impl<'a, 'b> Prover<'a, 'b> {
     ///
     /// Returns a new `Prover` instance.
     pub fn new(
-        g: &'b GroupElement,
-        h: &'b GroupElement,
+        g: &'b G1,
+        h: &'b G1,
         transcript: &'a mut Transcript,
     ) -> Self {
         transcript.r1cs_domain_sep();
@@ -116,7 +116,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     ///
     /// Returns a pair of a Pedersen commitment (as a GroupElement point),
     /// and a [`Variable`] corresponding to it, which can be used to form constraints.
-    pub fn commit(&mut self, v: FieldElement, v_blinding: FieldElement) -> (GroupElement, Variable) {
+    pub fn commit(&mut self, v: FieldElement, v_blinding: FieldElement) -> (G1, Variable) {
         let i = self.v.len();
         self.v.push(v);
         self.v_blinding.push(v_blinding);
@@ -382,7 +382,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             )
         } else {
             (
-                GroupElement::identity(), GroupElement::identity(), GroupElement::identity()
+                G1::identity(), G1::identity(), G1::identity()
             )
         };
 

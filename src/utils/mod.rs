@@ -18,7 +18,7 @@ use super::constants::{MODBYTES, CurveOrder};
 use super::types::{BigNum, DoubleBigNum};
 use super::errors::ValueError;
 use amcl::sha3::{SHAKE256, SHA3};
-use crate::utils::group_elem::GroupElement;
+use crate::utils::group_elem::G1;
 use crate::utils::field_elem::FieldElement;
 
 
@@ -44,24 +44,24 @@ pub fn get_seeded_RNG(entropy_size: usize) -> RAND {
     r
 }
 
-pub fn get_generators(prefix: &str, n: usize) -> Vec<GroupElement> {
+pub fn get_generators(prefix: &str, n: usize) -> Vec<G1> {
     //let prefix = String::from(s);
-    let mut gens: Vec<GroupElement> = Vec::with_capacity(n);
+    let mut gens: Vec<G1> = Vec::with_capacity(n);
     for i in 1..n+1 {
         let s: String = prefix.to_string() + &i.to_string();
-        gens.push(GroupElement::from_msg_hash(s.as_bytes()));
+        gens.push(G1::from_msg_hash(s.as_bytes()));
     }
     gens
 }
 
-pub fn gen_challenges(input: &[&GroupElement], state: &mut Vec<u8>, n: usize) -> Vec<FieldElement> {
+pub fn gen_challenges(input: &[&G1], state: &mut Vec<u8>, n: usize) -> Vec<FieldElement> {
     let mut r = Vec::<FieldElement>::with_capacity(n);
     for i in 0..input.len() {
         state.extend_from_slice(&input[i].to_bytes());
     }
     r.push(FieldElement::from_msg_hash(&state));
 
-    let gen = GroupElement::generator();
+    let gen = G1::generator();
     for _ in 1..n {
         let _p = gen * r.last().unwrap();
         state.extend_from_slice(&_p.to_bytes());
@@ -276,8 +276,8 @@ mod test {
         for _ in 0..count {
             a.push(FieldElement::random(None).to_bignum());
             b.push(FieldElement::random(None).to_bignum());
-            g.push(GroupElement::random(None).to_ecp());
-            h.push(GroupElement::random(None).to_ecp());
+            g.push(G1::random(None).to_ecp());
+            h.push(G1::random(None).to_ecp());
         }
 
         let mut start = Instant::now();

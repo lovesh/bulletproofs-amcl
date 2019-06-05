@@ -41,7 +41,7 @@ mod tests {
     use super::*;
     use merlin::Transcript;
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
+    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
     use bulletproofs::utils::field_elem::FieldElement;
 
     #[test]
@@ -57,8 +57,8 @@ mod tests {
     fn set_membership_1_check_helper(value: u64, set: Vec<u64>) -> Result<(), R1CSError> {
         let G: GroupElementVector = get_generators("G", 64).into();
         let H: GroupElementVector = get_generators("H", 64).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         let set_length = set.len();
 

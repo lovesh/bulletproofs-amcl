@@ -1,7 +1,7 @@
 //! Defines a `TranscriptProtocol` trait for using a Merlin transcript.
 use merlin::Transcript;
 use crate::utils::field_elem::FieldElement;
-use crate::utils::group_elem::GroupElement;
+use crate::utils::group_elem::G1;
 use crate::constants::MODBYTES;
 
 
@@ -17,7 +17,7 @@ pub trait TranscriptProtocol {
     /// Commit a `scalar` with the given `label`.
     fn commit_scalar(&mut self, label: &'static [u8], scalar: &FieldElement);
     /// Commit a `point` with the given `label`.
-    fn commit_point(&mut self, label: &'static [u8], point: &GroupElement);
+    fn commit_point(&mut self, label: &'static [u8], point: &G1);
     /// Compute a `label`ed challenge variable.
     fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement;
 }
@@ -45,7 +45,7 @@ impl TranscriptProtocol for Transcript {
         self.commit_bytes(label, &scalar.to_bytes());
     }
 
-    fn commit_point(&mut self, label: &'static [u8], point: &GroupElement) {
+    fn commit_point(&mut self, label: &'static [u8], point: &G1) {
         self.commit_bytes(label, &point.to_bytes());
     }
 

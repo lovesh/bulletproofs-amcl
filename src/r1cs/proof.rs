@@ -1,7 +1,7 @@
 //! Definition of the proof struct.
 
 use crate::utils::field_elem::FieldElement; 
-use crate::utils::group_elem::GroupElement; 
+use crate::utils::group_elem::G1;
 use crate::inner_product::InnerProductArgumentProof;
 
 /// A proof of some statement specified by a
@@ -24,27 +24,27 @@ use crate::inner_product::InnerProductArgumentProof;
 #[allow(non_snake_case)]
 pub struct R1CSProof {
     /// Commitment to the values of input wires in the first phase.
-    pub(super) A_I1: GroupElement,
+    pub(super) A_I1: G1,
     /// Commitment to the values of output wires in the first phase.
-    pub(super) A_O1: GroupElement,
+    pub(super) A_O1: G1,
     /// Commitment to the blinding factors in the first phase.
-    pub(super) S1: GroupElement,
+    pub(super) S1: G1,
     /// Commitment to the values of input wires in the second phase.
-    pub(super) A_I2: GroupElement,
+    pub(super) A_I2: G1,
     /// Commitment to the values of output wires in the second phase.
-    pub(super) A_O2: GroupElement,
+    pub(super) A_O2: G1,
     /// Commitment to the blinding factors in the second phase.
-    pub(super) S2: GroupElement,
+    pub(super) S2: G1,
     /// Commitment to the \\(t_1\\) coefficient of \\( t(x) \\)
-    pub(super) T_1: GroupElement,
+    pub(super) T_1: G1,
     /// Commitment to the \\(t_3\\) coefficient of \\( t(x) \\)
-    pub(super) T_3: GroupElement,
+    pub(super) T_3: G1,
     /// Commitment to the \\(t_4\\) coefficient of \\( t(x) \\)
-    pub(super) T_4: GroupElement,
+    pub(super) T_4: G1,
     /// Commitment to the \\(t_5\\) coefficient of \\( t(x) \\)
-    pub(super) T_5: GroupElement,
+    pub(super) T_5: G1,
     /// Commitment to the \\(t_6\\) coefficient of \\( t(x) \\)
-    pub(super) T_6: GroupElement,
+    pub(super) T_6: G1,
     /// Evaluation of the polynomial \\(t(x)\\) at the challenge point \\(x\\)
     pub(super) t_x: FieldElement,
     /// Blinding factor for the synthetic commitment to \\( t(x) \\)

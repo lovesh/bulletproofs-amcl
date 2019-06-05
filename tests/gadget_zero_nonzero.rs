@@ -17,15 +17,15 @@ mod tests {
     use super::*;
     use merlin::Transcript;
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
+    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
     use bulletproofs::utils::field_elem::FieldElement;
 
     #[test]
     fn test_is_zero_non_zero() {
         let G: GroupElementVector = get_generators("G", 128).into();
         let H: GroupElementVector = get_generators("H", 128).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         // To prove/verify value == 0, set y = 0 and inv = 0
         // To prove/verify value != 0, set y = 1 and inv = value^-1

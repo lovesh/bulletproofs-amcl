@@ -17,7 +17,7 @@ use utils::poseidon::{PoseidonParams, Poseidon_permutation, Poseidon_permutation
 mod tests {
     use super::*;
     use bulletproofs::utils::get_generators;
-    use bulletproofs::utils::group_elem::{GroupElement, GroupElementVector};
+    use bulletproofs::utils::group_elem::{G1, GroupElementVector};
     use bulletproofs::utils::field_elem::FieldElement;
     
     // For benchmarking
@@ -41,8 +41,8 @@ mod tests {
 
         let G: GroupElementVector = get_generators("G", 2048).into();
         let H: GroupElementVector = get_generators("H", 2048).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         println!("Proving");
         let (proof, commitments) = {
@@ -105,8 +105,8 @@ mod tests {
 
         let G: GroupElementVector = get_generators("G", 2048).into();
         let H: GroupElementVector = get_generators("H", 2048).into();
-        let g =  GroupElement::from_msg_hash("g".as_bytes());
-        let h =  GroupElement::from_msg_hash("h".as_bytes());
+        let g =  G1::from_msg_hash("g".as_bytes());
+        let h =  G1::from_msg_hash("h".as_bytes());
 
         println!("Proving");
         let (proof, commitments) = {

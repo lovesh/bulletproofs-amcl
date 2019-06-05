@@ -1,7 +1,7 @@
 use super::errors::ValueError;
 use super::utils::gen_challenges;
 use crate::utils::field_elem::{FieldElement, FieldElementVector};
-use crate::utils::group_elem::{GroupElement, GroupElementVector};
+use crate::utils::group_elem::{G1, GroupElementVector};
 use crate::utils::commitment::*;
 
 
@@ -9,8 +9,8 @@ use crate::utils::commitment::*;
 pub struct InnerProductArgument<'a> {
     G: &'a GroupElementVector,
     H: &'a GroupElementVector,
-    u: &'a GroupElement,
-    P: &'a GroupElement,
+    u: &'a G1,
+    P: &'a G1,
     size: usize
 }
 
@@ -24,8 +24,8 @@ pub struct InnerProductArgumentProof {
 }
 
 impl<'a> InnerProductArgument<'a> {
-    pub fn new(g: &'a GroupElementVector, h: &'a GroupElementVector, u: &'a GroupElement,
-               P: &'a GroupElement) -> Result<InnerProductArgument<'a>, ValueError> {
+    pub fn new(g: &'a GroupElementVector, h: &'a GroupElementVector, u: &'a G1,
+               P: &'a G1) -> Result<InnerProductArgument<'a>, ValueError> {
         check_vector_size_for_equality!(g, h)?;
         if !g.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(g.len()))
@@ -116,7 +116,7 @@ impl<'a> InnerProductArgument<'a> {
     }
 
     fn _verify_proof_recursively(&self, g: &GroupElementVector, h: &GroupElementVector, L: &GroupElementVector, R: &GroupElementVector,
-                                 a: &FieldElement, b: &FieldElement, P: &GroupElement, state: &mut Vec<u8>) -> Result<bool, ValueError> {
+                                 a: &FieldElement, b: &FieldElement, P: &G1, state: &mut Vec<u8>) -> Result<bool, ValueError> {
         match g.len() {
             1 => {
                 let g_a = g[0] * a;
@@ -161,7 +161,7 @@ impl<'a> InnerProductArgument<'a> {
     //  hash function H : Z_p^2n+1 -> G1
     // H(a_1, a'_2, b_1, b'_2, c) = g[:n/2]^a_1.g[n/2:]^a'_2.h[:n/2]^b_1.h[n/2:]^b'_2.u^c
     fn hash(g: &GroupElementVector, h: &GroupElementVector, a1: &FieldElementVector, a2_prime: &FieldElementVector, b1: &FieldElementVector,
-                b2_prime: &FieldElementVector, u: &GroupElement, c: &FieldElement) -> Result<GroupElement, ValueError> {
+            b2_prime: &FieldElementVector, u: &G1, c: &FieldElement) -> Result<G1, ValueError> {
         check_vector_size_for_equality!(g, h)?;
         if !g.len().is_power_of_two() {
             return Err(ValueError::NonPowerOf2(g.len()))
@@ -209,7 +209,7 @@ impl<'a> InnerProductArgument<'a> {
     }
 
     // P = L^x^2.P.R^x^-2
-    fn calculate_new_P(old_P: &GroupElement, x_sqr: &FieldElement, x_inv_sqr: &FieldElement, L: &GroupElement, R: &GroupElement) -> GroupElement {
+    fn calculate_new_P(old_P: &G1, x_sqr: &FieldElement, x_inv_sqr: &FieldElement, L: &G1, R: &G1) -> G1 {
         let _P1 = L * x_sqr;
         let _P2 = R * x_inv_sqr;
         old_P + _P1 + _P2
@@ -235,9 +235,9 @@ mod test {
 
     #[test]
     fn test_inner_product_argument() {
-        let g: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let h: GroupElementVector = vec!["h1", "h2", "h3", "h4"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let u = GroupElement::from_msg_hash("u".as_bytes());
+        let g: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let h: GroupElementVector = vec!["h1", "h2", "h3", "h4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let u = G1::from_msg_hash("u".as_bytes());
         let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
         let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
 
@@ -265,9 +265,9 @@ mod test {
 
     #[test]
     fn test_input_validation() {
-        let g: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let h: GroupElementVector = vec!["h1", "h2"].iter().map(| s | GroupElement::from_msg_hash(s.as_bytes())).collect::<Vec<GroupElement>>().into();
-        let u = GroupElement::from_msg_hash("u".as_bytes());
+        let g: GroupElementVector = vec!["g1", "g2", "g3", "g4"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let h: GroupElementVector = vec!["h1", "h2"].iter().map(| s | G1::from_msg_hash(s.as_bytes())).collect::<Vec<G1>>().into();
+        let u = G1::from_msg_hash("u".as_bytes());
         let a: FieldElementVector = vec![1, 2, 3, 4].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
         let b: FieldElementVector = vec![5, 6, 7, 8].iter().map(| i | FieldElement::from(*i as u8)).collect::<Vec<FieldElement>>().into();
 
