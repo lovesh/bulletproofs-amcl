@@ -1,5 +1,5 @@
-extern crate cpuprofiler;
-extern crate flame;
+//extern crate cpuprofiler;
+//extern crate flame;
 extern crate merlin;
 extern crate rand;
 
@@ -26,7 +26,7 @@ mod tests {
     use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
     use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-    use cpuprofiler::PROFILER;
+//    use cpuprofiler::PROFILER;
     use std::fs::File;
 
     #[test]
@@ -70,7 +70,7 @@ mod tests {
                 };
 
                 //flame::start("proving");
-                PROFILER.lock().unwrap().start("./proving.profile").unwrap();
+                //PROFILER.lock().unwrap().start("./proving.profile").unwrap();
                 let start = Instant::now();
                 assert!(mimc_gadget(
                     &mut prover,
@@ -86,7 +86,7 @@ mod tests {
                 let proof = prover.prove(&G, &H).unwrap();
                 total_proving += start.elapsed();
                 //flame::end("proving");
-                PROFILER.lock().unwrap().stop().unwrap();
+                //PROFILER.lock().unwrap().stop().unwrap();
 
                 (proof, (com_l, com_r))
             };
@@ -107,11 +107,11 @@ mod tests {
             };
 
             //flame::start("verifying");
-            PROFILER
+            /*PROFILER
                 .lock()
                 .unwrap()
                 .start("./verifying.profile")
-                .unwrap();
+                .unwrap();*/
             let start = Instant::now();
             assert!(mimc_gadget(
                 &mut verifier,
@@ -126,7 +126,7 @@ mod tests {
             assert!(verifier.verify(&proof, &g, &h, &G, &H).is_ok());
             total_verifying += start.elapsed();
             //flame::end("verifying");
-            PROFILER.lock().unwrap().stop().unwrap();
+            //PROFILER.lock().unwrap().stop().unwrap();
         }
 
         println!(
@@ -137,7 +137,7 @@ mod tests {
             "Total verifying time for {} samples: {:?} seconds",
             SAMPLES, total_verifying
         );
-        flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+        //flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
     }
 
 }

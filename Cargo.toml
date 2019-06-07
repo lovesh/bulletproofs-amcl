@@ -16,5 +16,5 @@ branch = "master"
 features = ["bls381"]
 
 [dev-dependencies]
-flame = "*"
-cpuprofiler = "0.0.3"
+#flame = "*"
+#cpuprofiler = "0.0.3"
