@@ -1,21 +1,26 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
 use super::helper_constraints::non_zero::is_nonzero_gadget;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use rand::{RngCore, CryptoRng};
-
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use rand::{CryptoRng, RngCore};
 
 /// Accepts the num which is to be proved non-zero and optionally the randomness used in committing to that number.
 /// This randomness argument is accepted so that this can be used as a sub-protocol where the protocol on upper layer will create the commitment.
-pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(value: FieldElement, randomness: Option<FieldElement>, rng: Option<&mut R>, transcript_label: &'static [u8],
-                                                        g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(
+    value: FieldElement,
+    randomness: Option<FieldElement>,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let inv = value.inverse();
@@ -24,8 +29,10 @@ pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(value: FieldElement, ra
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(g, h, &mut prover_transcript);
 
-    let (com_val, var_val) = prover.commit(value.clone(),
-                                           randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())));
+    let (com_val, var_val) = prover.commit(
+        value.clone(),
+        randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
+    );
     let alloc_scal = AllocatedQuantity {
         variable: var_val,
         assignment: Some(value),
@@ -46,8 +53,15 @@ pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(value: FieldElement, ra
     Ok((proof, comms))
 }
 
-pub fn verify_proof_of_non_zero_val(proof: R1CSProof, commitments: Vec<G1>,
-                                   transcript_label: &'static [u8], g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_proof_of_non_zero_val(
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
@@ -88,7 +102,8 @@ mod tests {
         let h = G1::from_msg_hash("h".as_bytes());
 
         let label = b"NonZero";
-        let (proof, commitments) = gen_proof_of_non_zero_val(value, None, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+        let (proof, commitments) =
+            gen_proof_of_non_zero_val(value, None, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
 
         verify_proof_of_non_zero_val(proof, commitments, label, &g, &h, &G, &H).unwrap();
     }

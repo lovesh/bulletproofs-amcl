@@ -1,14 +1,12 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use rand::{RngCore, CryptoRng};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use rand::{CryptoRng, RngCore};
 
 /// Constraints for checking set membership check
 /// Create a new set with values being difference between the set value at that index and the value being proved a member.
@@ -27,11 +25,7 @@ pub fn set_membership_gadget<CS: ConstraintSystem>(
 
     for i in 0..set_length {
         // Since `diff_vars[i]` is `set[i] - v`, `diff_vars[i]` + `v` should be `set[i]`
-        constrain_lc_with_scalar::<CS>(
-            cs,
-            diff_vars[i].variable + v.variable,
-            &set[i],
-        );
+        constrain_lc_with_scalar::<CS>(cs, diff_vars[i].variable + v.variable, &set[i]);
 
         let (_, _, o) = cs.multiply(product.clone(), diff_vars[i].variable.into());
         product = o.into();
@@ -43,8 +37,17 @@ pub fn set_membership_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
-pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(value: FieldElement, randomness: Option<FieldElement>, set: &[FieldElement], rng: Option<&mut R>, transcript_label: &'static [u8],
-                                                               g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(
+    value: FieldElement,
+    randomness: Option<FieldElement>,
+    set: &[FieldElement],
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let set_length = set.len();
@@ -56,8 +59,10 @@ pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(value: FieldElement, 
 
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
     let value = FieldElement::from(value);
-    let (com_value, var_value) = prover.commit(value.clone(),
-                                               randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())));
+    let (com_value, var_value) = prover.commit(
+        value.clone(),
+        randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
+    );
     let alloc_scal = AllocatedQuantity {
         variable: var_value,
         assignment: Some(value),
@@ -85,8 +90,16 @@ pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(value: FieldElement, 
     Ok((proof, comms))
 }
 
-pub fn verify_proof_of_set_membership(set: &[FieldElement], proof: R1CSProof, commitments: Vec<G1>,
-                                          transcript_label: &'static [u8], g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_proof_of_set_membership(
+    set: &[FieldElement],
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
@@ -126,8 +139,15 @@ mod tests {
 
         let mut rng = rand::thread_rng();
 
-        let set = vec![FieldElement::from(2), FieldElement::from(3), FieldElement::from(5),
-                       FieldElement::from(6), FieldElement::from(8), FieldElement::from(20), FieldElement::from(25)];
+        let set = vec![
+            FieldElement::from(2),
+            FieldElement::from(3),
+            FieldElement::from(5),
+            FieldElement::from(6),
+            FieldElement::from(8),
+            FieldElement::from(20),
+            FieldElement::from(25),
+        ];
         let value = FieldElement::from(3);
 
         let G: G1Vector = get_generators("G", 64).into();
@@ -136,7 +156,9 @@ mod tests {
         let h = G1::from_msg_hash("h".as_bytes());
 
         let label = b"SetMembership";
-        let (proof, commitments) = gen_proof_of_set_membership(value, None, &set, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+        let (proof, commitments) =
+            gen_proof_of_set_membership(value, None, &set, Some(&mut rng), label, &g, &h, &G, &H)
+                .unwrap();
 
         verify_proof_of_set_membership(&set, proof, commitments, label, &g, &h, &G, &H).unwrap();
     }

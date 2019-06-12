@@ -1,15 +1,12 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use rand::{RngCore, CryptoRng};
-
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use rand::{CryptoRng, RngCore};
 
 // Ensure `v` is a bit, hence 0 or 1
 pub fn bit_gadget<CS: ConstraintSystem>(
@@ -86,8 +83,17 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 /// and prove that each element is either 0 or 1, sum of elements of this bitmap is 1 (as there is only 1 element)
 /// and the relation set[i] * bitmap[i] = bitmap[i] * value.
 /// Taken from https://github.com/HarryR/ethsnarks/blob/master/src/gadgets/one_of_n.hpp
-pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(value: u64, randomness: Option<FieldElement>, set: &[u64], rng: Option<&mut R>, transcript_label: &'static [u8],
-                                                         g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(
+    value: u64,
+    randomness: Option<FieldElement>,
+    set: &[u64],
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let set_length = set.len();
@@ -120,8 +126,10 @@ pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(value: u64, rando
     vector_sum_gadget(&mut prover, &bit_vars, 1)?;
 
     let _value = FieldElement::from(value);
-    let (com_value, var_value) = prover.commit(_value,
-                                               randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())));
+    let (com_value, var_value) = prover.commit(
+        _value,
+        randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
+    );
     let quantity_value = AllocatedQuantity {
         variable: var_value,
         assignment: Some(_value),
@@ -139,8 +147,16 @@ pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(value: u64, rando
     Ok((proof, comms))
 }
 
-pub fn verify_proof_of_set_membership_alt(set: &[u64], proof: R1CSProof, commitments: Vec<G1>,
-                                    transcript_label: &'static [u8], g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_proof_of_set_membership_alt(
+    set: &[u64],
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
@@ -192,8 +208,20 @@ mod tests {
         let h = G1::from_msg_hash("h".as_bytes());
 
         let label = b"SetMembershipAlternate";
-        let (proof, commitments) = gen_proof_of_set_membership_alt(value, None, &set, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+        let (proof, commitments) = gen_proof_of_set_membership_alt(
+            value,
+            None,
+            &set,
+            Some(&mut rng),
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
 
-        verify_proof_of_set_membership_alt(&set, proof, commitments, label, &g, &h, &G, &H).unwrap();
+        verify_proof_of_set_membership_alt(&set, proof, commitments, label, &g, &h, &G, &H)
+            .unwrap();
     }
 }

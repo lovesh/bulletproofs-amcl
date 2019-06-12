@@ -26,7 +26,7 @@ mod tests {
     use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
     use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
-//    use cpuprofiler::PROFILER;
+    //    use cpuprofiler::PROFILER;
     use std::fs::File;
 
     #[test]
@@ -108,10 +108,10 @@ mod tests {
 
             //flame::start("verifying");
             /*PROFILER
-                .lock()
-                .unwrap()
-                .start("./verifying.profile")
-                .unwrap();*/
+            .lock()
+            .unwrap()
+            .start("./verifying.profile")
+            .unwrap();*/
             let start = Instant::now();
             assert!(mimc_gadget(
                 &mut verifier,

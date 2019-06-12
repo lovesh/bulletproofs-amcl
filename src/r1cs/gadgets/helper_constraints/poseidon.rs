@@ -1,9 +1,7 @@
-use amcl_wrapper::field_elem::FieldElement;
 use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
 use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use amcl_wrapper::field_elem::FieldElement;
 use merlin::Transcript;
 
 use super::super::helper_constraints::constrain_lc_with_scalar;
@@ -56,7 +54,7 @@ impl PoseidonParams {
 pub enum SboxType {
     Cube,
     Inverse,
-    Quint
+    Quint,
 }
 
 impl SboxType {
@@ -68,7 +66,7 @@ impl SboxType {
                 let sq = (elem * elem);
                 let f = sq * sq;
                 f * elem
-            },
+            }
         }
     }
 

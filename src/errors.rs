@@ -26,8 +26,8 @@ macro_rules! check_for_randomness_or_rng {
     ( $randomness:expr, $rng:expr ) => {{
         if $randomness.is_none() && $rng.is_none() {
             Err(R1CSError::GadgetError {
-            description: String::from("Since randoness is None, provide"),
-        })
+                description: String::from("Since randoness is None, provide"),
+            })
         } else {
             Ok(())
         }

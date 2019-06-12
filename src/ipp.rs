@@ -351,8 +351,7 @@ mod tests {
         let H_factors = FieldElementVector::new_vandermonde_vector(&y_inv, n);
 
         let mut new_trans = Transcript::new(b"innerproduct");
-        let ipp_proof =
-            IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
+        let ipp_proof = IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
 
         let b_prime: Vec<FieldElement> = b
             .iter()

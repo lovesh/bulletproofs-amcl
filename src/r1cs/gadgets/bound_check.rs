@@ -1,15 +1,13 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
 use super::helper_constraints::positive_no::positive_no_gadget;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use rand::{RngCore, CryptoRng};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use rand::{CryptoRng, RngCore};
 
 /// Constraints for proving v lies in [min, max].
 /// Ensure v - min and max - v are positive numbers and don't overflow
@@ -43,9 +41,19 @@ pub fn bound_check_gadget<CS: ConstraintSystem>(
 
 /// Accepts the num for which the bounds have to proved and optionally the randomness used in committing to that number.
 /// This randomness argument is accepted so that this can be used as a sub-protocol where the protocol on upper layer will create the commitment.
-pub fn gen_proof_of_bounded_num<R: RngCore + CryptoRng>(val: u64, randomness: Option<FieldElement>, lower: u64, upper: u64,
-                                                        max_bits_in_val: usize, rng: Option<&mut R>, transcript_label: &'static [u8],
-                                                        g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_bounded_num<R: RngCore + CryptoRng>(
+    val: u64,
+    randomness: Option<FieldElement>,
+    lower: u64,
+    upper: u64,
+    max_bits_in_val: usize,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let a = val - lower;
@@ -57,7 +65,10 @@ pub fn gen_proof_of_bounded_num<R: RngCore + CryptoRng>(val: u64, randomness: Op
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(g, h, &mut prover_transcript);
 
-    let (com_v, var_v) = prover.commit(val.into(), randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())));
+    let (com_v, var_v) = prover.commit(
+        val.into(),
+        randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
+    );
     let quantity_v = AllocatedQuantity {
         variable: var_v,
         assignment: Some(val.into()),
@@ -78,16 +89,33 @@ pub fn gen_proof_of_bounded_num<R: RngCore + CryptoRng>(val: u64, randomness: Op
     };
     comms.push(com_b);
 
-    bound_check_gadget(&mut prover, quantity_v, quantity_a, quantity_b, upper, lower, max_bits_in_val)?;
+    bound_check_gadget(
+        &mut prover,
+        quantity_v,
+        quantity_a,
+        quantity_b,
+        upper,
+        lower,
+        max_bits_in_val,
+    )?;
 
     let proof = prover.prove(G, H)?;
 
     Ok((proof, comms))
 }
 
-pub fn verify_proof_of_bounded_num(lower: u64, upper: u64, max_bits_in_val: usize,
-                                   proof: R1CSProof, commitments: Vec<G1>,
-                                   transcript_label: &'static [u8], g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_proof_of_bounded_num(
+    lower: u64,
+    upper: u64,
+    max_bits_in_val: usize,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
@@ -109,7 +137,15 @@ pub fn verify_proof_of_bounded_num(lower: u64, upper: u64, max_bits_in_val: usiz
         assignment: None,
     };
 
-    bound_check_gadget(&mut verifier, quantity_v, quantity_a, quantity_b, upper, lower, max_bits_in_val)?;
+    bound_check_gadget(
+        &mut verifier,
+        quantity_v,
+        quantity_a,
+        quantity_b,
+        upper,
+        lower,
+        max_bits_in_val,
+    )?;
 
     verifier.verify(&proof, g, h, G, H)
 }
@@ -140,8 +176,22 @@ mod tests {
         let n = 32;
 
         let label = b"BoundsTest";
-        let (proof, commitments) = gen_proof_of_bounded_num(v, randomness, min, max, n, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+        let (proof, commitments) = gen_proof_of_bounded_num(
+            v,
+            randomness,
+            min,
+            max,
+            n,
+            Some(&mut rng),
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
 
-        verify_proof_of_bounded_num(min, max, n, proof, commitments, label, &g, &h, &G, &H).unwrap();
+        verify_proof_of_bounded_num(min, max, n, proof, commitments, label, &g, &h, &G, &H)
+            .unwrap();
     }
 }

@@ -1,26 +1,27 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use std::time::{Duration, Instant};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use rand::{RngCore, CryptoRng};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use rand::{CryptoRng, RngCore};
+use std::time::{Duration, Instant};
 
 use super::helper_constraints::poseidon::{
-    PoseidonParams, Poseidon_hash_2, Poseidon_hash_2_gadget, SboxType, PADDING_CONST, ZERO_CONST,
-    Poseidon_hash_4, Poseidon_hash_4_gadget
+    PoseidonParams, Poseidon_hash_2, Poseidon_hash_2_gadget, Poseidon_hash_4,
+    Poseidon_hash_4_gadget, SboxType, PADDING_CONST, ZERO_CONST,
 };
 use amcl_wrapper::commitment::commit_to_field_element;
 
 /// Statics are needed to use permutation as a hash function
 ///
 /// Allocate padding constant and zeroes for Prover
-pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> Vec<AllocatedQuantity> {
+pub fn allocate_statics_for_prover(
+    prover: &mut Prover,
+    num_statics: usize,
+) -> Vec<AllocatedQuantity> {
     let mut statics = vec![];
     let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
     statics.push(AllocatedQuantity {
@@ -47,13 +48,24 @@ pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> V
 }
 
 /// Allocate padding constant and zeroes for Verifier
-pub fn allocate_statics_for_verifier(verifier: &mut Verifier, num_statics: usize, g: &G1, h: &G1) -> Vec<AllocatedQuantity> {
+pub fn allocate_statics_for_verifier(
+    verifier: &mut Verifier,
+    num_statics: usize,
+    g: &G1,
+    h: &G1,
+) -> Vec<AllocatedQuantity> {
     let mut statics = vec![];
     // Commitment to PADDING_CONST with blinding as 0
-    let pad_comm = commit_to_field_element(g, h, &FieldElement::from(PADDING_CONST), &FieldElement::zero());
+    let pad_comm = commit_to_field_element(
+        g,
+        h,
+        &FieldElement::from(PADDING_CONST),
+        &FieldElement::zero(),
+    );
 
     // Commitment to 0 with blinding as 0
-    let zero_comm = commit_to_field_element(g, h, &FieldElement::from(ZERO_CONST), &FieldElement::zero());
+    let zero_comm =
+        commit_to_field_element(g, h, &FieldElement::from(ZERO_CONST), &FieldElement::zero());
 
     let v = verifier.commit(zero_comm.clone());
     statics.push(AllocatedQuantity {
@@ -76,15 +88,25 @@ pub fn allocate_statics_for_verifier(verifier: &mut Verifier, num_statics: usize
     statics
 }
 
-
-pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(inputs: [FieldElement; 2], randomness: Option<[FieldElement; 2]>,
-                                                                                expected_output: &FieldElement, hash_params: &PoseidonParams, sbox_type: &SboxType,
-                                                                                rng: Option<&mut R>, transcript_label: &'static [u8], g: &G1, h: &G1,
-                                                                                G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
+    inputs: [FieldElement; 2],
+    randomness: Option<[FieldElement; 2]>,
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let width = hash_params.width;
-    let total_rounds = hash_params.full_rounds_beginning + hash_params.partial_rounds + hash_params.full_rounds_end;
+    let total_rounds = hash_params.full_rounds_beginning
+        + hash_params.partial_rounds
+        + hash_params.full_rounds_end;
 
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
@@ -94,7 +116,10 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
 
     let rands: [FieldElement; 2] = randomness.unwrap_or_else(|| {
         let r = rng.unwrap();
-        [FieldElement::random_using_rng(r), FieldElement::random_using_rng(r)]
+        [
+            FieldElement::random_using_rng(r),
+            FieldElement::random_using_rng(r),
+        ]
     });
     let (com_l, var_l) = prover.commit(inputs[0].clone(), rands[0]);
     comms.push(com_l);
@@ -134,7 +159,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
         statics,
         &hash_params,
         sbox_type,
-        &expected_output
+        &expected_output,
     )?;
 
     println!(
@@ -148,9 +173,18 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     Ok((proof, comms))
 }
 
-pub fn verify_knowledge_of_preimage_of_Poseidon_2(expected_output: &FieldElement, hash_params: &PoseidonParams, sbox_type: &SboxType,
-                                                                          proof: R1CSProof, commitments: Vec<G1>, transcript_label: &'static [u8], g: &G1, h: &G1,
-                                                                          G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_knowledge_of_preimage_of_Poseidon_2(
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
     let mut statics = vec![];
@@ -181,8 +215,7 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(expected_output: &FieldElement
     });
 
     // Commitment to 0 with blinding as 0
-    let zero_comm =
-        commit_to_field_element(&g, &h, &FieldElement::zero(), &FieldElement::zero());
+    let zero_comm = commit_to_field_element(&g, &h, &FieldElement::zero(), &FieldElement::zero());
 
     for i in 3..width {
         let v = verifier.commit(zero_comm.clone());
@@ -200,7 +233,7 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(expected_output: &FieldElement
         statics,
         &hash_params,
         sbox_type,
-        &expected_output
+        &expected_output,
     )?;
 
     verifier.verify(&proof, &g, &h, &G, &H)?;
@@ -229,9 +262,33 @@ mod tests {
         let label = b"PoseidonHash2:1";
 
         let (proof, commitments) = gen_proof_of_knowledge_of_preimage_of_Poseidon_2(
-            [xl, xr], None, &expected_output, &hash_params, sbox_type, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+            [xl, xr],
+            None,
+            &expected_output,
+            &hash_params,
+            sbox_type,
+            Some(&mut rng),
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
 
-        verify_knowledge_of_preimage_of_Poseidon_2(&expected_output, &hash_params, sbox_type, proof, commitments, label, &g, &h, &G, &H).unwrap();
+        verify_knowledge_of_preimage_of_Poseidon_2(
+            &expected_output,
+            &hash_params,
+            sbox_type,
+            proof,
+            commitments,
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
     }
 
     #[test]

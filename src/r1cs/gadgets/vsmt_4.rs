@@ -1,23 +1,21 @@
-use crate::errors::R1CSError;
-use crate::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
-use std::time::{Duration, Instant};
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
+use crate::errors::R1CSError;
+use crate::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use amcl_wrapper::constants::{MODBYTES, NLEN};
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::{G1, G1Vector};
-use amcl_wrapper::constants::{MODBYTES, NLEN};
+use amcl_wrapper::group_elem_g1::{G1Vector, G1};
+use merlin::Transcript;
+use std::time::{Duration, Instant};
 
-use rand::{RngCore, CryptoRng};
+use rand::{CryptoRng, RngCore};
 
 use super::helper_constraints::poseidon::{
-    PoseidonParams, SboxType, PADDING_CONST, Poseidon_hash_4, Poseidon_hash_4_constraints
+    PoseidonParams, Poseidon_hash_4, Poseidon_hash_4_constraints, SboxType, PADDING_CONST,
 };
-use std::collections::HashMap;
 use crate::r1cs::gadgets::poseidon::{allocate_statics_for_prover, allocate_statics_for_verifier};
+use std::collections::HashMap;
 
 type DBVal = [FieldElement; 4];
 type ProofNode = [FieldElement; 3];
@@ -33,9 +31,12 @@ pub const LeafIndexBytes: usize = TreeDepth / 4;
 /// Get a base 4 representation of the given `scalar`. Only process `limit_bytes` of the scalar
 pub fn get_base_4_repr(scalar: &FieldElement, limit_bytes: usize) -> Vec<u8> {
     if limit_bytes > MODBYTES {
-        panic!("limit_bytes cannot be more than {} but found {}", MODBYTES, limit_bytes)
+        panic!(
+            "limit_bytes cannot be more than {} but found {}",
+            MODBYTES, limit_bytes
+        )
     }
-    let d = limit_bytes * 4;    // number of base 4 digits
+    let d = limit_bytes * 4; // number of base 4 digits
     let mut s = scalar.to_bignum();
     s.norm();
 
@@ -59,7 +60,7 @@ pub struct VanillaSparseMerkleTree_4<'a> {
     empty_tree_hashes: Vec<FieldElement>,
     db: HashMap<Vec<u8>, DBVal>,
     hash_params: &'a PoseidonParams,
-    pub root: FieldElement
+    pub root: FieldElement,
 }
 
 impl<'a> VanillaSparseMerkleTree_4<'a> {
@@ -72,7 +73,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
         let mut empty_tree_hashes: Vec<FieldElement> = vec![];
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
-            let prev = empty_tree_hashes[i-1];
+            let prev = empty_tree_hashes[i - 1];
             let input: [FieldElement; 4] = [prev.clone(); 4];
             // Hash all 4 children at once
             let new = Poseidon_hash_4(input.clone(), hash_params, &SboxType::Quint);
@@ -89,12 +90,11 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             empty_tree_hashes,
             db,
             hash_params,
-            root
+            root,
         }
     }
 
     pub fn update(&mut self, idx: FieldElement, val: FieldElement) -> FieldElement {
-
         // Find path to insert the new key
         let mut sidenodes_wrap = Some(Vec::<ProofNode>::new());
         self.get(idx, &mut sidenodes_wrap);
@@ -152,20 +152,26 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             Some(v) => {
                 v.extend_from_slice(&proof_vec);
             }
-            None => ()
+            None => (),
         }
 
         cur_node
     }
 
     /// Verify a merkle proof, if `root` is None, use the current root else use given root
-    pub fn verify_proof(&self, idx: FieldElement, val: FieldElement, proof: &[ProofNode], root: Option<&FieldElement>) -> bool {
+    pub fn verify_proof(
+        &self,
+        idx: FieldElement,
+        val: FieldElement,
+        proof: &[ProofNode],
+        root: Option<&FieldElement>,
+    ) -> bool {
         let mut cur_idx = get_base_4_repr(&idx, LeafIndexBytes).to_vec();
         cur_idx.reverse();
         let mut cur_val = val.clone();
 
         for (i, d) in cur_idx.iter().enumerate() {
-            let mut p = proof[self.depth-1-i].clone().to_vec();
+            let mut p = proof[self.depth - 1 - i].clone().to_vec();
             p.insert(*d as usize, cur_val);
             let mut input: DBVal = [FieldElement::zero(); 4];
             input.copy_from_slice(p.as_slice());
@@ -175,12 +181,8 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
 
         // Check if root is equal to cur_val
         match root {
-            Some(r) => {
-                cur_val == *r
-            }
-            None => {
-                cur_val == self.root
-            }
+            Some(r) => cur_val == *r,
+            None => cur_val == self.root,
         }
     }
 
@@ -231,9 +233,8 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     proof_nodes: Vec<AllocatedQuantity>,
     statics: Vec<AllocatedQuantity>,
     poseidon_params: &PoseidonParams,
-    sbox_type: &SboxType
+    sbox_type: &SboxType,
 ) -> Result<(), R1CSError> {
-
     let mut prev_hash = LinearCombination::from(leaf_val.variable);
     let mut proof_nodes = proof_nodes.clone();
 
@@ -245,7 +246,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     let two = FieldElement::from(2u64);
     let four = FieldElement::from(4u64);
 
-    let leaf_index_bytes = leaf_index.assignment.map(| l | {
+    let leaf_index_bytes = leaf_index.assignment.map(|l| {
         let mut b: [u8; MODBYTES] = [0u8; MODBYTES];
         let mut m = l.to_bignum();
         m.tobytes(&mut b);
@@ -259,15 +260,15 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
         for j in 0..4 {
             // Check that both 2 bits are actually bits, .i.e. they both are 0 and 1
             let (b0, b0_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
-                let bit = (l[i] >> 2*j) & 1;
-                (bit.into(), (1-bit).into())
+                let bit = (l[i] >> 2 * j) & 1;
+                (bit.into(), (1 - bit).into())
             }))?;
             cs.constrain(o.into());
             cs.constrain(b0 + (b0_1 - FieldElement::one()));
 
             let (b1, b1_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
-                let bit = (l[i] >> (2*j + 1)) & 1;
-                (bit.into(), (1-bit).into())
+                let bit = (l[i] >> (2 * j + 1)) & 1;
+                (bit.into(), (1 - bit).into())
             }))?;
             cs.constrain(o.into());
             cs.constrain(b1 + (b1_1 - FieldElement::one()));
@@ -333,7 +334,13 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             let c3 = c3_1 + c3_2 + c3_3;
 
             let input: [LinearCombination; 4] = [c0, c1, c2, c3];
-            prev_hash = Poseidon_hash_4_constraints::<CS>(cs, input, statics.clone(), poseidon_params, sbox_type)?;
+            prev_hash = Poseidon_hash_4_constraints::<CS>(
+                cs,
+                input,
+                statics.clone(),
+                poseidon_params,
+                sbox_type,
+            )?;
 
             exp_4 = exp_4 * four;
         }
@@ -346,11 +353,22 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
-pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(leaf: FieldElement, leaf_index: FieldElement, randomness: Option<[FieldElement; 2]>,
-                                                                                merkle_proof: Vec<ProofNode>, root: &FieldElement, tree_depth: usize,
-                                                                                hash_params: &PoseidonParams, sbox_type: &SboxType,
-                                                                                rng: Option<&mut R>, transcript_label: &'static [u8], g: &G1, h: &G1,
-                                                                                G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(
+    leaf: FieldElement,
+    leaf_index: FieldElement,
+    randomness: Option<[FieldElement; 2]>,
+    merkle_proof: Vec<ProofNode>,
+    root: &FieldElement,
+    tree_depth: usize,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let mut prover_transcript = Transcript::new(transcript_label);
@@ -359,7 +377,10 @@ pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(lea
     // Randomness is only provided for leaf value and leaf index
     let rands: [FieldElement; 2] = randomness.unwrap_or_else(|| {
         let r = rng.unwrap();
-        [FieldElement::random_using_rng(r), FieldElement::random_using_rng(r)]
+        [
+            FieldElement::random_using_rng(r),
+            FieldElement::random_using_rng(r),
+        ]
     });
 
     let mut comms = vec![];
@@ -403,9 +424,12 @@ pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(lea
         proof_alloc_scalars,
         statics,
         &hash_params,
-        sbox_type)?;
+        sbox_type,
+    )?;
 
-    let total_rounds = hash_params.full_rounds_beginning + hash_params.partial_rounds + hash_params.full_rounds_end;
+    let total_rounds = hash_params.full_rounds_beginning
+        + hash_params.partial_rounds
+        + hash_params.full_rounds_end;
     println!("For 4-ary tree of height {} (has 2^{} leaves) and Poseidon rounds {}, no of multipliers is {} and constraints is {}", tree_depth, tree_depth*2, total_rounds, &prover.num_multipliers(), &prover.num_constraints());
 
     let proof = prover.prove(G, H).unwrap();
@@ -416,10 +440,19 @@ pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(lea
     Ok((proof, comms))
 }
 
-pub fn verify_leaf_inclusion_4_ary_merkle_tree(root: &FieldElement, tree_depth: usize,
-                                             hash_params: &PoseidonParams, sbox_type: &SboxType,
-                                             proof: R1CSProof, commitments: Vec<G1>, transcript_label: &'static [u8], g: &G1, h: &G1,
-                                             G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
+pub fn verify_leaf_inclusion_4_ary_merkle_tree(
+    root: &FieldElement,
+    tree_depth: usize,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
@@ -440,7 +473,7 @@ pub fn verify_leaf_inclusion_4_ary_merkle_tree(root: &FieldElement, tree_depth: 
         let v = verifier.commit(*c);
         proof_alloc_scalars.push(AllocatedQuantity {
             variable: v,
-            assignment: None
+            assignment: None,
         });
     }
 
@@ -457,7 +490,8 @@ pub fn verify_leaf_inclusion_4_ary_merkle_tree(root: &FieldElement, tree_depth: 
         proof_alloc_scalars,
         statics,
         hash_params,
-        sbox_type)?;
+        sbox_type,
+    )?;
 
     verifier.verify(&proof, &g, &h, &G, &H)?;
     let end = start.elapsed();
@@ -496,7 +530,9 @@ mod tests {
             assert!(tree.verify_proof(s, s, &proof_vec, Some(&tree.root)));
         }
 
-        let kvs: Vec<(FieldElement, FieldElement)> = (0..10).map(|_| (FieldElement::random(), FieldElement::random())).collect();
+        let kvs: Vec<(FieldElement, FieldElement)> = (0..10)
+            .map(|_| (FieldElement::random(), FieldElement::random()))
+            .collect();
         for i in 0..kvs.len() {
             tree.update(kvs[i].0, kvs[i].1);
         }
@@ -542,8 +578,36 @@ mod tests {
         let label = b"4-aryMerkleTree";
 
         let (proof, commitments) = gen_proof_of_leaf_inclusion_4_ary_merkle_tree(
-            k.clone(), k.clone(), None, merkle_proof_vec, &tree.root, tree.depth, &hash_params, sbox_type, Some(&mut rng), label, &g, &h, &G, &H).unwrap();
+            k.clone(),
+            k.clone(),
+            None,
+            merkle_proof_vec,
+            &tree.root,
+            tree.depth,
+            &hash_params,
+            sbox_type,
+            Some(&mut rng),
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
 
-        verify_leaf_inclusion_4_ary_merkle_tree(&tree.root, tree.depth, &hash_params, sbox_type, proof, commitments, label, &g, &h, &G, &H).unwrap();
+        verify_leaf_inclusion_4_ary_merkle_tree(
+            &tree.root,
+            tree.depth,
+            &hash_params,
+            sbox_type,
+            proof,
+            commitments,
+            label,
+            &g,
+            &h,
+            &G,
+            &H,
+        )
+        .unwrap();
     }
 }
