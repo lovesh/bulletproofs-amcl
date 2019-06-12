@@ -24,28 +24,28 @@ pub trait TranscriptProtocol {
 
 impl TranscriptProtocol for Transcript {
     fn innerproduct_domain_sep(&mut self, n: u64) {
-        self.commit_bytes(b"dom-sep", b"ipp v1");
-        self.commit_bytes(b"n", &n.to_le_bytes());
+        self.append_message(b"dom-sep", b"ipp v1");
+        self.append_message(b"n", &n.to_le_bytes());
     }
 
     fn r1cs_domain_sep(&mut self) {
-        self.commit_bytes(b"dom-sep", b"r1cs v1");
+        self.append_message(b"dom-sep", b"r1cs v1");
     }
 
     fn r1cs_1phase_domain_sep(&mut self) {
-        self.commit_bytes(b"dom-sep", b"r1cs-1phase");
+        self.append_message(b"dom-sep", b"r1cs-1phase");
     }
 
     fn r1cs_2phase_domain_sep(&mut self) {
-        self.commit_bytes(b"dom-sep", b"r1cs-2phase");
+        self.append_message(b"dom-sep", b"r1cs-2phase");
     }
 
     fn commit_scalar(&mut self, label: &'static [u8], scalar: &FieldElement) {
-        self.commit_bytes(label, &scalar.to_bytes());
+        self.append_message(label, &scalar.to_bytes());
     }
 
     fn commit_point(&mut self, label: &'static [u8], point: &G1) {
-        self.commit_bytes(label, &point.to_bytes());
+        self.append_message(label, &point.to_bytes());
     }
 
     fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement {
