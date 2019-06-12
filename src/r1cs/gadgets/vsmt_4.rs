@@ -25,7 +25,7 @@ type ProofNode = [FieldElement; 3];
 /// Depth of the tree.
 /// Has to be a multiple of 4.
 // TODO: Remove above restriction.
-pub const TreeDepth: usize = 32;
+pub const TreeDepth: usize = 16;
 
 /// Number of bytes to represent leaf index
 pub const LeafIndexBytes: usize = TreeDepth / 4;

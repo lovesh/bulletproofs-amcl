@@ -108,7 +108,7 @@ mod tests {
                 let (com_r, var_r) = prover.commit(*r, FieldElement::random());
                 let (_, _, o1) = prover.multiply(var_p.into(), var_q.into());
                 let (_, _, o2) = prover.multiply(o1.into(), var_r.into());
-                let mut lc: LinearCombination = vec![(Variable::One(), *s)].iter().collect();
+                let lc: LinearCombination = vec![(Variable::One(), *s)].iter().collect();
                 prover.constrain(o2 - lc);
                 comms.push(com_p);
                 comms.push(com_q);
