@@ -17,6 +17,8 @@ use super::helper_constraints::poseidon::{
 };
 use amcl_wrapper::commitment::commit_to_field_element;
 
+/// Statics are needed to use permutation as a hash function
+///
 /// Allocate padding constant and zeroes for Prover
 pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> Vec<AllocatedQuantity> {
     let mut statics = vec![];

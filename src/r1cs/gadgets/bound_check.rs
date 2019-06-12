@@ -11,7 +11,8 @@ use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1, G1Vector};
 use rand::{RngCore, CryptoRng};
 
-
+/// Constraints for proving v lies in [min, max].
+/// Ensure v - min and max - v are positive numbers and don't overflow
 pub fn bound_check_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,

@@ -11,6 +11,12 @@ use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1, G1Vector};
 use rand::{RngCore, CryptoRng};
 
+
+/// Constraints for checking set membership check
+/// Create a new set with values being difference between the set value at that index and the value being proved a member.
+/// Now ensure that the product of members of this new set is not 0
+/// eg. Original set is (a, b, c, d, e). It is to be proved that x is not a member of set.
+/// Create new set (a-x, b-x, c-x, d-x, e-x). Now ensure product (a-x).(b-x).(c-x).(d-x).(e-x) != 0
 pub fn set_non_membership_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     v: AllocatedQuantity,
@@ -34,6 +40,8 @@ pub fn set_non_membership_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
+
+/// Prove that difference between each set element and value is non-zero, hence value does not equal any set element.
 pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(value: FieldElement, randomness: Option<FieldElement>, set: &[FieldElement], rng: Option<&mut R>, transcript_label: &'static [u8],
                                                            g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;

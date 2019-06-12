@@ -82,6 +82,10 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
+/// Allocate a bitmap for the `set` with 1 as the index of `value`, 0 otherwise. Then commit to values of bitmap
+/// and prove that each element is either 0 or 1, sum of elements of this bitmap is 1 (as there is only 1 element)
+/// and the relation set[i] * bitmap[i] = bitmap[i] * value.
+/// Taken from https://github.com/HarryR/ethsnarks/blob/master/src/gadgets/one_of_n.hpp
 pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(value: u64, randomness: Option<FieldElement>, set: &[u64], rng: Option<&mut R>, transcript_label: &'static [u8],
                                                          g: &G1, h: &G1, G: &G1Vector, H: &G1Vector) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
