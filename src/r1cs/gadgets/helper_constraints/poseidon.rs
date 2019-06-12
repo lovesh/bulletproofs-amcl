@@ -82,9 +82,6 @@ impl SboxType {
             SboxType::Cube => Self::synthesize_cube_sbox(cs, input_var, round_key),
             SboxType::Inverse => Self::synthesize_inverse_sbox(cs, input_var, round_key),
             SboxType::Quint => Self::synthesize_quint_sbox(cs, input_var, round_key),
-            _ => Err(R1CSError::GadgetError {
-                description: String::from("inverse not implemented"),
-            }),
         }
     }
 
@@ -272,7 +269,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
     // ------------ First full_rounds_beginning rounds begin --------------------
 
-    for k in 0..full_rounds_beginning {
+    for _ in 0..full_rounds_beginning {
         let mut sbox_outputs: Vec<LinearCombination> = vec![LinearCombination::default(); width];
 
         // Substitution (S-box) layer
@@ -304,7 +301,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
     // ------------ Middle rounds begin --------------------
 
-    for k in full_rounds_beginning..(full_rounds_beginning + partial_rounds) {
+    for _ in full_rounds_beginning..(full_rounds_beginning + partial_rounds) {
         let mut sbox_outputs: Vec<LinearCombination> = vec![LinearCombination::default(); width];
 
         // Substitution (S-box) layer

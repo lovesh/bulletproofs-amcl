@@ -7,7 +7,7 @@ use merlin::Transcript;
 use super::helper_constraints::constrain_lc_with_scalar;
 use super::helper_constraints::positive_no::positive_no_gadget;
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1, G1Vector};
 use rand::{RngCore, CryptoRng};
 
