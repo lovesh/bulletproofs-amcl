@@ -1,15 +1,13 @@
 use amcl_wrapper::field_elem::FieldElement;
-use bulletproofs::errors::R1CSError;
-use bulletproofs::r1cs::{
+use crate::errors::R1CSError;
+use crate::r1cs::{
     ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
 };
-use bulletproofs_amcl as bulletproofs;
-
-use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 
-use crate::utils::constrain_lc_with_scalar;
-use crate::utils::zero_non_zero::is_nonzero_gadget;
+use super::super::helper_constraints::constrain_lc_with_scalar;
+use super::super::helper_constraints::non_zero::is_nonzero_gadget;
 
 pub struct PoseidonParams {
     pub width: usize,
@@ -58,6 +56,7 @@ impl PoseidonParams {
 pub enum SboxType {
     Cube,
     Inverse,
+    Quint
 }
 
 impl SboxType {
@@ -65,6 +64,11 @@ impl SboxType {
         match self {
             SboxType::Cube => (elem * elem) * elem,
             SboxType::Inverse => elem.inverse(),
+            SboxType::Quint => {
+                let sq = (elem * elem);
+                let f = sq * sq;
+                f * elem
+            },
         }
     }
 
@@ -77,6 +81,7 @@ impl SboxType {
         match self {
             SboxType::Cube => Self::synthesize_cube_sbox(cs, input_var, round_key),
             SboxType::Inverse => Self::synthesize_inverse_sbox(cs, input_var, round_key),
+            SboxType::Quint => Self::synthesize_quint_sbox(cs, input_var, round_key),
             _ => Err(R1CSError::GadgetError {
                 description: String::from("inverse not implemented"),
             }),
@@ -93,6 +98,19 @@ impl SboxType {
         let (i, _, sqr) = cs.multiply(inp_plus_const.clone(), inp_plus_const);
         let (_, _, cube) = cs.multiply(sqr.into(), i.into());
         Ok(cube)
+    }
+
+    // Allocate variables in circuit and enforce constraints when Sbox as quint
+    fn synthesize_quint_sbox<CS: ConstraintSystem>(
+        cs: &mut CS,
+        input_var: LinearCombination,
+        round_key: FieldElement,
+    ) -> Result<Variable, R1CSError> {
+        let inp_plus_const: LinearCombination = input_var + round_key;
+        let (i, _, sqr) = cs.multiply(inp_plus_const.clone(), inp_plus_const);
+        let (_, _, qr) = cs.multiply(sqr.into(), sqr.into());
+        let (_, _, qi) = cs.multiply(qr.into(), i.into());
+        Ok(qi)
     }
 
     // Allocate variables in circuit and enforce constraints when Sbox as inverse
@@ -327,8 +345,8 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
     // ------------ Last rounds with full SBox begin --------------------
 
-    // 2 rounds
-    for k in full_rounds_beginning + partial_rounds
+    // 3 rounds
+    for _ in full_rounds_beginning + partial_rounds
         ..(full_rounds_beginning + partial_rounds + full_rounds_end)
     {
         let mut sbox_outputs: Vec<LinearCombination> = vec![LinearCombination::default(); width];

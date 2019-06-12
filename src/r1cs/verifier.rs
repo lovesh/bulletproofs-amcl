@@ -7,8 +7,7 @@ use core::mem;
 use merlin::Transcript;
 
 use crate::errors::R1CSError;
-use crate::inner_product::InnerProductArgument;
-use crate::new_ipp::NewIPP;
+use crate::ipp::IPP;
 use crate::r1cs::constraint_system::ConstraintSystem;
 use crate::r1cs::constraint_system::RandomizedConstraintSystem;
 use crate::r1cs::linear_combination::LinearCombination;
@@ -349,7 +348,7 @@ impl<'a> Verifier<'a> {
             .inner_product(&wL)
             .unwrap();
         // Get IPP variables
-        let (u_sq, u_inv_sq, s) = NewIPP::verification_scalars(
+        let (u_sq, u_inv_sq, s) = IPP::verification_scalars(
             &proof.ipp_proof.L,
             &proof.ipp_proof.R,
             padded_n,
@@ -386,14 +385,6 @@ impl<'a> Verifier<'a> {
                 u_or_1 * (y_inv_i * (x * wLi + wOi - b * s_i_inv) - FieldElement::one())
             })
             .collect();
-
-        /*let Q = g * w;
-        let ipa = InnerProductArgument::new(&G.as_slice()[0..padded_n].into(),
-                                            &H.as_slice()[0..padded_n].into(), &Q, &proof.P).unwrap();
-        let res = ipa.verify_proof_recursively(&proof.ipp_proof).unwrap();
-        if !res {
-            return Err(R1CSError::VerificationError);
-        }*/
 
         let r = FieldElement::random();
 
