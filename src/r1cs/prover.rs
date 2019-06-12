@@ -6,8 +6,7 @@ use crate::transcript::TranscriptProtocol;
 use merlin::Transcript;
 
 use crate::errors::R1CSError;
-use crate::inner_product::InnerProductArgument;
-use crate::new_ipp::NewIPP;
+use crate::ipp::IPP;
 use crate::r1cs::constraint_system::ConstraintSystem;
 use crate::r1cs::constraint_system::RandomizedConstraintSystem;
 use crate::r1cs::linear_combination::LinearCombination;
@@ -248,8 +247,6 @@ impl<'a, 'b> Prover<'a, 'b> {
         println!("Comm Weight matrix");
         util::print_2d_matrix(&WV);*/
 
-        let n = self.a_L.len();
-        let m = self.v.len();
         let q = self.constraints.len();
         let z_exp: FieldElementVector = FieldElementVector::new_vandermonde_vector(z, q + 1)
             .into_iter()
@@ -545,15 +542,6 @@ impl<'a, 'b> Prover<'a, 'b> {
         let w = self.transcript.challenge_scalar(b"w");
         let Q = self.g * w;
 
-        /*let G_l_vec = scalar_point_inner_product(&l_vec, &self.G[0..padded_n]).unwrap();
-        let H_r_vec = scalar_point_inner_product(&r_vec, &self.H[0..padded_n]).unwrap();
-        let c = field_elements_inner_product(&l_vec, &r_vec).unwrap();
-        let Q_c = scalar_point_multiplication(&c, &Q);
-        let P = add_group_elements!(&G_l_vec, &H_r_vec, &Q_c);
-
-        let ipa = InnerProductArgument::new(&self.G[0..padded_n], &self.H[0..padded_n], &Q, &P).unwrap();
-        let ipp_proof = ipa.gen_proof(&l_vec, &r_vec).unwrap();*/
-
         let G_factors: FieldElementVector = iter::repeat(FieldElement::one())
             .take(n1)
             .chain(iter::repeat(u).take(n2 + pad))
@@ -568,7 +556,7 @@ impl<'a, 'b> Prover<'a, 'b> {
             .into();
 
         //let mut new_trans = Transcript::new(b"innerproduct");
-        let ipp_proof = NewIPP::create_ipp(
+        let ipp_proof = IPP::create_ipp(
             self.transcript,
             &Q,
             &G_factors,
@@ -578,26 +566,6 @@ impl<'a, 'b> Prover<'a, 'b> {
             &l_vec,
             &r_vec,
         );
-
-        /*let r_prime: Vec<FieldElement> = r_vec.iter().zip(exp_y_inv.iter()).map(|(bi, yi)| field_elements_multiplication(&bi, &yi)).collect();
-        let c = field_elements_inner_product(&l_vec, &r_vec).unwrap();
-        let mut _1 = vec![];
-        _1.extend(&l_vec);
-        _1.extend(&r_prime);
-        _1.push(c);
-        let mut _2 = vec![];
-        _2.extend(&self.G[..padded_n]);
-        _2.extend(&self.H[..padded_n]);
-        _2.push(Q);
-        let P = multi_scalar_multiplication(
-            &_1,
-            &_2,
-        ).unwrap();
-
-        let mut new_trans1 = Transcript::new(b"innerproduct");
-        Self::verify_ipp(padded_n, &mut new_trans1, &G_factors, &H_factors,
-                         &P, &Q, &self.G[..padded_n], &self.H[..padded_n],
-                         &ipp_proof.a, &ipp_proof.b, &ipp_proof.L, &ipp_proof.R)?;*/
 
         Ok(R1CSProof {
             A_I1,

@@ -1,11 +1,10 @@
 use amcl_wrapper::field_elem::FieldElement;
-use bulletproofs::errors::R1CSError;
-use bulletproofs::r1cs::{
+use crate::errors::R1CSError;
+use crate::r1cs::{
     ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
 };
-use bulletproofs_amcl as bulletproofs;
 
-use bulletproofs::r1cs::linear_combination::AllocatedQuantity;
+use crate::r1cs::linear_combination::AllocatedQuantity;
 use merlin::Transcript;
 
 /// Enforces that the quantity of v is in the range [0, 2^n).

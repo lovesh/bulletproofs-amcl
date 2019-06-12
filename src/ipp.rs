@@ -1,5 +1,4 @@
 use crate::errors::R1CSError;
-use crate::inner_product::InnerProductArgumentProof;
 use crate::transcript::TranscriptProtocol;
 use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
@@ -7,8 +6,17 @@ use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use core::iter;
 use merlin::Transcript;
 
-pub struct NewIPP {}
-impl NewIPP {
+#[derive(Clone, Debug)]
+#[allow(non_snake_case)]
+pub struct InnerProductArgumentProof {
+    pub L: G1Vector,
+    pub R: G1Vector,
+    pub a: FieldElement,
+    pub b: FieldElement,
+}
+
+pub struct IPP {}
+impl IPP {
     /// Create an inner-product proof.
     ///
     /// The proof is created with respect to the bases \\(G\\), \\(H'\\),
@@ -344,7 +352,7 @@ mod tests {
 
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof =
-            NewIPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
+            IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
 
         let b_prime: Vec<FieldElement> = b
             .iter()
@@ -365,7 +373,7 @@ mod tests {
             .unwrap();
 
         let mut new_trans1 = Transcript::new(b"innerproduct");
-        NewIPP::verify_ipp(
+        IPP::verify_ipp(
             n,
             &mut new_trans1,
             &G_factors,

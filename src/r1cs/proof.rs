@@ -1,6 +1,6 @@
 //! Definition of the proof struct.
 
-use crate::inner_product::InnerProductArgumentProof;
+use crate::ipp::InnerProductArgumentProof;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem_g1::G1;
 

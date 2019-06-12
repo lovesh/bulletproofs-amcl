@@ -2,8 +2,7 @@ extern crate merlin;
 extern crate rand;
 
 use amcl_wrapper::field_elem::FieldElement;
-use bulletproofs::r1cs::{ConstraintSystem, LinearCombination, Variable};
-use bulletproofs_amcl as bulletproofs;
+use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
 
 /// Constrain a linear combination to be equal to a scalar
 pub fn constrain_lc_with_scalar<CS: ConstraintSystem>(
@@ -15,3 +14,6 @@ pub fn constrain_lc_with_scalar<CS: ConstraintSystem>(
 }
 
 pub mod mimc;
+pub mod poseidon;
+pub mod positive_no;
+pub mod non_zero;

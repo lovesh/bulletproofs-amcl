@@ -1,9 +1,5 @@
 # Bulletproofs
 
-1. On a pairing friendly curve. BLS12-381 and BN254 for now. Adjust the value of `ECCurve` in [lib.rs](src/lib.rs)
+1. On a pairing friendly curve. BLS12-381 and BN254 for now. Change value of default feature to change the curve,
 2. Using [Apache Milagro](https://github.com/milagro-crypto/amcl).
-3. Pending support for 
-    - aggregation 
-    - non power of 2 values
-    - inner product verification through multi-exponentiation
-    - Compressed points to shorten proof size
+3. R1CS support present. For gadgets, check [here](src/r1cs/gadgets).

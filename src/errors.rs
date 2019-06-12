@@ -19,3 +19,17 @@ pub enum R1CSError {
         description: String,
     },
 }
+
+/// Check if either randomness was provided or random number generator was provided. Works like a boolean OR on Option
+#[macro_export]
+macro_rules! check_for_randomness_or_rng {
+    ( $randomness:expr, $rng:expr ) => {{
+        if $randomness.is_none() && $rng.is_none() {
+            Err(R1CSError::GadgetError {
+            description: String::from("Since randoness is None, provide"),
+        })
+        } else {
+            Ok(())
+        }
+    }};
+}
