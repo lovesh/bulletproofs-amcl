@@ -341,7 +341,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
 
     cs.constrain(constraint_leaf_index.iter().collect());
 
-    //constrain_lc_with_scalar::<CS>(cs, prev_hash, root);
+    constrain_lc_with_scalar::<CS>(cs, prev_hash, root);
 
     Ok(())
 }
