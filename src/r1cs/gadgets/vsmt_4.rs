@@ -422,13 +422,14 @@ pub fn verify_leaf_inclusion_4_ary_merkle_tree(root: &FieldElement, tree_depth: 
                                              G: &G1Vector, H: &G1Vector) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
+
     let var_leaf = verifier.commit(commitments[0]);
     let leaf_alloc_scalar = AllocatedQuantity {
         variable: var_leaf,
         assignment: None,
     };
 
-    let var_leaf_idx = verifier.commit(commitments[0]);
+    let var_leaf_idx = verifier.commit(commitments[1]);
     let leaf_idx_alloc_scalar = AllocatedQuantity {
         variable: var_leaf_idx,
         assignment: None,
@@ -479,12 +480,12 @@ mod tests {
 
         let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, TreeDepth);
 
-        for i in 1..6 {
+        for i in 1..10 {
             let s = FieldElement::from(i as u64);
             tree.update(s, s);
         }
 
-        for i in 1..6 {
+        for i in 1..10 {
             let s = FieldElement::from(i as u32);
             assert_eq!(s, tree.get(s, &mut None));
             let mut proof_vec = Vec::<ProofNode>::new();
