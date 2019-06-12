@@ -12,10 +12,68 @@ use amcl_wrapper::group_elem_g1::{G1, G1Vector};
 use rand::{RngCore, CryptoRng};
 
 use super::helper_constraints::poseidon::{
-    PoseidonParams, Poseidon_hash_2, Poseidon_hash_2_gadget, SboxType, PADDING_CONST,
+    PoseidonParams, Poseidon_hash_2, Poseidon_hash_2_gadget, SboxType, PADDING_CONST, ZERO_CONST,
     Poseidon_hash_4, Poseidon_hash_4_gadget
 };
 use amcl_wrapper::commitment::commit_to_field_element;
+
+/// Allocate padding constant and zeroes for Prover
+pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> Vec<AllocatedQuantity> {
+    let mut statics = vec![];
+    let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
+    statics.push(AllocatedQuantity {
+        variable: var,
+        assignment: Some(FieldElement::from(ZERO_CONST)),
+    });
+
+    // Commitment to PADDING_CONST with blinding as 0
+    let (_, var) = prover.commit(FieldElement::from(PADDING_CONST), FieldElement::zero());
+    statics.push(AllocatedQuantity {
+        variable: var,
+        assignment: Some(FieldElement::from(PADDING_CONST)),
+    });
+
+    // Commit to 0 with randomness 0 for the rest of the elements of width
+    for _ in 2..num_statics {
+        let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
+        statics.push(AllocatedQuantity {
+            variable: var,
+            assignment: Some(FieldElement::from(ZERO_CONST)),
+        });
+    }
+    statics
+}
+
+/// Allocate padding constant and zeroes for Verifier
+pub fn allocate_statics_for_verifier(verifier: &mut Verifier, num_statics: usize, g: &G1, h: &G1) -> Vec<AllocatedQuantity> {
+    let mut statics = vec![];
+    // Commitment to PADDING_CONST with blinding as 0
+    let pad_comm = commit_to_field_element(g, h, &FieldElement::from(PADDING_CONST), &FieldElement::zero());
+
+    // Commitment to 0 with blinding as 0
+    let zero_comm = commit_to_field_element(g, h, &FieldElement::from(ZERO_CONST), &FieldElement::zero());
+
+    let v = verifier.commit(zero_comm.clone());
+    statics.push(AllocatedQuantity {
+        variable: v,
+        assignment: None,
+    });
+
+    let v = verifier.commit(pad_comm);
+    statics.push(AllocatedQuantity {
+        variable: v,
+        assignment: None,
+    });
+    for _ in 2..num_statics {
+        let v = verifier.commit(zero_comm.clone());
+        statics.push(AllocatedQuantity {
+            variable: v,
+            assignment: None,
+        });
+    }
+    statics
+}
+
 
 pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(inputs: [FieldElement; 2], randomness: Option<[FieldElement; 2]>,
                                                                                 expected_output: &FieldElement, hash_params: &PoseidonParams, sbox_type: &SboxType,
