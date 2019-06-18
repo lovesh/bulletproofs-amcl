@@ -317,7 +317,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         // We cannot do this in advance because user can commit variables one-by-one,
         // but this suffix provides safe disambiguation because each variable
         // is prefixed with a separate label.
-        self.transcript.commit_u64(b"m", self.v.len() as u64);
+        self.transcript.append_u64(b"m", self.v.len() as u64);
 
         // Commit to the first-phase low-level witness variables.
         let n1 = self.a_L.len();

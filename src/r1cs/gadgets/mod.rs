@@ -3,6 +3,7 @@ extern crate rand;
 
 pub mod bound_check;
 mod helper_constraints;
+pub mod mimc;
 pub mod non_zero;
 pub mod poseidon;
 pub mod set_membership;

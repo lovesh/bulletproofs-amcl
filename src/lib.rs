@@ -14,6 +14,8 @@ pub mod utils;
 
 mod transcript;
 
-mod ipp;
+pub mod ipp;
 
 pub mod r1cs;
+
+pub mod jubjub;

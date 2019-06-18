@@ -163,8 +163,9 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     )?;
 
     println!(
-        "For Poseidon hash rounds {}, no of constraints is {}",
+        "For Poseidon hash rounds {}, no of multipliers is {}, no of constraints is {}",
         total_rounds,
+        &prover.num_multipliers(),
         &prover.num_constraints()
     );
     println!("Proving time is: {:?}", start.elapsed());

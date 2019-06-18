@@ -7,16 +7,18 @@ use merlin::Transcript;
 
 use super::super::helper_constraints::constrain_lc_with_scalar;
 
-//pub const MIMC_ROUNDS: usize = 322;
-pub const MIMC_ROUNDS: usize = 10;
-
-pub fn mimc(xl: &FieldElement, xr: &FieldElement, constants: &[FieldElement]) -> FieldElement {
-    assert_eq!(constants.len(), MIMC_ROUNDS);
+pub fn mimc(
+    xl: &FieldElement,
+    xr: &FieldElement,
+    constants: &[FieldElement],
+    mimc_rounds: usize,
+) -> FieldElement {
+    assert_eq!(constants.len(), mimc_rounds);
 
     let mut xl = xl.clone();
     let mut xr = xr.clone();
 
-    for i in 0..MIMC_ROUNDS {
+    for i in 0..mimc_rounds {
         let tmp1 = xl + constants[i];
         let mut tmp2 = (tmp1 * tmp1) * tmp1;
         tmp2 += xr;

@@ -271,7 +271,7 @@ impl<'a> Verifier<'a> {
         // We cannot do this in advance because user can commit variables one-by-one,
         // but this suffix provides safe disambiguation because each variable
         // is prefixed with a separate label.
-        self.transcript.commit_u64(b"m", self.V.len() as u64);
+        self.transcript.append_u64(b"m", self.V.len() as u64);
 
         let n1 = self.num_vars;
         self.transcript.commit_point(b"A_I1", &proof.A_I1);
