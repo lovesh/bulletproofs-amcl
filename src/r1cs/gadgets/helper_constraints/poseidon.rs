@@ -42,12 +42,12 @@ impl PoseidonParams {
     // TODO: Write logic to generate correct round keys.
     fn gen_round_keys(num_branches: usize, total_rounds: usize) -> Vec<FieldElement> {
         let cap = (total_rounds + 1) * num_branches;
-        vec![FieldElement::one(); cap]
+        vec![FieldElement::random(); cap]
     }
 
     // TODO: Write logic to generate correct MDS matrix.
     fn gen_MDS_matrix(num_branches: usize) -> Vec<Vec<FieldElement>> {
-        vec![vec![FieldElement::one(); num_branches]; num_branches]
+        vec![vec![FieldElement::random(); num_branches]; num_branches]
     }
 }
 
@@ -60,11 +60,16 @@ pub enum SboxType {
 impl SboxType {
     fn apply_sbox(&self, elem: &FieldElement) -> FieldElement {
         match self {
-            SboxType::Cube => (elem * elem) * elem,
+            SboxType::Cube => {
+                // elem^3. When squaring, don't use elem * elem but elem.square()
+                let sqr = elem.square();
+                sqr * elem
+            },
             SboxType::Inverse => elem.inverse(),
             SboxType::Quint => {
-                let sq = (elem * elem);
-                let f = sq * sq;
+                // elem^5
+                let sq = elem.square();
+                let f = sq.square();
                 f * elem
             }
         }
