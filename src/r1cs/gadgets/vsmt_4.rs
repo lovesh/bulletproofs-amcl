@@ -23,7 +23,7 @@ type ProofNode = [FieldElement; 3];
 /// Depth of the tree.
 /// Has to be a multiple of 4.
 // TODO: Remove above restriction.
-pub const TreeDepth: usize = 16;
+pub const TreeDepth: usize = 12;
 
 /// Number of bytes to represent leaf index
 pub const LeafIndexBytes: usize = TreeDepth / 4;
@@ -569,8 +569,8 @@ mod tests {
         let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
-        let G: G1Vector = get_generators("G", 819200).into();
-        let H: G1Vector = get_generators("H", 819200).into();
+        let G: G1Vector = get_generators("G", 81920).into();
+        let H: G1Vector = get_generators("H", 81920).into();
 
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());

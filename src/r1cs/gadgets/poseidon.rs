@@ -151,7 +151,6 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
         });
     }
 
-    let start = Instant::now();
     Poseidon_hash_2_gadget(
         &mut prover,
         l_alloc,
@@ -163,12 +162,12 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     )?;
 
     println!(
-        "For Poseidon hash rounds {}, no of multipliers is {}, no of constraints is {}",
+        "For Poseidon hash rounds {}, sbox type {:?}, no of multipliers is {}, no of constraints is {}",
         total_rounds,
+        sbox_type,
         &prover.num_multipliers(),
         &prover.num_constraints()
     );
-    println!("Proving time is: {:?}", start.elapsed());
 
     let proof = prover.prove(&G, &H).unwrap();
     Ok((proof, comms))
@@ -226,7 +225,6 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(
         });
     }
 
-    let start = Instant::now();
     Poseidon_hash_2_gadget(
         &mut verifier,
         l_alloc,
@@ -238,7 +236,6 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(
     )?;
 
     verifier.verify(&proof, &g, &h, &G, &H)?;
-    println!("Verification time is: {:?}", start.elapsed());
     Ok(())
 }
 
@@ -262,6 +259,7 @@ mod tests {
 
         let label = b"PoseidonHash2:1";
 
+        let start = Instant::now();
         let (proof, commitments) = gen_proof_of_knowledge_of_preimage_of_Poseidon_2(
             [xl, xr],
             None,
@@ -276,7 +274,9 @@ mod tests {
             &H,
         )
         .unwrap();
+        println!("Proving time is: {:?}", start.elapsed());
 
+        let start = Instant::now();
         verify_knowledge_of_preimage_of_Poseidon_2(
             &expected_output,
             &hash_params,
@@ -290,6 +290,7 @@ mod tests {
             &H,
         )
         .unwrap();
+        println!("Verification time is: {:?}", start.elapsed());
     }
 
     #[test]

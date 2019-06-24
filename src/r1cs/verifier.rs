@@ -446,7 +446,7 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
         mut left: LinearCombination,
         mut right: LinearCombination,
     ) -> (Variable, Variable, Variable) {
-        let (l_var, r_var, o_var) = _allocate_vars(self);
+        let (l_var, r_var, o_var) = self._allocate_vars();
 
         // Constrain l,r,o:
         left.terms.push((l_var, FieldElement::minus_one()));
@@ -476,15 +476,7 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
         &mut self,
         _: Option<(FieldElement, FieldElement)>,
     ) -> Result<(Variable, Variable, Variable), R1CSError> {
-        let var = self.num_vars;
-        self.num_vars += 1;
-
-        // Create variables for l,r,o
-        let l_var = Variable::MultiplierLeft(var);
-        let r_var = Variable::MultiplierRight(var);
-        let o_var = Variable::MultiplierOutput(var);
-
-        Ok((l_var, r_var, o_var))
+        Ok(self._allocate_vars())
     }
 
     fn constrain(&mut self, lc: LinearCombination) {
@@ -521,6 +513,22 @@ impl<'a, 'b> ConstraintSystem for Verifier<'a> {
         }
     }
 }
+
+impl<'a> Verifier<'a> {
+    // Allocate variables
+    fn _allocate_vars(&mut self) -> (Variable, Variable, Variable) {
+        let next_var_idx = self.num_vars;
+        self.num_vars += 1;
+
+        // Create variables for l,r,o
+        let l_var = Variable::MultiplierLeft(next_var_idx);
+        let r_var = Variable::MultiplierRight(next_var_idx);
+        let o_var = Variable::MultiplierOutput(next_var_idx);
+
+        (l_var, r_var, o_var)
+    }
+}
+
 
 impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a> {
     type RandomizedCS = Self;
@@ -571,17 +579,4 @@ impl<'a, 'b> RandomizedConstraintSystem for RandomizingVerifier<'a> {
     fn challenge_scalar(&mut self, label: &'static [u8]) -> FieldElement {
         self.verifier.transcript.challenge_scalar(label)
     }
-}
-
-// Allocate variables
-fn _allocate_vars(verifier: &mut Verifier) -> (Variable, Variable, Variable) {
-    let next_var_idx = verifier.num_vars;
-    verifier.num_vars += 1;
-
-    // Create variables for l,r,o
-    let l_var = Variable::MultiplierLeft(next_var_idx);
-    let r_var = Variable::MultiplierRight(next_var_idx);
-    let o_var = Variable::MultiplierOutput(next_var_idx);
-
-    (l_var, r_var, o_var)
 }

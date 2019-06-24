@@ -61,6 +61,10 @@ impl LinearCombination {
         }
         new_lc_terms.iter().collect()
     }
+
+    pub fn len(&self) -> usize {
+        self.terms.len()
+    }
 }
 
 impl From<Variable> for LinearCombination {

@@ -51,6 +51,7 @@ impl PoseidonParams {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum SboxType {
     Cube,
     Inverse,
@@ -269,6 +270,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
     let full_rounds_beginning = params.full_rounds_beginning;
     let partial_rounds = params.partial_rounds;
     let full_rounds_end = params.full_rounds_end;
+    let total_rounds = full_rounds_beginning + partial_rounds + full_rounds_end;
 
     // ------------ First full_rounds_beginning rounds begin --------------------
 
@@ -337,6 +339,11 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
         for i in 0..width {
             // replace input_vars with simplified next_input_vars
+            /*if next_input_vars[0].len() > total_rounds {
+                input_vars[i] = next_input_vars.remove(0).simplify();
+            } else {
+                input_vars[i] = next_input_vars.remove(0);
+            }*/
             input_vars[i] = next_input_vars.remove(0).simplify();
         }
     }

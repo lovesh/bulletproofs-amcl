@@ -87,12 +87,12 @@ pub fn verify_knowledge_of_preimage_of_mimc(
     let var_l = verifier.commit(commitments[0]);
     let var_r = verifier.commit(commitments[1]);
 
-    let mut left_alloc_scalar = AllocatedQuantity {
+    let left_alloc_scalar = AllocatedQuantity {
         variable: var_l,
         assignment: None,
     };
 
-    let mut right_alloc_scalar = AllocatedQuantity {
+    let right_alloc_scalar = AllocatedQuantity {
         variable: var_r,
         assignment: None,
     };
