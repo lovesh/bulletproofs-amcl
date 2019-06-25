@@ -62,7 +62,7 @@ impl SboxType {
     fn apply_sbox(&self, elem: &FieldElement) -> FieldElement {
         match self {
             SboxType::Cube => {
-                // elem^3. When squaring, don't use elem * elem but elem.square()
+                // elem^3. When squaring, don't use `elem * elem` but `elem.square()`
                 let sqr = elem.square();
                 sqr * elem
             },
@@ -175,9 +175,9 @@ pub fn Poseidon_permutation(
         }
 
         // linear layer
-        for j in 0..width {
-            for i in 0..width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[i][j];
+        for i in 0..width {
+            for j in 0..width {
+                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
             }
         }
 
@@ -200,9 +200,9 @@ pub fn Poseidon_permutation(
         current_state[width - 1] = sbox.apply_sbox(&current_state[width - 1]);
 
         // linear layer
-        for j in 0..width {
-            for i in 0..width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[i][j];
+        for i in 0..width {
+            for j in 0..width {
+                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
             }
         }
 
@@ -214,8 +214,9 @@ pub fn Poseidon_permutation(
     }
 
     // last full Sbox rounds
-    for _ in full_rounds_beginning + partial_rounds
-        ..(full_rounds_beginning + partial_rounds + full_rounds_end)
+    let loop_begin = full_rounds_beginning + partial_rounds;
+    let loop_end = full_rounds_beginning + partial_rounds + full_rounds_end;
+    for _ in loop_begin..loop_end
     {
         // Sbox layer
         for i in 0..width {
@@ -225,9 +226,9 @@ pub fn Poseidon_permutation(
         }
 
         // linear layer
-        for j in 0..width {
-            for i in 0..params.width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[i][j];
+        for i in 0..width {
+            for j in 0..width {
+                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
             }
         }
 
@@ -251,16 +252,17 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
     assert_eq!(input.len(), width);
 
     fn apply_linear_layer(
-        num_branches: usize,
         sbox_outs: Vec<LinearCombination>,
         next_inputs: &mut Vec<LinearCombination>,
         matrix_2: &Vec<Vec<FieldElement>>,
     ) {
-        for j in 0..num_branches {
-            for i in 0..num_branches {
-                next_inputs[i] = next_inputs[i].clone() + (matrix_2[i][j] * sbox_outs[j].clone());
+        let width = sbox_outs.len();
+        for i in 0..width {
+            for j in 0..width {
+                next_inputs[i] += (matrix_2[j][i] * sbox_outs[j].clone());
             }
         }
+
     }
 
     let mut input_vars: Vec<LinearCombination> = input;
@@ -281,7 +283,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         for i in 0..width {
             let round_key = params.round_keys[round_keys_offset];
             sbox_outputs[i] = sbox_type
-                .synthesize_sbox(cs, input_vars[i].clone(), round_key.clone())?
+                .synthesize_sbox(cs, input_vars[i].clone(), round_key)?
                 .into();
 
             round_keys_offset += 1;
@@ -290,7 +292,6 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         let mut next_input_vars: Vec<LinearCombination> = vec![LinearCombination::default(); width];
 
         apply_linear_layer(
-            width,
             sbox_outputs,
             &mut next_input_vars,
             &params.MDS_matrix,
@@ -317,10 +318,10 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
             // Here the last one is chosen but the choice is arbitrary.
             if i == width - 1 {
                 sbox_outputs[i] = sbox_type
-                    .synthesize_sbox(cs, input_vars[i].clone(), round_key.clone())?
+                    .synthesize_sbox(cs, input_vars[i].clone(), round_key)?
                     .into();
             } else {
-                sbox_outputs[i] = input_vars[i].clone() + LinearCombination::from(round_key);
+                sbox_outputs[i] = input_vars[i].clone() + round_key;
             }
 
             round_keys_offset += 1;
@@ -331,7 +332,6 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         let mut next_input_vars: Vec<LinearCombination> = vec![LinearCombination::default(); width];
 
         apply_linear_layer(
-            width,
             sbox_outputs,
             &mut next_input_vars,
             &params.MDS_matrix,
@@ -339,12 +339,8 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
         for i in 0..width {
             // replace input_vars with simplified next_input_vars
-            /*if next_input_vars[0].len() > total_rounds {
-                input_vars[i] = next_input_vars.remove(0).simplify();
-            } else {
-                input_vars[i] = next_input_vars.remove(0);
-            }*/
             input_vars[i] = next_input_vars.remove(0).simplify();
+            //println!("len={}", input_vars[i].len());
         }
     }
 
@@ -362,7 +358,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         for i in 0..width {
             let round_key = params.round_keys[round_keys_offset];
             sbox_outputs[i] = sbox_type
-                .synthesize_sbox(cs, input_vars[i].clone(), round_key.clone())?
+                .synthesize_sbox(cs, input_vars[i].clone(), round_key)?
                 .into();
 
             round_keys_offset += 1;
@@ -373,7 +369,6 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         let mut next_input_vars: Vec<LinearCombination> = vec![LinearCombination::default(); width];
 
         apply_linear_layer(
-            width,
             sbox_outputs,
             &mut next_input_vars,
             &params.MDS_matrix,

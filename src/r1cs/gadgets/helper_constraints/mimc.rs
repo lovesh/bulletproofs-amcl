@@ -60,7 +60,6 @@ pub fn enforce_mimc_2_inputs<CS: ConstraintSystem>(
 
     for j in 0..mimc_rounds {
         // xL, xR := xR + (xL + Ci)^3, xL
-        //let cs = &mut cs.namespace(|| format!("mimc round {}", j));
 
         let const_lc: LinearCombination =
             vec![(Variable::One(), mimc_constants[j])].iter().collect();
@@ -70,7 +69,7 @@ pub fn enforce_mimc_2_inputs<CS: ConstraintSystem>(
         let (l, _, l_sqr) = cs.multiply(left_plus_const.clone(), left_plus_const);
         let (_, _, l_cube) = cs.multiply(l_sqr.into(), l.into());
 
-        let tmp = LinearCombination::from(l_cube) + right_v;
+        let tmp = l_cube + right_v;
         right_v = left_v;
         left_v = tmp;
     }

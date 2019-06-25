@@ -23,7 +23,7 @@ type ProofNode = [FieldElement; 3];
 /// Depth of the tree.
 /// Has to be a multiple of 4.
 // TODO: Remove above restriction.
-pub const TreeDepth: usize = 12;
+pub const TreeDepth: usize = 16;
 
 /// Number of bytes to represent leaf index
 pub const LeafIndexBytes: usize = TreeDepth / 4;
@@ -208,7 +208,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
 ///
 ///                [c0, c1, c2, c3]
 ///
-///                Different arrangements of node for values of p
+///                Different arrangements of node for values of p => (b1b0)
 ///                p=0 => [N, N1, N2, N3]
 ///                p=1 => [N1, N, N2, N3]
 ///                p=2 => [N1, N2, N, N3]
@@ -509,7 +509,7 @@ mod tests {
     fn test_vanilla_sparse_merkle_tree_4() {
         let width = 6;
         let (full_b, full_e) = (4, 4);
-        let partial_rounds = 140;
+        let partial_rounds = 57;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, TreeDepth);
@@ -546,7 +546,7 @@ mod tests {
     fn test_VSMT_4_Verif() {
         let width = 6;
         let (full_b, full_e) = (4, 4);
-        let partial_rounds = 140;
+        let partial_rounds = 57;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
         let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, TreeDepth);
@@ -569,8 +569,8 @@ mod tests {
         let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
-        let G: G1Vector = get_generators("G", 81920).into();
-        let H: G1Vector = get_generators("H", 81920).into();
+        let G: G1Vector = get_generators("G", 8192).into();
+        let H: G1Vector = get_generators("H", 8192).into();
 
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
