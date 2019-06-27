@@ -37,3 +37,4 @@ pub fn gen_challenges(input: &[&G1], state: &mut Vec<u8>, n: usize) -> Vec<Field
     }
     r
 }
+

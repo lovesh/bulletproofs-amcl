@@ -17,3 +17,4 @@ pub mod mimc;
 pub mod non_zero;
 pub mod poseidon;
 pub mod positive_no;
+pub mod sparse_merkle_tree_4_ary;

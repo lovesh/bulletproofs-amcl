@@ -16,7 +16,6 @@ use super::helper_constraints::poseidon::{
 use amcl_wrapper::commitment::commit_to_field_element;
 
 /// Statics are needed to use permutation as a hash function
-///
 /// Allocate padding constant and zeroes for Prover
 pub fn allocate_statics_for_prover(
     prover: &mut Prover,
@@ -297,7 +296,7 @@ mod tests {
     fn test_poseidon_hash_2() {
         let width = 6;
         let (full_b, full_e) = (4, 4);
-        let partial_rounds = 140;
+        let partial_rounds = 57;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         check_hash_2(&hash_params, &SboxType::Cube);

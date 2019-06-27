@@ -7,6 +7,8 @@ use merlin::Transcript;
 use super::super::helper_constraints::constrain_lc_with_scalar;
 use super::super::helper_constraints::non_zero::is_nonzero_gadget;
 
+// Poseidon is described here https://eprint.iacr.org/2019/458
+#[derive(Clone, Debug)]
 pub struct PoseidonParams {
     pub width: usize,
     // Number of full SBox rounds in beginning

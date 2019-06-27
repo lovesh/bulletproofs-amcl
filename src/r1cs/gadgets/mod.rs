@@ -11,5 +11,5 @@ pub mod set_membership_alt;
 pub mod set_non_membership;
 pub mod vsmt_4;
 
-//pub mod randomizer;
+pub mod randomizer;
 //pub mod jubjub;
