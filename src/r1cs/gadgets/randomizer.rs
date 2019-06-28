@@ -25,7 +25,7 @@ use super::helper_constraints::sparse_merkle_tree_4_ary::{
 use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
-use crate::r1cs::gadgets::poseidon::{allocate_statics_for_prover, allocate_statics_for_verifier};
+use crate::r1cs::gadgets::poseidon_hash::{allocate_statics_for_prover, allocate_statics_for_verifier};
 
 /// Hash to get a new number. For other variations a keyed permutation should be used.
 fn randomize(x: &FieldElement) -> FieldElement {

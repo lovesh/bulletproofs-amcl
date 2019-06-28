@@ -5,7 +5,7 @@ pub mod bound_check;
 mod helper_constraints;
 pub mod mimc;
 pub mod non_zero;
-pub mod poseidon;
+pub mod poseidon_hash;
 pub mod set_membership;
 pub mod set_membership_alt;
 pub mod set_non_membership;

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use rand::{CryptoRng, RngCore};
 
-use crate::r1cs::gadgets::poseidon::{allocate_statics_for_prover, allocate_statics_for_verifier};
+use crate::r1cs::gadgets::poseidon_hash::{allocate_statics_for_prover, allocate_statics_for_verifier};
 
 use super::helper_constraints::poseidon::{
     PoseidonParams, SboxType

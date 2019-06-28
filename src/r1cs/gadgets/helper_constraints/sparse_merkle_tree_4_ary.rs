@@ -13,7 +13,6 @@ use super::constrain_lc_with_scalar;
 use super::poseidon::{
     PoseidonParams, Poseidon_hash_4, Poseidon_hash_4_constraints, SboxType, PADDING_CONST,
 };
-use crate::r1cs::gadgets::poseidon::{allocate_statics_for_prover, allocate_statics_for_verifier};
 
 pub type DBVal = [FieldElement; 4];
 pub type ProofNode = [FieldElement; 3];
