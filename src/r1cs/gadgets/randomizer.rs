@@ -185,6 +185,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
             new_tree_modified_nodes.insert(path.clone(), orig_val_lc.clone());
         }
     }
+
     cs.constrain(new_tree_modified_nodes[&root_key].clone() - orig_root.variable);
 
     Ok(())
@@ -368,13 +369,16 @@ mod tests {
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 8;
-        let data_size = 1500;
-        let count_modified = 5;
+        let data_size = 150;
+        let count_modified = 10;
         let original_data = FieldElementVector::random(data_size);
         let nonce = FieldElement::random();
         let indices = get_indices_to_modify(&nonce, data_size, count_modified);
 
-        println!("Total entries {}. Trying to modify {} entries. Will modify {} entries", data_size, count_modified, indices.len());
+        println!("Total entries {}. Trying to modify {} entries.", data_size, count_modified);
+        if count_modified != indices.len() {
+            println!("Will modify {} entries", indices.len());
+        }
         /*let mut indices: HashSet<FieldElement> = HashSet::new();
         indices.insert(FieldElement::from(0u32));
         indices.insert(FieldElement::from(1u32));
@@ -425,8 +429,8 @@ mod tests {
         let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
-        let G: G1Vector = get_generators("G", 32768).into();
-        let H: G1Vector = get_generators("H", 32768).into();
+        let G: G1Vector = get_generators("G", 65536).into();
+        let H: G1Vector = get_generators("H", 65536).into();
 
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());

@@ -43,7 +43,7 @@ pub fn get_base_4_repr(scalar: &FieldElement, limit_bytes: usize) -> Vec<u8> {
 }
 
 // TODO: ABSTRACT HASH FUNCTION BETTER
-/// Sparse merkle tree with width 4, .i.e each node has 4 children.
+/// Sparse merkle tree with arity 4, .i.e each node has 4 children.
 #[derive(Clone, Debug)]
 pub struct VanillaSparseMerkleTree_4<'a> {
     pub depth: usize,

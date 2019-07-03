@@ -212,11 +212,6 @@ mod tests {
         for i in 0..kvs.len() {
             assert_eq!(kvs[i].1, tree.get(kvs[i].0, &mut None));
         }
-
-        let f = FieldElement::from(5u32);
-        let s = FieldElement::from(8u32);
-        tree.update(f, s);
-        assert_eq!(s, tree.get(f, &mut None));
     }
 
     #[test]

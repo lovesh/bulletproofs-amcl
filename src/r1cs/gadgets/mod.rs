@@ -9,7 +9,7 @@ pub mod poseidon_hash;
 pub mod set_membership;
 pub mod set_membership_alt;
 pub mod set_non_membership;
-pub mod vsmt_4;
+pub mod sparse_merkle_tree_4_ary;
 
 pub mod randomizer;
 //pub mod jubjub;
