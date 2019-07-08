@@ -19,3 +19,5 @@ pub mod poseidon;
 pub mod positive_no;
 pub mod sparse_merkle_tree_4_ary;
 pub mod sparse_merkle_tree_8_ary;
+pub mod bit;
+pub mod vector_sum;

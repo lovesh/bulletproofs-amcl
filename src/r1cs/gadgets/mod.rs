@@ -12,4 +12,5 @@ pub mod set_non_membership;
 pub mod sparse_merkle_tree_4_ary;
 
 pub mod randomizer;
+pub mod difference;
 //pub mod jubjub;

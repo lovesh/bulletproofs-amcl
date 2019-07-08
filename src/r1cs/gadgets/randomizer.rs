@@ -1,7 +1,7 @@
 /// Gadget to prove that 2 merkle trees have only few leaves different.
 /// The leaves that are chosen different is based on value of the nonce
 /// It is known to verifier which leaves are distorted.
-/// The circuit should take the original data root, distorted data and the original pixels which were distorted.
+/// The circuit should take the original data root, distorted data and the original data points which were distorted.
 /// The idea is that the circuit will take call update as many times as the number of distorted leaves and eventually the root should match
 
 use std::collections::{HashSet, HashMap};
@@ -28,12 +28,12 @@ use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variab
 use crate::r1cs::gadgets::poseidon_hash::{allocate_statics_for_prover, allocate_statics_for_verifier};
 
 /// Hash to get a new number. For other variations a keyed permutation should be used.
-fn randomize(x: &FieldElement) -> FieldElement {
+pub fn randomize(x: &FieldElement) -> FieldElement {
     FieldElement::from_msg_hash(&x.to_bytes())
 }
 
 /// Generate `count_modified` numbers in range [0, data_size) using `nonce`. Uses SHAKE.
-fn get_indices_to_modify(nonce: &FieldElement, data_size: usize, count_modified: usize) -> HashSet<FieldElement> {
+pub fn get_indices_to_modify(nonce: &FieldElement, data_size: usize, count_modified: usize) -> HashSet<FieldElement> {
     let mut hasher = SHA3::new(SHAKE256);
     for b in nonce.to_bytes() {
         hasher.process(b);
@@ -56,7 +56,7 @@ fn get_indices_to_modify(nonce: &FieldElement, data_size: usize, count_modified:
     indices
 }
 
-fn get_randomized_data(original_data: &FieldElementVector, indices: &HashSet<FieldElement>) -> (HashMap<FieldElement, FieldElement>, FieldElementVector) {
+pub fn get_randomized_data(original_data: &FieldElementVector, indices: &HashSet<FieldElement>) -> (HashMap<FieldElement, FieldElement>, FieldElementVector) {
     // Keeps original values of the modified indices.
     let mut modified_indices = HashMap::<FieldElement, FieldElement>::new();
     let mut new_data = original_data.clone();
@@ -369,8 +369,8 @@ mod tests {
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 8;
-        let data_size = 150;
-        let count_modified = 10;
+        let data_size = 1500;
+        let count_modified = 5;
         let original_data = FieldElementVector::random(data_size);
         let nonce = FieldElement::random();
         let indices = get_indices_to_modify(&nonce, data_size, count_modified);
