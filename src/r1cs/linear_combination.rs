@@ -2,7 +2,7 @@ use amcl_wrapper::field_elem::FieldElement;
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use std::ops::{Add, Mul, Neg, Sub, AddAssign};
+use std::ops::{Add, AddAssign, Mul, Neg, Sub};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Variable {

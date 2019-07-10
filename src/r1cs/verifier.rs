@@ -529,7 +529,6 @@ impl<'a> Verifier<'a> {
     }
 }
 
-
 impl<'a, 'b> ConstraintSystem for RandomizingVerifier<'a> {
     type RandomizedCS = Self;
 
