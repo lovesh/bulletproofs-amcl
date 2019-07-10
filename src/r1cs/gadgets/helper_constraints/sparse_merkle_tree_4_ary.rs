@@ -17,24 +17,29 @@ use super::poseidon::{
 pub type DBVal = [FieldElement; 4];
 pub type ProofNode = [FieldElement; 3];
 
-/// Get a base 4 representation of the given `scalar`. Only process `limit_bytes` of the scalar
-pub fn get_base_4_repr(scalar: &FieldElement, limit_bytes: usize) -> Vec<u8> {
-    if limit_bytes > MODBYTES {
+
+fn get_byte_size(num_digits: usize) -> usize {
+    num_digits / 4 + { if num_digits % 4 == 0 {0} else {1}}
+}
+
+/// Get a base 4 representation of the given `scalar`. Only return `num_digits` of the representation
+pub fn get_base_4_repr(scalar: &FieldElement, num_digits: usize) -> Vec<u8> {
+    let byte_size = get_byte_size(num_digits);
+    if byte_size > MODBYTES {
         panic!(
             "limit_bytes cannot be more than {} but found {}",
-            MODBYTES, limit_bytes
+            MODBYTES, byte_size
         )
     }
-    let d = limit_bytes * 4; // number of base 4 digits
     let mut s = scalar.to_bignum();
     s.norm();
 
     let mut base_4 = vec![];
-    while (base_4.len() != d) && (!s.iszilch()) {
+    while (base_4.len() != num_digits) && (!s.iszilch()) {
         base_4.push(s.lastbits(2) as u8);
         s.fshr(2);
     }
-    while base_4.len() != d {
+    while base_4.len() != num_digits {
         base_4.push(0);
     }
 
@@ -55,10 +60,6 @@ pub struct VanillaSparseMerkleTree_4<'a> {
 
 impl<'a> VanillaSparseMerkleTree_4<'a> {
     pub fn new(hash_params: &'a PoseidonParams, depth: usize) -> VanillaSparseMerkleTree_4<'a> {
-        if (depth % 4) != 0 {
-            panic!("Tree depth should be a multiple of 4");
-        }
-        let depth = depth;
         let mut db = HashMap::new();
         let mut empty_tree_hashes: Vec<FieldElement> = vec![];
         empty_tree_hashes.push(FieldElement::zero());
@@ -176,8 +177,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
     }
 
     pub fn leaf_index_to_path(idx: &FieldElement, depth: usize) -> Vec<u8> {
-        let leaf_index_byte_size = depth / 4;
-        get_base_4_repr(idx, leaf_index_byte_size).to_vec()
+        get_base_4_repr(idx, depth).to_vec()
     }
 
     fn update_db_with_key_val(&mut self, key: &FieldElement, val: DBVal) {
@@ -247,11 +247,15 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
         b
     });
 
-    let leaf_index_byte_size = depth / 4;
+    let leaf_index_byte_size = get_byte_size(depth);
     // Each leaf index can take upto leaf_index_byte_size bytes so for each byte
     for i in 0..leaf_index_byte_size {
         // Decompose each byte into 4 parts of 2 bits each. For each 2 bits
         for j in 0..4 {
+            // The depth might not be a multiple of 4 so there might not be 4 base 4 digits
+            if proof_nodes.is_empty() {
+                break
+            }
             // Check that both 2 bits are actually bits, .i.e. they both are 0 and 1
             let (b0, b0_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
                 let bit = (l[i] >> 2 * j) & 1;
@@ -345,4 +349,47 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     constrain_lc_with_scalar::<CS>(cs, prev_hash, expected_root);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vanilla_sparse_merkle_tree_4() {
+        let width = 6;
+        let (full_b, full_e) = (4, 4);
+        let partial_rounds = 57;
+        let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
+
+        let tree_depth = 17;
+        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
+
+        for i in 1..10 {
+            let s = FieldElement::from(i as u64);
+            tree.update(s, s);
+        }
+
+        for i in 1..10 {
+            let s = FieldElement::from(i as u32);
+            assert_eq!(s, tree.get(s, &mut None));
+            let mut proof_vec = Vec::<ProofNode>::new();
+            let mut proof = Some(proof_vec);
+            assert_eq!(s, tree.get(s, &mut proof));
+            proof_vec = proof.unwrap();
+            assert!(tree.verify_proof(s, s, &proof_vec, None));
+            assert!(tree.verify_proof(s, s, &proof_vec, Some(&tree.root)));
+        }
+
+        let kvs: Vec<(FieldElement, FieldElement)> = (0..10)
+            .map(|_| (FieldElement::random(), FieldElement::random()))
+            .collect();
+        for i in 0..kvs.len() {
+            tree.update(kvs[i].0, kvs[i].1);
+        }
+
+        for i in 0..kvs.len() {
+            assert_eq!(kvs[i].1, tree.get(kvs[i].0, &mut None));
+        }
+    }
 }

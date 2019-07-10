@@ -38,13 +38,13 @@ pub fn difference_gadget<CS: ConstraintSystem>(
 
         // diff * (1 - 1_or_0) = 0
         let one_minus_var_1_or_0 = Variable::One() - var_1_or_0;
-        let (a, b, o) = cs.multiply(var_diff.into(), one_minus_var_1_or_0);
+        let (_, _, o) = cs.multiply(var_diff.into(), one_minus_var_1_or_0);
         cs.constrain(o.into());
 
         result.push(var_1_or_0);
     }
 
-    vector_sum_constraints::<CS>(cs, result, count_different);
+    vector_sum_constraints::<CS>(cs, result, count_different)?;
 
     Ok(())
 }
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_set_difference() {
-        let data_size = 1500;
+        let data_size = 150;
         let count_modified = 5;
         let original_data = FieldElementVector::random(data_size);
         let nonce = FieldElement::random();

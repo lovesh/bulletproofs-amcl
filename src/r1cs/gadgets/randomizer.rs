@@ -101,7 +101,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
         let mut orig_vals_proof = &mut orig_vals_proofs[i];
 
         let mut path_for_update = VanillaSparseMerkleTree_4::leaf_index_to_path(&idx, depth);
-        let mut path_for_get = path_for_update.clone(); // Path from root to leaf
+        let path_for_get = path_for_update.clone(); // Path from root to leaf
         path_for_update.reverse();  // Path from leaf to root
 
         //println!("path val={:?}", &idx.to_bignum().w[0]);
@@ -133,7 +133,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
         let mut cur_prefix: Vec<u8> = vec![];
 
         for pos in path_for_get.iter() {
-            let mut children = new_tree.db.get(&cur_node.to_bytes()).unwrap().to_vec();
+            let children = new_tree.db.get(&cur_node.to_bytes()).unwrap().to_vec();
             cur_node = children[*pos as usize].clone();
             for (k, c) in children.iter().enumerate() {
                 let mut key = cur_prefix.clone();
@@ -369,7 +369,7 @@ mod tests {
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 8;
-        let data_size = 1500;
+        let data_size = 150;
         let count_modified = 5;
         let original_data = FieldElementVector::random(data_size);
         let nonce = FieldElement::random();
@@ -399,8 +399,8 @@ mod tests {
         // `new_data` is different from `original_data` only in `count_modified` values.
         // Check by creating sets over `new_data` and `original_data` and then intersecting them.
         // The intersection should have `data_size - count_modified` values.
-        let mut orig_data_set: HashSet<&FieldElement> = original_data.iter().collect();
-        let mut new_data_set: HashSet<&FieldElement> = new_data.iter().collect();
+        let orig_data_set: HashSet<&FieldElement> = original_data.iter().collect();
+        let new_data_set: HashSet<&FieldElement> = new_data.iter().collect();
         let intersection: HashSet<_> = orig_data_set.intersection(&new_data_set).collect();
         assert_eq!(intersection.len(), data_size - count_modified);
 

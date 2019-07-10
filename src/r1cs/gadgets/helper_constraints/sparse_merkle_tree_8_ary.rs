@@ -13,6 +13,7 @@ use super::constrain_lc_with_scalar;
 use super::poseidon::{
     PoseidonParams, Poseidon_hash_8, Poseidon_hash_8_constraints, SboxType, PADDING_CONST,
 };
+use crate::r1cs::gadgets::helper_constraints::poseidon::ZERO_CONST;
 
 const ARITY: usize = 8;
 
@@ -60,14 +61,13 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         if (depth % ARITY) != 0 {
             panic!("Tree depth should be a multiple of {}", ARITY);
         }
-        let depth = depth;
         let mut db = HashMap::new();
         let mut empty_tree_hashes: Vec<FieldElement> = vec![];
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
             let prev = empty_tree_hashes[i - 1];
             let input: [FieldElement; ARITY] = [prev.clone(); ARITY];
-            // Hash all 4 children at once
+            // Hash all 8 children at once
             let new = Poseidon_hash_8(input.clone(), hash_params, &SboxType::Quint);
             let key = new.to_bytes();
 
@@ -185,6 +185,24 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
     fn update_db_with_key_val(&mut self, key: &FieldElement, val: DBVal) {
         self.db.insert(key.to_bytes(), val);
     }
+}
+
+pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
+    cs: &mut CS,
+    depth: usize,
+    expected_root: &FieldElement,
+    leaf_val: AllocatedQuantity,
+    leaf_index: AllocatedQuantity,
+    mut proof_nodes: Vec<AllocatedQuantity>,
+    zero: AllocatedQuantity,
+    poseidon_params: &PoseidonParams,
+    sbox_type: &SboxType,
+) -> Result<(), R1CSError> {
+    let mut prev_hash = LinearCombination::from(leaf_val.variable);
+
+    let zero: LinearCombination = zero.variable.into();
+
+    unimplemented!()
 }
 
 #[cfg(test)]

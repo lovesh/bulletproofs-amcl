@@ -19,12 +19,6 @@ use super::helper_constraints::sparse_merkle_tree_4_ary::{
     DBVal, ProofNode, VanillaSparseMerkleTree_4, vanilla_merkle_merkle_tree_4_verif_gadget
 };
 
-/// Depth of the tree.
-/// Has to be a multiple of 4.
-// TODO: Remove above restriction.
-pub const TreeDepth: usize = 16;
-
-
 pub fn gen_proof_of_leaf_inclusion_4_ary_merkle_tree<R: RngCore + CryptoRng>(
     leaf: FieldElement,
     leaf_index: FieldElement,
@@ -178,50 +172,14 @@ mod tests {
     use crate::utils::get_generators;
 
     #[test]
-    fn test_vanilla_sparse_merkle_tree_4() {
-        let width = 6;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
-        let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-
-        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, TreeDepth);
-
-        for i in 1..10 {
-            let s = FieldElement::from(i as u64);
-            tree.update(s, s);
-        }
-
-        for i in 1..10 {
-            let s = FieldElement::from(i as u32);
-            assert_eq!(s, tree.get(s, &mut None));
-            let mut proof_vec = Vec::<ProofNode>::new();
-            let mut proof = Some(proof_vec);
-            assert_eq!(s, tree.get(s, &mut proof));
-            proof_vec = proof.unwrap();
-            assert!(tree.verify_proof(s, s, &proof_vec, None));
-            assert!(tree.verify_proof(s, s, &proof_vec, Some(&tree.root)));
-        }
-
-        let kvs: Vec<(FieldElement, FieldElement)> = (0..10)
-            .map(|_| (FieldElement::random(), FieldElement::random()))
-            .collect();
-        for i in 0..kvs.len() {
-            tree.update(kvs[i].0, kvs[i].1);
-        }
-
-        for i in 0..kvs.len() {
-            assert_eq!(kvs[i].1, tree.get(kvs[i].0, &mut None));
-        }
-    }
-
-    #[test]
     fn test_VSMT_4_Verif() {
         let width = 6;
         let (full_b, full_e) = (4, 4);
         let partial_rounds = 57;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, TreeDepth);
+        let tree_depth = 6;
+        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
 
         for i in 1..=10 {
             let s = FieldElement::from(i as u32);
