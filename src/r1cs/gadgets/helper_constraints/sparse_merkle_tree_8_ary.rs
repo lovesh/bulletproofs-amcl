@@ -12,7 +12,7 @@ use amcl_wrapper::group_elem_g1::G1;
 use super::poseidon::{
     PoseidonParams, Poseidon_hash_8, Poseidon_hash_8_constraints, SboxType, PADDING_CONST,
 };
-use super::{constrain_lc_with_scalar, get_byte_size};
+use super::{constrain_lc_with_scalar, get_byte_size, get_bit_count};
 use crate::r1cs::gadgets::helper_constraints::poseidon::ZERO_CONST;
 
 const ARITY: usize = 8;
@@ -212,7 +212,14 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
 ///
 ///                Arithmetic relations for c0, c1, c2, c3, c4, c5, c6, c7
 ///
-///                TODO: add constraints
+///                c0 = (1-b0)*(1-b1)*(1-b2)*N + (1-(1-b0)*(1-b1)*(1-b2))N1
+///                c1 = (1 - (1-b1)*(1-b2))*N2 + (1-b1)*(1-b2)*b0*N + (1-b1)*(1-b2)*(1-b0)*N1
+///                c2 = (1-b1)*(1-b2)*N2 + (1-b0)*(1-b2)*b1*N + (1-(1-b0*b1)(1-b2))*N3
+///                c3 = (1-b2)(1-b0*b1)*N3 + (1-b2)*b0*b1*N + b2*N4
+///                c4 = (1 - b2) * N4 + b2 * (1 - b0) * (1 - b1) * N + b2 * (1 - (1-b1)*(1-b0)) * N5
+///                c5 = (1 - b2 * (1 - (1 - b0) * (1 - b1))) * N5 + b2 * b1 * N6 + b2 * (1 - b1) * b0 * N
+///                c6 = b0*b1*b2*N7 + b2*(1-b0)*b1*N + (1-b1*b2)*N6
+///                c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
 ///
 pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -236,60 +243,79 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
     let four = FieldElement::from(4u64);
     let eight = FieldElement::from(8u64);
 
-    let leaf_index_bytes = leaf_index.assignment.map(|l| {
-        let mut b: [u8; MODBYTES] = [0u8; MODBYTES];
-        let mut m = l.to_bignum();
-        m.tobytes(&mut b);
+    let leaf_index_octets = leaf_index.assignment.map(|l| {
+        let mut b = get_base_8_repr(&l, depth);
         b.reverse();
         b
     });
 
-    let leaf_index_byte_size = get_byte_size(depth, 8);
-    // Each leaf index can take upto leaf_index_byte_size bytes so for each byte
-    for i in 0..leaf_index_byte_size {
-        // Decompose each byte into 3 parts, 2 parts of 3 bits and 1 part of 2 bits. For each parts
-        for j in 0..3 {
-            // The depth might not be a multiple of 8 so there might not be 3 base 8 digits
-            if proof_nodes.is_empty() {
-                break;
-            }
-
-            // Check each bit is actually a bit, .i.e. 0 or 1
-            let (b0, b0_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
-                let bit = (l[i] >> 3 * j) & 1;
-                (bit.into(), (1 - bit).into())
-            }))?;
-            cs.constrain(o.into());
-            cs.constrain(b0 + (b0_1 - FieldElement::one()));
-
-            let (b1, b1_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
-                let bit = (l[i] >> (3 * j + 1)) & 1;
-                (bit.into(), (1 - bit).into())
-            }))?;
-            cs.constrain(o.into());
-            cs.constrain(b1 + (b1_1 - FieldElement::one()));
-
-            // The 3 bits should represent the base 8 digit for the node in path to leaf
-            // Add (4*b2 + 2*b1 + b0)*8^(3*i+j) to constraint_leaf_index.
-            // (4*b2 + 2*b1 + b0)*8^(3*i+j) = 4*8^(3*i+j)*b2 + 2*8^(3*i+j)*b1 + 8^(3*i+j)*b0
-            constraint_leaf_index.push((b1, two * exp_8));
-            constraint_leaf_index.push((b0, exp_8));
-
-            if j != 2 {
-                let (b2, b2_1, o) = cs.allocate_multiplier(leaf_index_bytes.map(|l| {
-                    let bit = (l[i] >> (3 * j + 2)) & 1;
-                    (bit.into(), (1 - bit).into())
-                }))?;
-                cs.constrain(o.into());
-                cs.constrain(b2 + (b2_1 - FieldElement::one()));
-
-                constraint_leaf_index.push((b2, four * exp_8));
-            }
-
-            // TODO: Add constraints for hashing proof nodes
-
-            exp_8 = exp_8 * eight;
+    let leaf_index_bit_count = get_bit_count(depth, 8);
+    for i in (0..leaf_index_bit_count).step_by(3) {
+        if proof_nodes.is_empty() {
+            break;
         }
+
+        // Check each bit is actually a bit, .i.e. 0 or 1
+        let (bit0, bit1, bit2) = match &leaf_index_octets {
+            Some(l) => {
+                let b0 = (l[i/3] >> 0) & 1;
+                let b0_1 = (1 - b0);
+                let b1 = (l[i/3] >> 1) & 1;
+                let b1_1 = (1 - b1);
+                let b2 = (l[i/3] >> 2) & 1;
+                let b2_1 = (1 - b2);
+                (
+                    Some((FieldElement::from(b0), FieldElement::from(b0_1))),
+                    Some((FieldElement::from(b1), FieldElement::from(b1_1))),
+                    Some((FieldElement::from(b2), FieldElement::from(b2_1)))
+                )
+            },
+            None => {
+                (None, None, None)
+            }
+        };
+
+        let (b0, b0_1, o) = cs.allocate_multiplier(bit0)?;
+        cs.constrain(o.into());
+        cs.constrain(b0 + (b0_1 - FieldElement::one()));
+
+        let (b1, b1_1, o) = cs.allocate_multiplier(bit1)?;
+        cs.constrain(o.into());
+        cs.constrain(b1 + (b1_1 - FieldElement::one()));
+
+        let (b2, b2_1, o) = cs.allocate_multiplier(bit2)?;
+        cs.constrain(o.into());
+        cs.constrain(b2 + (b2_1 - FieldElement::one()));
+
+        // The 3 bits should represent the base 8 digit for the node in path to leaf
+        // Add (4*b2 + 2*b1 + b0)*8^(i/3) to constraint_leaf_index.
+        // (4*b2 + 2*b1 + b0)*8^(i/3) = 4*8^(i/3)*b2 + 2*8^(i/3)*b1 + 8^(i/3)*b0
+        constraint_leaf_index.push((b0, exp_8));
+        constraint_leaf_index.push((b1, two * exp_8));
+        constraint_leaf_index.push((b2, four * exp_8));
+
+        let N7: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N6: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N5: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N4: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N3: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N2: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N1: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+
+        // Notation: b0_1 = 1 - b0, b1_1 = 1 - b1 and b2_1 = 1 - b2 and prev_hash = N
+        // Pre-compute various products of both bits
+        // (1 - b0)*(1 - b1)
+        let (_, _, b0_1_b1_1) = cs.multiply(b0_1.into(), b1_1.into());
+        // (1 - b0)*b1
+        let (_, _, b0_1_b1) = cs.multiply(b0_1.into(), b1.into());
+        // b0*(1 - b1)
+        let (_, _, b0_b1_1) = cs.multiply(b0.into(), b1_1.into());
+        // b0*b1
+        let (_, _, b0_b1) = cs.multiply(b0.into(), b1.into());
+
+        // TODO: Add Constraints mentioned in comments
+
+        exp_8 = exp_8 * eight;
     }
 
     cs.constrain(constraint_leaf_index.iter().collect());
@@ -297,6 +323,7 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
     // TODO: Check for root equality
 
     unimplemented!()
+    //Ok(())
 }
 
 #[cfg(test)]

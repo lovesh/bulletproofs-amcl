@@ -178,25 +178,13 @@ mod tests {
         let partial_rounds = 57;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-        let tree_depth = 6;
+        let tree_depth = 12;
         let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
 
         for i in 1..=10 {
             let s = FieldElement::from(i as u32);
             tree.update(s, s);
         }
-
-        let mut merkle_proof_vec = Vec::<ProofNode>::new();
-        let mut merkle_proof = Some(merkle_proof_vec);
-        let k = FieldElement::from(7u32);
-        assert_eq!(k, tree.get(k, &mut merkle_proof));
-        merkle_proof_vec = merkle_proof.unwrap();
-        assert!(tree.verify_proof(k, k, &merkle_proof_vec, None));
-        assert!(tree.verify_proof(k, k, &merkle_proof_vec, Some(&tree.root)));
-
-        let mut rng = rand::thread_rng();
-
-        let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
         let G: G1Vector = get_generators("G", 8192).into();
@@ -205,39 +193,52 @@ mod tests {
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
 
-        let label = b"4-aryMerkleTree";
+        for i in vec![3u32, 4u32, 7u32, 8u32, 9u32] {
+            let mut merkle_proof_vec = Vec::<ProofNode>::new();
+            let mut merkle_proof = Some(merkle_proof_vec);
+            let k = FieldElement::from(i);
+            assert_eq!(k, tree.get(k, &mut merkle_proof));
+            merkle_proof_vec = merkle_proof.unwrap();
+            assert!(tree.verify_proof(k, k, &merkle_proof_vec, Some(&tree.root)));
 
-        let (proof, commitments) = gen_proof_of_leaf_inclusion_4_ary_merkle_tree(
-            k.clone(),
-            k.clone(),
-            None,
-            merkle_proof_vec,
-            &tree.root,
-            tree.depth,
-            &hash_params,
-            sbox_type,
-            Some(&mut rng),
-            label,
-            &g,
-            &h,
-            &G,
-            &H,
-        )
-        .unwrap();
+            let mut rng = rand::thread_rng();
 
-        verify_leaf_inclusion_4_ary_merkle_tree(
-            &tree.root,
-            tree.depth,
-            &hash_params,
-            sbox_type,
-            proof,
-            commitments,
-            label,
-            &g,
-            &h,
-            &G,
-            &H,
-        )
-        .unwrap();
+            let sbox_type = &SboxType::Quint;
+
+            let label = b"4-aryMerkleTree";
+
+            let (proof, commitments) = gen_proof_of_leaf_inclusion_4_ary_merkle_tree(
+                k.clone(),
+                k.clone(),
+                None,
+                merkle_proof_vec,
+                &tree.root,
+                tree.depth,
+                &hash_params,
+                sbox_type,
+                Some(&mut rng),
+                label,
+                &g,
+                &h,
+                &G,
+                &H,
+            )
+                .unwrap();
+
+            verify_leaf_inclusion_4_ary_merkle_tree(
+                &tree.root,
+                tree.depth,
+                &hash_params,
+                sbox_type,
+                proof,
+                commitments,
+                label,
+                &g,
+                &h,
+                &G,
+                &H,
+            )
+                .unwrap();
+        }
     }
 }

@@ -1,10 +1,9 @@
 use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 
-/// Represents a degree-1 vector polynomial \\(\mathbf{a} + \mathbf{b} \cdot x\\).
+/// Represents a degree-1 vector polynomial. `A + B*X`.
 pub struct VecPoly1(pub FieldElementVector, pub FieldElementVector);
 
-/// Represents a degree-3 vector polynomial
-/// \\(\mathbf{a} + \mathbf{b} \cdot x + \mathbf{c} \cdot x^2 + \mathbf{d} \cdot x^3 \\).
+/// Represents a degree-3 vector polynomial. `A + B*X + C*X^2 + D*X^3`.
 pub struct VecPoly3(
     pub FieldElementVector,
     pub FieldElementVector,
@@ -12,11 +11,10 @@ pub struct VecPoly3(
     pub FieldElementVector,
 );
 
-/// Represents a degree-2 scalar polynomial \\(a + b \cdot x + c \cdot x^2\\)
+/// Represents a degree-2 scalar polynomial `a + b*x + c*x^2`
 pub struct Poly2(pub FieldElement, pub FieldElement, pub FieldElement);
 
-/// Represents a degree-6 scalar polynomial, without the zeroth degree
-/// \\(a \cdot x + b \cdot x^2 + c \cdot x^3 + d \cdot x^4 + e \cdot x^5 + f \cdot x^6\\)
+/// Represents a degree-6 scalar polynomial, without the zeroth degree. `b*x + c*x^2 + d*x^3 + e*x^5 + f*x^6`
 pub struct Poly6 {
     pub t1: FieldElement,
     pub t2: FieldElement,

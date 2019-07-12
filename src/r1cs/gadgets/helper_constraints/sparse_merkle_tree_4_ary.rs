@@ -13,6 +13,7 @@ use super::poseidon::{
     PoseidonParams, Poseidon_hash_4, Poseidon_hash_4_constraints, SboxType, PADDING_CONST,
 };
 use super::{constrain_lc_with_scalar, get_byte_size};
+use crate::r1cs::gadgets::helper_constraints::allocated_leaf_index_to_bytes;
 
 pub type DBVal = [FieldElement; 4];
 pub type ProofNode = [FieldElement; 3];
@@ -205,13 +206,13 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
 ///
 ///                Arithmetic relations for c0, c1, c2 and c3
 ///
-///                c0 = (1-b0)*(1-b1)*N + b0*N1 + (1-b0)*b1*N1
+///                c0 = (1-b0)*(1-b1)*N + (1 - (1-b0)*(1-b1))*N1
 ///
-///                c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + (1-b0)*b1*N2 + b0*b1*N2
+///                c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + b1*N2
 ///
 ///                c2 = (1-b1)*N2 + (1-b0)*b1*N + b0*b1*N3
 ///
-///                c3 = (1-b1)*N3 + (1-b0)*b1*N3 + b1*b0*N
+///                c3 = (1-b1*b0)*N3 + b1*b0*N
 ///
 pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
@@ -234,13 +235,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     let two = FieldElement::from(2u64);
     let four = FieldElement::from(4u64);
 
-    let leaf_index_bytes = leaf_index.assignment.map(|l| {
-        let mut b: [u8; MODBYTES] = [0u8; MODBYTES];
-        let mut m = l.to_bignum();
-        m.tobytes(&mut b);
-        b.reverse();
-        b
-    });
+    let leaf_index_bytes= allocated_leaf_index_to_bytes(leaf_index);
 
     let leaf_index_byte_size = get_byte_size(depth, 4);
     // Each leaf index can take upto leaf_index_byte_size bytes so for each byte
@@ -291,23 +286,19 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
 
             // (1-b0)*(1-b1)*N
             let (_, _, c0_1) = cs.multiply(b0_1_b1_1.into(), prev_hash.clone());
-            // b0*N1
-            let (_, _, c0_2) = cs.multiply(b0.into(), N1.clone());
-            // (1-b0)*b1*N1
-            let (_, _, c0_3) = cs.multiply(b0_1_b1.into(), N1.clone());
-            // c0 = (1-b0)*(1-b1)*N + b0*N1 + (1-b0)*b1*N1
-            let c0 = c0_1 + c0_2 + c0_3;
+            // (1 - (1-b0)*(1-b1))*N1
+            let (_, _, c0_2) = cs.multiply((Variable::One() - b0_1_b1_1).into(), N1.clone());
+            // c0 = (1-b0)*(1-b1)*N + (b0 + b1 - b0*b1)*N1
+            let c0 = c0_1 + c0_2;
 
             // (1-b0)*(1-b1)*N1
             let (_, _, c1_1) = cs.multiply(b0_1_b1_1.into(), N1.clone());
             // (1-b1)*b0*N
             let (_, _, c1_2) = cs.multiply(b0_b1_1.into(), prev_hash.clone());
-            // (1-b0)*b1*N2
-            let (_, _, c1_3) = cs.multiply(b0_1_b1.into(), N2.clone());
-            // b0*b1*N2
-            let (_, _, c1_4) = cs.multiply(b0_b1.into(), N2.clone());
-            // c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + (1-b0)*b1*N2 + b0*b1*N2
-            let c1 = c1_1 + c1_2 + c1_3 + c1_4;
+            // b1*N2
+            let (_, _, c1_3) = cs.multiply(b1.into(), N2.clone());
+            // c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + b1*N2
+            let c1 = c1_1 + c1_2 + c1_3;
 
             // (1-b1)*N2
             let (_, _, c2_1) = cs.multiply(b1_1.into(), N2.clone());
@@ -318,14 +309,12 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             // c2 = (1-b1)*N2 + (1-b0)*b1*N + b0*b1*N3
             let c2 = c2_1 + c2_2 + c2_3;
 
-            // (1-b1)*N3
-            let (_, _, c3_1) = cs.multiply(b1_1.into(), N3.clone());
-            // (1-b0)*b1*N3
-            let (_, _, c3_2) = cs.multiply(b0_1_b1.into(), N3.clone());
             // b1*b0*N
-            let (_, _, c3_3) = cs.multiply(b0_b1.into(), prev_hash.clone());
-            // c3 = (1-b1)*N3 + (1-b0)*b1*N3 + b1*b0*N
-            let c3 = c3_1 + c3_2 + c3_3;
+            let (_, _, c3_1) = cs.multiply(b0_b1.into(), prev_hash.clone());
+            // (1 - b1*b0)*N
+            let (_, _, c3_2) = cs.multiply((Variable::One() - b0_b1), N3.clone());
+            // c3 = b1*b0*N + (1 - b1*b0)*N
+            let c3 = c3_1 + c3_2;
 
             let input: [LinearCombination; 4] = [c0, c1, c2, c3];
             prev_hash = Poseidon_hash_4_constraints::<CS>(

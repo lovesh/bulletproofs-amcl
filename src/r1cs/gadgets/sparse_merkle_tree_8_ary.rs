@@ -176,7 +176,7 @@ mod tests {
         let partial_rounds = 1;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-        let tree_depth = 6;
+        let tree_depth = 13;
         let mut tree = VanillaSparseMerkleTree_8::new(&hash_params, tree_depth);
 
         for i in 1..=10 {
@@ -197,8 +197,8 @@ mod tests {
         let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
-        let G: G1Vector = get_generators("G", 8192).into();
-        let H: G1Vector = get_generators("H", 8192).into();
+        let G: G1Vector = get_generators("G", 256).into();
+        let H: G1Vector = get_generators("H", 256).into();
 
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
