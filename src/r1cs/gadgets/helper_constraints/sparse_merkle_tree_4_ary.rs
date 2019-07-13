@@ -294,6 +294,8 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             // b0*b1
             let (_, _, b0_b1) = cs.multiply(b0.into(), b1.into());
 
+            // TODO: Look at the changes done in 8-ary tree, some constraints can be eliminated.
+
             // (1-b0)*(1-b1)*N
             let (_, _, c0_1) = cs.multiply(b0_1_b1_1.into(), prev_hash.clone());
             // (1 - (1-b0)*(1-b1))*N1
@@ -334,6 +336,8 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
                 poseidon_params,
                 sbox_type,
             )?;
+
+            prev_hash = prev_hash.simplify();
 
             exp_4 = exp_4 * four;
         }

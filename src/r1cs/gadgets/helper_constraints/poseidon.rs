@@ -274,7 +274,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
     let full_rounds_beginning = params.full_rounds_beginning;
     let partial_rounds = params.partial_rounds;
     let full_rounds_end = params.full_rounds_end;
-    
+
     // ------------ First full_rounds_beginning rounds begin --------------------
 
     for _ in 0..full_rounds_beginning {

@@ -348,12 +348,14 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // (1-b1)*(1-b2)*b0*N
         let (_, _, c1_3) = cs.multiply(c1_2.into(), prev_hash.clone());
         // (1-b1)*(1-b2)*(1-b0)*N1
-        let (_, _, c1_4) = cs.multiply(b0_1_b1_1_b2_1.into(), N1.clone());
+        //let (_, _, c1_4) = cs.multiply(b0_1_b1_1_b2_1.into(), N1.clone());
+        let c1_4 = N1 - c0_2;
         // c1 = (1 - (1-b1)*(1-b2))*N2 + (1-b1)*(1-b2)*b0*N + (1-b1)*(1-b2)*(1-b0)*N1
         let c1 = c1_1 + c1_3 + c1_4;
 
         // (1-b1)*(1-b2)*N2
-        let (_, _, c2_1) = cs.multiply(b1_1_b2_1.into(), N2.clone());
+        // let (_, _, c2_1) = cs.multiply(b1_1_b2_1.into(), N2.clone());
+        let c2_1 = N2 - c1_1;
         // (1-b0)*(1-b2)
         let (_, _, c2_2) = cs.multiply(b0_1.into(), b2_1.into());
         // (1-b0)*(1-b2)*b1
@@ -366,8 +368,9 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let c2 = c2_1 + c2_4 + c2_5;
 
         // (1-b2)*(1-b0*b1)*N3
-        let (_, _, c3_1) = cs.multiply(b01_1_b2_1.into(), N3.clone());
+        //let (_, _, c3_1) = cs.multiply(b01_1_b2_1.into(), N3.clone());
         // XXX: Cant c3_1 be N3 - c2_5? There seem to be several such cases.
+        let c3_1 = N3 - c2_5;
 
         // (1-b2)*b0*b1
         let (_, _, c3_2) = cs.multiply(b2_1.into(), b0_b1.into());
@@ -379,8 +382,9 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let c3 = c3_1 + c3_3 + c3_4;
 
         // (1-b2)*N4
-        let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
+//        let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
         // XXX: Cant c4_1 be N4 - c3_4?
+        let c4_1 = N4 - c3_4;
 
         // b2*(1-b0)*(1-b1)
         let (_, _, c4_2) = cs.multiply(b2.into(), b0_1_b1_1.into());
@@ -394,7 +398,9 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let c4 = c4_1 + c4_3 + c4_5;
 
         // (1-b2*(1-(1-b0)*(1-b1)))*N5
-        let (_, _, c5_1) = cs.multiply((Variable::One() - c4_4).into(), N5.clone());
+        //let (_, _, c5_1) = cs.multiply((Variable::One() - c4_4).into(), N5.clone());
+        let c5_1 = N5 - c4_5;
+
         // b2*b1*N6
         let (_, _, c5_2) = cs.multiply(b1_b2.into(), N6.clone());
         // b2*(1 - b1)
@@ -413,14 +419,16 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // b2*(1-b0)*b1*N
         let (_, _, c6_3) = cs.multiply(c6_2.into(), prev_hash.clone());
         // (1-b1*b2)*N6
-        let (_, _, c6_4) = cs.multiply((Variable::One() - b1_b2).into(), N6.clone());
+        //let (_, _, c6_4) = cs.multiply((Variable::One() - b1_b2).into(), N6.clone());
+        let c6_4 = N6 - c5_2;
         // c6 = b0*b1*b2*N7 + b2*(1-b0)*b1*N + (1-b1*b2)*N6
         let c6 = c6_1 + c6_3 + c6_4;
 
         // b0*b1*b2*N
         let (_, _, c7_1) = cs.multiply(b0_b1_b2.into(), prev_hash.clone());
         // (1-b0*b1*b2)*N7
-        let (_, _, c7_2) = cs.multiply((Variable::One() - b0_b1_b2).into(), N7.clone());
+        //let (_, _, c7_2) = cs.multiply((Variable::One() - b0_b1_b2).into(), N7.clone());
+        let c7_2 = N7 - c6_1;
         // c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
         let c7 = c7_1 + c7_2;
 
@@ -432,6 +440,8 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
             poseidon_params,
             sbox_type,
         )?;
+
+        prev_hash = prev_hash.simplify();
 
         exp_8 = exp_8 * eight;
     }
