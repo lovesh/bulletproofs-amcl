@@ -32,7 +32,7 @@ pub fn difference_gadget<CS: ConstraintSystem>(
 
         // diff * diff_inv = 1_or_0 depending on diff being non-zero or zero
         let (var_diff, _) = cs.allocate_single(val_diff)?;
-        let (var_diff_inv, var_o) = cs.allocate_single(val_diff_inv)?;
+        let (_, var_o) = cs.allocate_single(val_diff_inv)?;
         let var_1_or_0 = var_o.unwrap();
 
         // diff * (1 - 1_or_0) = 0

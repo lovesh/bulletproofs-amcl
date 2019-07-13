@@ -367,7 +367,7 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
 
         // (1-b2)*(1-b0*b1)*N3
         let (_, _, c3_1) = cs.multiply(b01_1_b2_1.into(), N3.clone());
-        // XXX: Cant c3_1 be N3 - c2_4? There seem to be several such cases.
+        // XXX: Cant c3_1 be N3 - c2_5? There seem to be several such cases.
 
         // (1-b2)*b0*b1
         let (_, _, c3_2) = cs.multiply(b2_1.into(), b0_b1.into());
@@ -380,7 +380,7 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
 
         // (1-b2)*N4
         let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
-        // XXX: Cant c4_1 be N4 - c3_3?
+        // XXX: Cant c4_1 be N4 - c3_4?
 
         // b2*(1-b0)*(1-b1)
         let (_, _, c4_2) = cs.multiply(b2.into(), b0_1_b1_1.into());

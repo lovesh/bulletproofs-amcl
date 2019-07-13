@@ -259,7 +259,6 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
-    let width = hash_params.width;
     let total_rounds = hash_params.full_rounds_beginning
         + hash_params.partial_rounds
         + hash_params.full_rounds_end;
@@ -370,7 +369,6 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
-    let width = hash_params.width;
     let total_rounds = hash_params.full_rounds_beginning
         + hash_params.partial_rounds
         + hash_params.full_rounds_end;

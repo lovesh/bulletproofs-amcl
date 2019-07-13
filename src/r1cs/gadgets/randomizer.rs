@@ -106,8 +106,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
 
     for i in 0..indices.len() {
         let idx = indices[i];
-        let orig_val = orig_vals[i];
-        let mut orig_vals_proof = &mut orig_vals_proofs[i];
+        let orig_vals_proof = &mut orig_vals_proofs[i];
 
         let mut path_for_update = VanillaSparseMerkleTree_4::leaf_index_to_path(&idx, depth);
         let path_for_get = path_for_update.clone(); // Path from root to leaf
