@@ -181,39 +181,49 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
     }
 }
 
-/// Constraints for 4-ary tree
-///
-///                Hash all 4 children including the node on the path to leaf.
-///                But the prover cannot disclose at what index the node is in the children.
-///                So he expresses each child arithmetically. An example below for a single level of the tree.
-///
-///                Proof elements = [N1, N2, N3]
-///                Hidden Node (node in path to leaf) = N
-///
-///                Proof elements with placeholder (_p0, _p1, _p2, _p3) where hidden node can go
-///                [_p0, N1, _p1, N2, _p2, N3, _p3]
-///
-///                p = position of hidden node, p =(b1, b0) where b0 and b1 are bits at index 0 and 1
-///                c0, c1, c2, c3 are children of one level of one subtree
-///
-///                [c0, c1, c2, c3]
-///
-///                Different arrangements of node for values of p => (b1b0)
-///                p=0 => [N, N1, N2, N3]
-///                p=1 => [N1, N, N2, N3]
-///                p=2 => [N1, N2, N, N3]
-///                p=3 => [N1, N2, N3, N]
-///
-///                Arithmetic relations for c0, c1, c2 and c3
-///
-///                c0 = (1-b0)*(1-b1)*N + (1 - (1-b0)*(1-b1))*N1
-///
-///                c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + b1*N2
-///
-///                c2 = (1-b1)*N2 + (1-b0)*b1*N + b0*b1*N3
-///
-///                c3 = (1-b1*b0)*N3 + b1*b0*N
-///
+/*
+    Constraints for 4-ary tree
+
+    Hash all 4 children including the node on the path to leaf.
+    But the prover cannot disclose at what index the node is in the children.
+    So he expresses each child arithmetically. An example below for a single level of the tree.
+
+    Proof elements = [N1, N2, N3]
+    Hidden Node (node in path to leaf) = N
+
+    Proof elements with placeholder (_p0, _p1, _p2, _p3) where hidden node can go
+    [_p0, N1, _p1, N2, _p2, N3, _p3]
+
+    p = position of hidden node, p =(b1, b0) where b0 and b1 are bits at index 0 and 1
+    c0, c1, c2, c3 are children of one level of one subtree
+
+    [c0, c1, c2, c3]
+
+    Different arrangements of node for values of p => (b1b0)
+    p=0 => [N, N1, N2, N3]
+    p=1 => [N1, N, N2, N3]
+    p=2 => [N1, N2, N, N3]
+    p=3 => [N1, N2, N3, N]
+
+    Another way of looking at it
+
+    | node   | p=0(0)   | p=1(1)   | p=2(10)   | p=3(11)   |
+    |--------|----------|----------|-----------|-----------|
+    | c0     | N        | N1       | N1        | N1        |
+    | c1     | N1       | N        | N2        | N2        |
+    | c2     | N2       | N2       | N         | N3        |
+    | c3     | N3       | N3       | N3        | N         |
+
+    Arithmetic relations for c0, c1, c2 and c3
+
+    c0 = (1-b0)*(1-b1)*N + (1 - (1-b0)*(1-b1))*N1
+
+    c1 = (1-b0)*(1-b1)*N1 + (1-b1)*b0*N + b1*N2
+
+    c2 = (1-b1)*N2 + (1-b0)*b1*N + b0*b1*N3
+
+    c3 = (1-b1*b0)*N3 + b1*b0*N
+*/
 pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     depth: usize,
@@ -288,7 +298,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             let (_, _, c0_1) = cs.multiply(b0_1_b1_1.into(), prev_hash.clone());
             // (1 - (1-b0)*(1-b1))*N1
             let (_, _, c0_2) = cs.multiply((Variable::One() - b0_1_b1_1).into(), N1.clone());
-            // c0 = (1-b0)*(1-b1)*N + (b0 + b1 - b0*b1)*N1
+            // c0 = (1-b0)*(1-b1)*N + (1 - (1-b0)*(1-b1))*N1
             let c0 = c0_1 + c0_2;
 
             // (1-b0)*(1-b1)*N1

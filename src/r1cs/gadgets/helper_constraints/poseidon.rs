@@ -42,14 +42,16 @@ impl PoseidonParams {
     }
 
     // TODO: Write logic to generate correct round keys.
-    fn gen_round_keys(num_branches: usize, total_rounds: usize) -> Vec<FieldElement> {
-        let cap = (total_rounds + 1) * num_branches;
-        vec![FieldElement::random(); cap]
+    fn gen_round_keys(width: usize, total_rounds: usize) -> Vec<FieldElement> {
+        let cap = (total_rounds + 1) * width;
+        //vec![FieldElement::random(); cap]
+        vec![FieldElement::one(); cap]
     }
 
     // TODO: Write logic to generate correct MDS matrix.
-    fn gen_MDS_matrix(num_branches: usize) -> Vec<Vec<FieldElement>> {
-        vec![vec![FieldElement::random(); num_branches]; num_branches]
+    fn gen_MDS_matrix(width: usize) -> Vec<Vec<FieldElement>> {
+        //vec![vec![FieldElement::random(); width]; width]
+        vec![vec![FieldElement::one(); width]; width]
     }
 }
 

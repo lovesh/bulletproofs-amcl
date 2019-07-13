@@ -183,44 +183,57 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
     }
 }
 
-/// Constraints for 8-ary tree
-///
-///                Hash all 8 children including the node on the path to leaf.
-///                But the prover cannot disclose at what index the node is in the children.
-///                So he expresses each child arithmetically. An example below for a single level of the tree.
-///
-///                Proof elements = [N1, N2, N3, N4, N5, N6, N7]
-///                Hidden Node (node in path to leaf) = N
-///
-///                Proof elements with placeholder (_p0, _p1, _p2, _p3, _p4, _p5, _p6) where hidden node can go
-///                [_p0, N1, _p1, N2, _p2, N3, _p3, N4, _p4, N5, _p5, N6, _p6, N7]
-///
-///                p = position of hidden node, p =(b2, b1, b0) where b0, b1 and b2 are bits at index 0, 1 and 2
-///                c0, c1, c2, c3, c4, c5, c6, c7 are children of one level of one subtree
-///
-///                [c0, c1, c2, c3, c4, c5, c6, c7]
-///
-///                Different arrangements of node for values of p => (b2b1b0)
-///                p=0 => [N, N1, N2, N3, N4, N5, N6, N7]
-///                p=1 => [N1, N, N2, N3, N4, N5, N6, N7]
-///                p=2 => [N1, N2, N, N3, N4, N5, N6, N7]
-///                p=3 => [N1, N2, N3, N, N4, N5, N6, N7]
-///                p=4 => [N1, N2, N3, N4, N, N5, N6, N7]
-///                p=5 => [N1, N2, N3, N4, N5, N, N6, N7]
-///                p=6 => [N1, N2, N3, N4, N5, N6, N, N7]
-///                p=7 => [N1, N2, N3, N4, N5, N6, N7, N]
-///
-///                Arithmetic relations for c0, c1, c2, c3, c4, c5, c6, c7
-///
-///                c0 = (1-b0)*(1-b1)*(1-b2)*N + (1-(1-b0)*(1-b1)*(1-b2))N1
-///                c1 = (1 - (1-b1)*(1-b2))*N2 + (1-b1)*(1-b2)*b0*N + (1-b1)*(1-b2)*(1-b0)*N1
-///                c2 = (1-b1)*(1-b2)*N2 + (1-b0)*(1-b2)*b1*N + (1-(1-b0*b1)(1-b2))*N3
-///                c3 = (1-b2)(1-b0*b1)*N3 + (1-b2)*b0*b1*N + b2*N4
-///                c4 = (1 - b2) * N4 + b2 * (1 - b0) * (1 - b1) * N + b2 * (1 - (1-b1)*(1-b0)) * N5
-///                c5 = (1 - b2 * (1 - (1 - b0) * (1 - b1))) * N5 + b2 * b1 * N6 + b2 * (1 - b1) * b0 * N
-///                c6 = b0*b1*b2*N7 + b2*(1-b0)*b1*N + (1-b1*b2)*N6
-///                c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
-///
+/*
+    Constraints for 8-ary tree
+
+    Hash all 8 children including the node on the path to leaf.
+    But the prover cannot disclose at what index the node is in the children.
+    So he expresses each child arithmetically. An example below for a single level of the tree.
+
+    Proof elements = [N1, N2, N3, N4, N5, N6, N7]
+    Hidden Node (node in path to leaf) = N
+
+    Proof elements with placeholder (_p0, _p1, _p2, _p3, _p4, _p5, _p6) where hidden node can go
+    [_p0, N1, _p1, N2, _p2, N3, _p3, N4, _p4, N5, _p5, N6, _p6, N7]
+
+    p = position of hidden node, p =(b2, b1, b0) where b0, b1 and b2 are bits at index 0, 1 and 2
+    c0, c1, c2, c3, c4, c5, c6, c7 are children of one level of one subtree
+
+    [c0, c1, c2, c3, c4, c5, c6, c7]
+
+    Different arrangements of node for values of p => (b2b1b0)
+    p=0 => [N, N1, N2, N3, N4, N5, N6, N7]
+    p=1 => [N1, N, N2, N3, N4, N5, N6, N7]
+    p=2 => [N1, N2, N, N3, N4, N5, N6, N7]
+    p=3 => [N1, N2, N3, N, N4, N5, N6, N7]
+    p=4 => [N1, N2, N3, N4, N, N5, N6, N7]
+    p=5 => [N1, N2, N3, N4, N5, N, N6, N7]
+    p=6 => [N1, N2, N3, N4, N5, N6, N, N7]
+    p=7 => [N1, N2, N3, N4, N5, N6, N7, N]
+
+    Another way of looking at it
+    | node   | p=0(0)   | p=1(1)   | p=2(10)   | p=3(11)   | p=4(100)   | p=5(101)   | p=6(110)   | p=7(111)   |
+    |--------|----------|----------|-----------|-----------|------------|------------|------------|------------|
+    | c0     | N        | N1       | N1        | N1        | N1         | N1         | N1         | N1         |
+    | c1     | N1       | N        | N2        | N2        | N2         | N2         | N2         | N2         |
+    | c2     | N2       | N2       | N         | N3        | N3         | N3         | N3         | N3         |
+    | c3     | N3       | N3       | N3        | N         | N4         | N4         | N4         | N4         |
+    | c4     | N4       | N4       | N4        | N4        | N          | N5         | N5         | N5         |
+    | c5     | N5       | N5       | N5        | N5        | N5         | N          | N6         | N6         |
+    | c6     | N6       | N6       | N6        | N6        | N6         | N6         | N          | N7         |
+    | c7     | N7       | N7       | N7        | N7        | N7         | N7         | N7         | N          |
+
+    Arithmetic relations for c0, c1, c2, c3, c4, c5, c6, c7
+
+    c0 = (1-b0)*(1-b1)*(1-b2)*N + (1-(1-b0)*(1-b1)*(1-b2))*N1
+    c1 = (1 - (1-b1)*(1-b2))*N2 + (1-b1)*(1-b2)*b0*N + (1-b1)*(1-b2)*(1-b0)*N1
+    c2 = (1-b1)*(1-b2)*N2 + (1-b0)*(1-b2)*b1*N + (1-(1-b0*b1)*(1-b2))*N3
+    c3 = (1-b2)*(1-b0*b1)*N3 + (1-b2)*b0*b1*N + b2*N4
+    c4 = (1-b2)*N4 + b2*(1-b0)*(1-b1)*N + b2*(1-(1-b1)*(1-b0))*N5
+    c5 = (1 - b2 * (1 - (1 - b0) * (1 - b1))) * N5 + b2 * b1 * N6 + b2 * (1 - b1) * b0 * N
+    c6 = b0*b1*b2*N7 + b2*(1-b0)*b1*N + (1-b1*b2)*N6
+    c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
+*/
 pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     depth: usize,
@@ -258,11 +271,12 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // Check each bit is actually a bit, .i.e. 0 or 1
         let (bit0, bit1, bit2) = match &leaf_index_octets {
             Some(l) => {
-                let b0 = (l[i/3] >> 0) & 1;
+                let octet = l[i/3];
+                let b0 = (octet >> 0) & 1;
                 let b0_1 = (1 - b0);
-                let b1 = (l[i/3] >> 1) & 1;
+                let b1 = (octet >> 1) & 1;
                 let b1_1 = (1 - b1);
-                let b2 = (l[i/3] >> 2) & 1;
+                let b2 = (octet >> 2) & 1;
                 let b2_1 = (1 - b2);
                 (
                     Some((FieldElement::from(b0), FieldElement::from(b0_1))),
@@ -303,27 +317,130 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let N1: LinearCombination = proof_nodes.pop().unwrap().variable.into();
 
         // Notation: b0_1 = 1 - b0, b1_1 = 1 - b1 and b2_1 = 1 - b2 and prev_hash = N
-        // Pre-compute various products of both bits
+        // Pre-compute various products of all bits
         // (1 - b0)*(1 - b1)
         let (_, _, b0_1_b1_1) = cs.multiply(b0_1.into(), b1_1.into());
-        // (1 - b0)*b1
-        let (_, _, b0_1_b1) = cs.multiply(b0_1.into(), b1.into());
-        // b0*(1 - b1)
-        let (_, _, b0_b1_1) = cs.multiply(b0.into(), b1_1.into());
+        // (1 - b1)*(1 - b2)
+        let (_, _, b1_1_b2_1) = cs.multiply(b1_1.into(), b2_1.into());
         // b0*b1
         let (_, _, b0_b1) = cs.multiply(b0.into(), b1.into());
+        // b1*b2
+        let (_, _, b1_b2) = cs.multiply(b1.into(), b2.into());
+        // b0*b1*b2
+        let (_, _, b0_b1_b2) = cs.multiply(b0_b1.into(), b2.into());
+        // (1 - b0)*(1 - b1)*(1-b2)
+        let (_, _, b0_1_b1_1_b2_1) = cs.multiply(b0_1_b1_1.into(), b2_1.into());
+        // (1-b0*b1)*(1-b2)
+        let (_, _, b01_1_b2_1) = cs.multiply((Variable::One() - b0_b1).into(), b2_1.into());
 
-        // TODO: Add Constraints mentioned in comments
+        // Constraints for nodes
+        // (1 - b0)*(1 - b1)*(1-b2)*N
+        let (_, _, c0_1) = cs.multiply(b0_1_b1_1_b2_1.into(), prev_hash.clone());
+        // (1 - (1 - b0)*(1 - b1)*(1-b2))*N1
+        let (_, _, c0_2) = cs.multiply((Variable::One() - b0_1_b1_1_b2_1).into(), N1.clone());
+        // c0 = (1 - b0)*(1 - b1)*(1-b2)*N + (1 - (1 - b0)*(1 - b1)*(1-b2))*N1
+        let c0 = c0_1 + c0_2;
+
+        // (1-(1-b1)*(1-b2))*N2
+        let (_, _, c1_1) = cs.multiply((Variable::One() - b1_1_b2_1).into(), N2.clone());
+        // (1-b1)*(1-b2)*b0
+        let (_, _, c1_2) = cs.multiply(b1_1_b2_1.into(), b0.into());
+        // (1-b1)*(1-b2)*b0*N
+        let (_, _, c1_3) = cs.multiply(c1_2.into(), prev_hash.clone());
+        // (1-b1)*(1-b2)*(1-b0)*N1
+        let (_, _, c1_4) = cs.multiply(b0_1_b1_1_b2_1.into(), N1.clone());
+        // c1 = (1 - (1-b1)*(1-b2))*N2 + (1-b1)*(1-b2)*b0*N + (1-b1)*(1-b2)*(1-b0)*N1
+        let c1 = c1_1 + c1_3 + c1_4;
+
+        // (1-b1)*(1-b2)*N2
+        let (_, _, c2_1) = cs.multiply(b1_1_b2_1.into(), N2.clone());
+        // (1-b0)*(1-b2)
+        let (_, _, c2_2) = cs.multiply(b0_1.into(), b2_1.into());
+        // (1-b0)*(1-b2)*b1
+        let (_, _, c2_3) = cs.multiply(c2_2.into(), b1.into());
+        // (1-b0)*(1-b2)*b1*N
+        let (_, _, c2_4) = cs.multiply(c2_3.into(), prev_hash.clone());
+        // (1-(1-b0*b1)*(1-b2))*N3
+        let (_, _, c2_5) = cs.multiply((Variable::One() - b01_1_b2_1).into(), N3.clone());
+        // c2 = (1-b1)*(1-b2)*N2 + (1-b0)*(1-b2)*b1*N + (1-(1-b0*b1)*(1-b2))*N3
+        let c2 = c2_1 + c2_4 + c2_5;
+
+        // (1-b2)*(1-b0*b1)*N3
+        let (_, _, c3_1) = cs.multiply(b01_1_b2_1.into(), N3.clone());
+        // XXX: Cant c3_1 be N3 - c2_4? There seem to be several such cases.
+
+        // (1-b2)*b0*b1
+        let (_, _, c3_2) = cs.multiply(b2_1.into(), b0_b1.into());
+        // (1-b2)*b0*b1*N
+        let (_, _, c3_3) = cs.multiply(c3_2.into(), prev_hash.clone());
+        // b2*N4
+        let (_, _, c3_4) = cs.multiply(b2.into(), N4.clone());
+        // c3 = (1-b2)*(1-b0*b1)*N3 + (1-b2)*b0*b1*N + b2*N4
+        let c3 = c3_1 + c3_3 + c3_4;
+
+        // (1-b2)*N4
+        let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
+        // XXX: Cant c4_1 be N4 - c3_3?
+
+        // b2*(1-b0)*(1-b1)
+        let (_, _, c4_2) = cs.multiply(b2.into(), b0_1_b1_1.into());
+        // b2*(1-b0)*(1-b1)*N
+        let (_, _, c4_3) = cs.multiply(c4_2.into(), prev_hash.clone());
+        // b2*(1-(1-b1)*(1-b0))
+        let (_, _, c4_4) = cs.multiply(b2.into(), (Variable::One() - b0_1_b1_1).into());
+        // b2*(1-(1-b1)*(1-b0))*N5
+        let (_, _, c4_5) = cs.multiply(c4_4.into(), N5.clone());
+        // c4 = (1-b2)*N4 + b2*(1-b0)*(1-b1)*N + b2*(1-(1-b1)*(1-b0))*N5
+        let c4 = c4_1 + c4_3 + c4_5;
+
+        // (1-b2*(1-(1-b0)*(1-b1)))*N5
+        let (_, _, c5_1) = cs.multiply((Variable::One() - c4_4).into(), N5.clone());
+        // b2*b1*N6
+        let (_, _, c5_2) = cs.multiply(b1_b2.into(), N6.clone());
+        // b2*(1 - b1)
+        let (_, _, c5_3) = cs.multiply(b2.into(), b1_1.into());
+        // b2*(1 - b1)*b0
+        let (_, _, c5_4) = cs.multiply(c5_3.into(), b0.into());
+        // b2*(1 - b1)*b0*N
+        let (_, _, c5_5) = cs.multiply(c5_4.into(), prev_hash.clone());
+        // c5 = (1-b2*(1-(1-b0)*(1-b1)))*N5 + b2*b1*N6 + b2*(1 - b1)*b0*N
+        let c5 = c5_1 + c5_2 + c5_5;
+
+        // b0*b1*b2*N7
+        let (_, _, c6_1) = cs.multiply(b0_b1_b2.into(), N7.clone());
+        // b2*(1-b0)*b1
+        let (_, _, c6_2) = cs.multiply(b1_b2.into(), b0_1.into());
+        // b2*(1-b0)*b1*N
+        let (_, _, c6_3) = cs.multiply(c6_2.into(), prev_hash.clone());
+        // (1-b1*b2)*N6
+        let (_, _, c6_4) = cs.multiply((Variable::One() - b1_b2).into(), N6.clone());
+        // c6 = b0*b1*b2*N7 + b2*(1-b0)*b1*N + (1-b1*b2)*N6
+        let c6 = c6_1 + c6_3 + c6_4;
+
+        // b0*b1*b2*N
+        let (_, _, c7_1) = cs.multiply(b0_b1_b2.into(), prev_hash.clone());
+        // (1-b0*b1*b2)*N7
+        let (_, _, c7_2) = cs.multiply((Variable::One() - b0_b1_b2).into(), N7.clone());
+        // c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
+        let c7 = c7_1 + c7_2;
+
+        let input: [LinearCombination; 8] = [c0, c1, c2, c3, c4, c5, c6, c7];
+        prev_hash = Poseidon_hash_8_constraints::<CS>(
+            cs,
+            input,
+            zero.clone(),
+            poseidon_params,
+            sbox_type,
+        )?;
 
         exp_8 = exp_8 * eight;
     }
 
     cs.constrain(constraint_leaf_index.iter().collect());
 
-    // TODO: Check for root equality
+    constrain_lc_with_scalar::<CS>(cs, prev_hash, expected_root);
 
-    unimplemented!()
-    //Ok(())
+    Ok(())
 }
 
 #[cfg(test)]
@@ -338,7 +455,7 @@ mod tests {
         let partial_rounds = 57;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-        let tree_depth = 10;
+        let tree_depth = 12;
         let mut tree = VanillaSparseMerkleTree_8::new(&hash_params, tree_depth);
 
         for i in 1..20 {

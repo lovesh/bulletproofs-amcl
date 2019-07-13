@@ -173,10 +173,10 @@ mod tests {
     fn test_VSMT_8_Verif() {
         let width = 9;
         let (full_b, full_e) = (4, 4);
-        let partial_rounds = 1;
+        let partial_rounds = 57;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-        let tree_depth = 13;
+        let tree_depth = 8;
         let mut tree = VanillaSparseMerkleTree_8::new(&hash_params, tree_depth);
 
         for i in 1..=10 {
@@ -189,7 +189,7 @@ mod tests {
         let k = FieldElement::from(9u32);
         assert_eq!(k, tree.get(k, &mut merkle_proof));
         merkle_proof_vec = merkle_proof.unwrap();
-        assert!(tree.verify_proof(k, k, &merkle_proof_vec, None));
+        //println!("{:?}", &merkle_proof_vec);
         assert!(tree.verify_proof(k, k, &merkle_proof_vec, Some(&tree.root)));
 
         let mut rng = rand::thread_rng();
@@ -197,8 +197,8 @@ mod tests {
         let sbox_type = &SboxType::Quint;
 
         // TODO: Use iterators. Generating so many generators at once is very slow. In practice, generators will be persisted.
-        let G: G1Vector = get_generators("G", 256).into();
-        let H: G1Vector = get_generators("H", 256).into();
+        let G: G1Vector = get_generators("G", 4096).into();
+        let H: G1Vector = get_generators("H", 4096).into();
 
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
