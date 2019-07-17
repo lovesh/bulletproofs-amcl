@@ -355,7 +355,7 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_4(
 }
 
 pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
-    inputs: [FieldElement; 8],
+    inputs: Vec<FieldElement>,
     randomness: Option<[FieldElement; 8]>,
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
@@ -367,6 +367,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
     G: &G1Vector,
     H: &G1Vector,
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    assert_eq!(inputs.len(), 8);
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let total_rounds = hash_params.full_rounds_beginning
@@ -599,7 +600,7 @@ mod tests {
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
 
-        let inputs = [
+        let inputs = vec![
             FieldElement::random(),
             FieldElement::random(),
             FieldElement::random(),

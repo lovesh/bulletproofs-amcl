@@ -44,14 +44,14 @@ impl PoseidonParams {
     // TODO: Write logic to generate correct round keys.
     fn gen_round_keys(width: usize, total_rounds: usize) -> Vec<FieldElement> {
         let cap = (total_rounds + 1) * width;
-        //vec![FieldElement::random(); cap]
-        vec![FieldElement::one(); cap]
+        (0..cap).map(|_| FieldElement::random()).collect::<Vec<_>>()
+        //vec![FieldElement::one(); cap]
     }
 
     // TODO: Write logic to generate correct MDS matrix.
     fn gen_MDS_matrix(width: usize) -> Vec<Vec<FieldElement>> {
-        //vec![vec![FieldElement::random(); width]; width]
-        vec![vec![FieldElement::one(); width]; width]
+        (0..width).map(|_| (0..width).map(|_| FieldElement::random()).collect::<Vec<_>>()).collect::<Vec<Vec<_>>>()
+        //vec![vec![FieldElement::one(); width]; width]
     }
 }
 
@@ -127,7 +127,7 @@ impl SboxType {
         let inp_plus_const: LinearCombination = input_var + round_key;
 
         let val_l = cs.evaluate_lc(&inp_plus_const);
-        let val_r = val_l.map(|l| l.inverse());
+        let val_r = val_l.clone().map(|l| l.inverse());
 
         let (var_l, _) = cs.allocate_single(val_l)?;
         let (var_r, var_o) = cs.allocate_single(val_r)?;
@@ -173,7 +173,7 @@ pub fn Poseidon_permutation(
     for _ in 0..full_rounds_beginning {
         // Sbox layer
         for i in 0..width {
-            current_state[i] += params.round_keys[round_keys_offset];
+            current_state[i] += &params.round_keys[round_keys_offset];
             current_state[i] = sbox.apply_sbox(&current_state[i]);
             round_keys_offset += 1;
         }
@@ -181,21 +181,21 @@ pub fn Poseidon_permutation(
         // linear layer
         for i in 0..width {
             for j in 0..width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
+                current_state_temp[i] += &current_state[j] * params.MDS_matrix[j][i];
             }
         }
 
         // Output of this round becomes input to next round
         for i in 0..width {
-            current_state[i] = current_state_temp[i];
-            current_state_temp[i] = FieldElement::zero();
+            current_state[i] = current_state_temp.remove(0);
+            current_state_temp.push(FieldElement::zero());
         }
     }
 
     // middle partial Sbox rounds
     for _ in full_rounds_beginning..(full_rounds_beginning + partial_rounds) {
         for i in 0..width {
-            current_state[i] += params.round_keys[round_keys_offset];
+            current_state[i] += &params.round_keys[round_keys_offset];
             round_keys_offset += 1;
         }
 
@@ -206,14 +206,14 @@ pub fn Poseidon_permutation(
         // linear layer
         for i in 0..width {
             for j in 0..width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
+                current_state_temp[i] += &current_state[j] * &params.MDS_matrix[j][i];
             }
         }
 
         // Output of this round becomes input to next round
         for i in 0..width {
-            current_state[i] = current_state_temp[i];
-            current_state_temp[i] = FieldElement::zero();
+            current_state[i] = current_state_temp.remove(0);
+            current_state_temp.push(FieldElement::zero());
         }
     }
 
@@ -223,7 +223,7 @@ pub fn Poseidon_permutation(
     for _ in loop_begin..loop_end {
         // Sbox layer
         for i in 0..width {
-            current_state[i] += params.round_keys[round_keys_offset];
+            current_state[i] += &params.round_keys[round_keys_offset];
             current_state[i] = sbox.apply_sbox(&current_state[i]);
             round_keys_offset += 1;
         }
@@ -231,14 +231,14 @@ pub fn Poseidon_permutation(
         // linear layer
         for i in 0..width {
             for j in 0..width {
-                current_state_temp[i] += current_state[j] * params.MDS_matrix[j][i];
+                current_state_temp[i] += &current_state[j] * &params.MDS_matrix[j][i];
             }
         }
 
         // Output of this round becomes input to next round
         for i in 0..width {
-            current_state[i] = current_state_temp[i];
-            current_state_temp[i] = FieldElement::zero();
+            current_state[i] = current_state_temp.remove(0);
+            current_state_temp.push(FieldElement::zero());
         }
     }
 

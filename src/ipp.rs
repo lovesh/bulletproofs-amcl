@@ -70,8 +70,8 @@ impl IPP {
             n = n / 2;
             let (mut a_L, a_R) = a.split_at(n);
             let (mut b_L, b_R) = b.split_at(n);
-            let (mut G_L, G_R) = G.split_at(n);
-            let (mut H_L, H_R) = H.split_at(n);
+            let (mut G_L, mut G_R) = G.split_at(n);
+            let (mut H_L, mut H_R) = H.split_at(n);
             let (G_factors_L, G_factors_R) = G_factors.split_at(n);
             let (H_factors_L, H_factors_R) = H_factors.split_at(n);
 
@@ -83,52 +83,52 @@ impl IPP {
             L_0.extend(b_R.hadamard_product(&H_factors_L).unwrap());
             L_0.push(c_L);
 
-            let mut L_1 = vec![];
-            L_1.extend(G_R.iter());
-            L_1.extend(H_L.iter());
+            let mut L_1 = G1Vector::new(0);
+            L_1.append(&mut G_R);
+            L_1.append(&mut H_L);
             L_1.push(Q.clone());
 
             let L = G1Vector::from(L_1)
                 .multi_scalar_mul_var_time(&L_0.into())
                 .unwrap();
 
-            let mut R_0 = vec![];
+            let mut R_0: Vec<FieldElement> = vec![];
             R_0.extend(a_R.hadamard_product(&G_factors_L).unwrap());
             R_0.extend(b_L.hadamard_product(&H_factors_R).unwrap());
             R_0.push(c_R);
 
-            let mut R_1 = vec![];
-            R_1.extend(G_L.iter());
-            R_1.extend(H_R.iter());
+            let mut R_1 = G1Vector::new(0);
+            R_1.append(&mut G_L);
+            R_1.append(&mut H_R);
             R_1.push(Q.clone());
 
             let R = G1Vector::from(R_1)
                 .multi_scalar_mul_var_time(&R_0.into())
                 .unwrap();
 
-            L_vec.push(L);
-            R_vec.push(R);
-
             transcript.commit_point(b"L", &L);
             transcript.commit_point(b"R", &R);
+
+            L_vec.push(L);
+            R_vec.push(R);
 
             let u = transcript.challenge_scalar(b"u");
             let u_inv = u.inverse();
 
             for i in 0..n {
-                a_L[i] = a_L[i] * u + u_inv * a_R[i];
-                b_L[i] = b_L[i] * u_inv + u * b_R[i];
+                a_L[i] = &a_L[i] * &u + &u_inv * &a_R[i];
+                b_L[i] = &b_L[i] * &u_inv + &u * &b_R[i];
                 // G_L[i] = (u_inv * G_factors_L[i])*G_L[i] + (u * G_factors_R[i])* G_R[i];
                 G_L[i] = G_L[i].binary_scalar_mul(
                     &G_R[i],
-                    &(u_inv * G_factors_L[i]),
-                    &(u * G_factors_R[i]),
+                    &(&u_inv * &G_factors_L[i]),
+                    &(&u * &G_factors_R[i]),
                 );
                 // H_L[i] = (u * H_factors_L[i])*H_L[i] + (u_inv * H_factors_R[i])*H_R[i];
                 H_L[i] = H_L[i].binary_scalar_mul(
                     &H_R[i],
-                    &(u * H_factors_L[i]),
-                    &(u_inv * H_factors_R[i]),
+                    &(&u * &H_factors_L[i]),
+                    &(&u_inv * &H_factors_R[i]),
                 );
             }
 
@@ -142,50 +142,50 @@ impl IPP {
             n = n / 2;
             let (mut a_L, a_R) = a.split_at(n);
             let (mut b_L, b_R) = b.split_at(n);
-            let (mut G_L, G_R) = G.split_at(n);
-            let (mut H_L, H_R) = H.split_at(n);
+            let (mut G_L, mut G_R) = G.split_at(n);
+            let (mut H_L, mut H_R) = H.split_at(n);
 
             let c_L = a_L.inner_product(&b_R).unwrap();
             let c_R = a_R.inner_product(&b_L).unwrap();
 
-            let mut L_1 = vec![];
-            L_1.extend(G_R.iter());
-            L_1.extend(H_L.iter());
+            let mut L_1 = G1Vector::new(0);
+            L_1.append(&mut G_R);
+            L_1.append(&mut H_L);
             L_1.push(Q.clone());
-            let mut L_0 = vec![];
-            L_0.extend(a_L.iter());
-            L_0.extend(b_R.iter());
+            let mut L_0 = FieldElementVector::new(0);
+            L_0.append(&mut a_L.clone());
+            L_0.append(&mut b_R.clone());
             L_0.push(c_L);
 
             let L = G1Vector::from(L_1)
                 .multi_scalar_mul_var_time(&L_0.into())
                 .unwrap();
 
-            let mut R_1 = vec![];
-            R_1.extend(G_L.iter());
-            R_1.extend(H_R.iter());
+            let mut R_1 = G1Vector::new(0);
+            R_1.append(&mut G_L);
+            R_1.append(&mut H_R);
             R_1.push(Q.clone());
-            let mut R_0 = vec![];
-            R_0.extend(a_R.iter());
-            R_0.extend(b_L.iter());
+            let mut R_0 = FieldElementVector::new(0);
+            R_0.append(&mut a_R.clone());
+            R_0.append(&mut b_L.clone());
             R_0.push(c_R);
 
             let R = G1Vector::from(R_1)
                 .multi_scalar_mul_var_time(&R_0.into())
                 .unwrap();
 
-            L_vec.push(L);
-            R_vec.push(R);
-
             transcript.commit_point(b"L", &L);
             transcript.commit_point(b"R", &R);
+
+            L_vec.push(L);
+            R_vec.push(R);
 
             let u = transcript.challenge_scalar(b"u");
             let u_inv = u.inverse();
 
             for i in 0..n {
-                a_L[i] = a_L[i] * u + u_inv * a_R[i];
-                b_L[i] = b_L[i] * u_inv + u * b_R[i];
+                a_L[i] = &a_L[i] * &u + &u_inv * &a_R[i];
+                b_L[i] = &b_L[i] * &u_inv + &u * &b_R[i];
                 // G_L[i] = (u_inv * G_L[i]) + (u * G_R[i]);
                 G_L[i] = G_L[i].binary_scalar_mul(&G_R[i], &u_inv, &u);
                 // H_L[i] = (u * H_L[i]) + (u_inv * H_R[i]);
@@ -201,8 +201,8 @@ impl IPP {
         InnerProductArgumentProof {
             L: L_vec,
             R: R_vec,
-            a: a[0],
-            b: b[0],
+            a: a[0].clone(),
+            b: b[0].clone(),
         }
     }
 
@@ -246,12 +246,12 @@ impl IPP {
             .chain(neg_u_inv_sq)
             .collect();
 
-        let mut _2: Vec<G1> = vec![];
-        _2.push(*Q);
-        _2.extend(G.iter());
-        _2.extend(H.iter());
-        _2.extend(L_vec.iter());
-        _2.extend(R_vec.iter());
+        let mut _2 = G1Vector::new(0);
+        _2.push(Q.clone());
+        _2.append(&mut G.clone());
+        _2.append(&mut H.clone());
+        _2.append(&mut L_vec.clone());
+        _2.append(&mut R_vec.clone());
 
         let expected_P = G1Vector::from(_2)
             .multi_scalar_mul_var_time(&_1.into())
@@ -312,8 +312,8 @@ impl IPP {
             let k = 1 << lg_i;
             // The challenges are stored in "creation order" as [u_k,...,u_1],
             // so u_{lg(i)+1} = is indexed by (lg_n-1) - lg_i
-            let u_lg_i_sq = challenges_sq[(lg_n - 1) - lg_i];
-            s.push(s[i - k] * u_lg_i_sq);
+            let u_lg_i_sq = &challenges_sq[(lg_n - 1) - lg_i];
+            s.push(&s[i - k] * u_lg_i_sq);
         }
 
         Ok((challenges_sq, challenges_inv_sq, s))

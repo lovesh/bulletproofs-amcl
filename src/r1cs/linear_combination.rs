@@ -18,7 +18,7 @@ pub enum Variable {
     One(),
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct AllocatedQuantity {
     pub variable: Variable,
     pub assignment: Option<FieldElement>,
@@ -115,7 +115,7 @@ impl Mul<LinearCombination> for FieldElement {
         let out_terms = other
             .terms
             .into_iter()
-            .map(|(var, scalar)| (var, scalar * self))
+            .map(|(var, scalar)| (var, scalar * &self))
             .collect();
         LinearCombination { terms: out_terms }
     }

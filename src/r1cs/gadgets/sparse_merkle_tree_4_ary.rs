@@ -175,10 +175,10 @@ mod tests {
     fn test_VSMT_4_Verif() {
         let width = 6;
         let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+        let partial_rounds = 1;
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
-        let tree_depth = 12;
+        let tree_depth = 14;
         let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
 
         for i in 1..=10 {

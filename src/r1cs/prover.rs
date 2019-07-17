@@ -114,12 +114,11 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// and a [`Variable`] corresponding to it, which can be used to form constraints.
     pub fn commit(&mut self, v: FieldElement, v_blinding: FieldElement) -> (G1, Variable) {
         let i = self.v.len();
-        self.v.push(v);
-        self.v_blinding.push(v_blinding);
 
         // Add the commitment to the transcript.
-        //let V = self.pc_gens.commit(v, v_blinding).compress();
         let V = commit_to_field_element(&self.g, &self.h, &v, &v_blinding);
+        self.v.push(v);
+        self.v_blinding.push(v_blinding);
         self.transcript.commit_point(b"V", &V);
 
         (V, Variable::Committed(i))
@@ -153,28 +152,28 @@ impl<'a, 'b> Prover<'a, 'b> {
         let mut wO = FieldElementVector::new(n);
         let mut wV = FieldElementVector::new(m);
 
-        let mut exp_z = *z;
+        let mut exp_z = z.clone();
         for lc in self.constraints.iter() {
             for (var, coeff) in &lc.terms {
                 match var {
                     Variable::MultiplierLeft(i) => {
-                        wL[*i] += exp_z * coeff;
+                        wL[*i] += &exp_z * coeff;
                     }
                     Variable::MultiplierRight(i) => {
-                        wR[*i] += exp_z * coeff;
+                        wR[*i] += &exp_z * coeff;
                     }
                     Variable::MultiplierOutput(i) => {
-                        wO[*i] += exp_z * coeff;
+                        wO[*i] += &exp_z * coeff;
                     }
                     Variable::Committed(i) => {
-                        wV[*i] -= exp_z * coeff;
+                        wV[*i] -= &exp_z * coeff;
                     }
                     Variable::One() => {
                         // The prover doesn't need to handle constant terms
                     }
                 }
             }
-            exp_z = exp_z * z;
+            exp_z = &exp_z * z;
         }
 
         (wL, wR, wO, wV)
@@ -201,19 +200,19 @@ impl<'a, 'b> Prover<'a, 'b> {
             for (var, coeff) in &lc.terms {
                 match var {
                     Variable::MultiplierLeft(i) => {
-                        let (i, coeff) = (*i, *coeff);
+                        let (i, coeff) = (*i, coeff.clone());
                         WL[r][i] = coeff;
                     }
                     Variable::MultiplierRight(i) => {
-                        let (i, coeff) = (*i, *coeff);
+                        let (i, coeff) = (*i, coeff.clone());
                         WR[r][i] = coeff;
                     }
                     Variable::MultiplierOutput(i) => {
-                        let (i, coeff) = (*i, *coeff);
+                        let (i, coeff) = (*i, coeff.clone());
                         WO[r][i] = coeff;
                     }
                     Variable::Committed(i) => {
-                        let (i, coeff) = (*i, *coeff);
+                        let (i, coeff) = (*i, coeff.clone());
                         WV[r][i] = coeff;
                     }
                     Variable::One() => {
@@ -278,10 +277,10 @@ impl<'a, 'b> Prover<'a, 'b> {
             .iter()
             .fold(FieldElement::zero(), |sum, (var, coeff)| {
                 let val = match var {
-                    Variable::MultiplierLeft(i) => self.a_L[*i],
-                    Variable::MultiplierRight(i) => self.a_R[*i],
-                    Variable::MultiplierOutput(i) => self.a_O[*i],
-                    Variable::Committed(i) => self.v[*i],
+                    Variable::MultiplierLeft(i) => self.a_L[*i].clone(),
+                    Variable::MultiplierRight(i) => self.a_R[*i].clone(),
+                    Variable::MultiplierOutput(i) => self.a_O[*i].clone(),
+                    Variable::Committed(i) => self.v[*i].clone(),
                     Variable::One() => FieldElement::one(),
                 };
                 sum + coeff * val
@@ -348,7 +347,7 @@ impl<'a, 'b> Prover<'a, 'b> {
         .unwrap();
 
         // A_O = <a_O, G> + o_blinding * B_blinding
-        let A_O1 = G_n1.inner_product_const_time(&self.a_O).unwrap() + self.h * o_blinding1;
+        let A_O1 = G_n1.inner_product_const_time(&self.a_O).unwrap() + self.h * &o_blinding1;
 
         // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
         let S1 = commit_to_field_element_vectors(&G_n1, &H_n1, &self.h, &s_L1, &s_R1, &s_blinding1)
@@ -413,7 +412,7 @@ impl<'a, 'b> Prover<'a, 'b> {
                 )
                 .unwrap(),
                 // A_O = <a_O, G> + o_blinding * B_blinding
-                G_n2.inner_product_const_time(&a_O_n2).unwrap() + self.h * o_blinding2,
+                G_n2.inner_product_const_time(&a_O_n2).unwrap() + self.h * &o_blinding2,
                 // S = <s_L, G> + <s_R, H> + s_blinding * B_blinding
                 commit_to_field_element_vectors(&G_n2, &H_n2, self.h, &s_L2, &s_R2, &s_blinding2)
                     .unwrap(),
@@ -462,20 +461,20 @@ impl<'a, 'b> Prover<'a, 'b> {
         for (i, (sl, sr)) in sLsR.enumerate() {
             // l_poly.0 = 0
             // l_poly.1 = a_L + y^-n * (z * z^Q * W_R)
-            l_poly.1[i] = self.a_L[i] + (exp_y_inv[i] * wR[i]);
+            l_poly.1[i] = &self.a_L[i] + (&exp_y_inv[i] * &wR[i]);
             // l_poly.2 = a_O
-            l_poly.2[i] = self.a_O[i];
+            l_poly.2[i] = self.a_O[i].clone();
             // l_poly.3 = s_L
-            l_poly.3[i] = *sl;
+            l_poly.3[i] = sl.clone();
             // r_poly.0 = (z * z^Q * W_O) - y^n
-            r_poly.0[i] = wO[i] - exp_y;
+            r_poly.0[i] = &wO[i] - &exp_y;
             // r_poly.1 = y^n * a_R + (z * z^Q * W_L)
-            r_poly.1[i] = (exp_y * self.a_R[i]) + &wL[i];
+            r_poly.1[i] = (&exp_y * &self.a_R[i]) + &wL[i];
             // r_poly.2 = 0
             // r_poly.3 = y^n * s_R
-            r_poly.3[i] = exp_y * sr;
+            r_poly.3[i] = &exp_y * sr;
 
-            exp_y = exp_y * y; // y^i -> y^(i+1)
+            exp_y = exp_y * &y; // y^i -> y^(i+1)
         }
 
         let t_poly = VecPoly3::special_inner_product(&l_poly, &r_poly);
@@ -514,24 +513,24 @@ impl<'a, 'b> Prover<'a, 'b> {
             t6: t_6_blinding,
         };
 
-        let t_x = t_poly.eval(x);
-        let t_x_blinding = t_blinding_poly.eval(x);
-        let mut l_vec = l_poly.eval(x);
+        let t_x = t_poly.eval(&x);
+        let t_x_blinding = t_blinding_poly.eval(&x);
+        let mut l_vec = l_poly.eval(&x);
         l_vec.append(&mut FieldElementVector::new(pad));
 
-        let mut r_vec = r_poly.eval(x);
+        let mut r_vec = r_poly.eval(&x);
 
         // Since r_poly contains terms of y without any multiplicand, i.e. in the constant term
         for _ in n..padded_n {
             r_vec.push(exp_y.negation());
-            exp_y = exp_y * y; // y^i -> y^(i+1)
+            exp_y = exp_y * &y; // y^i -> y^(i+1)
         }
 
-        let i_blinding = i_blinding1 + u * i_blinding2;
-        let o_blinding = o_blinding1 + u * o_blinding2;
-        let s_blinding = s_blinding1 + u * s_blinding2;
+        let i_blinding = i_blinding1 + &u * i_blinding2;
+        let o_blinding = &o_blinding1 + &u * &o_blinding2;
+        let s_blinding = s_blinding1 + &u * s_blinding2;
 
-        let e_blinding = x * (i_blinding + x * (o_blinding + x * s_blinding));
+        let e_blinding = &x * (i_blinding + &x * (o_blinding + &x * s_blinding));
 
         self.transcript.commit_scalar(b"t_x", &t_x);
         self.transcript
@@ -607,7 +606,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
         // Synthesize the assignments for l,r,o
         let l = self.eval(&left);
         let r = self.eval(&right);
-        let o = l * r;
+        let o = &l * &r;
 
         let (l_var, r_var, o_var) = self._allocate_vars(l, r, o);
 
@@ -635,7 +634,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
             Some(i) => {
                 self.pending_multiplier = None;
                 self.a_R[i] = scalar;
-                self.a_O[i] = self.a_L[i] * self.a_R[i];
+                self.a_O[i] = &self.a_L[i] * &self.a_R[i];
                 Ok(Variable::MultiplierRight(i))
             }
         }
@@ -646,7 +645,7 @@ impl<'a, 'b> ConstraintSystem for Prover<'a, 'b> {
         input_assignments: Option<(FieldElement, FieldElement)>,
     ) -> Result<(Variable, Variable, Variable), R1CSError> {
         let (l, r) = input_assignments.ok_or(R1CSError::MissingAssignment)?;
-        let o = l * r;
+        let o = &l * &r;
 
         Ok(self._allocate_vars(l, r, o))
     }

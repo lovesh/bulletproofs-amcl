@@ -61,7 +61,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
             let prev = empty_tree_hashes[i - 1];
-            let input: [FieldElement; 4] = [prev.clone(); 4];
+            let input: [FieldElement; 4] = [prev.clone(), prev.clone(), prev.clone(), prev.clone()];
             // Hash all 4 children at once
             let new = Poseidon_hash_4(input.clone(), hash_params, &SboxType::Quint);
             let key = new.to_bytes();
@@ -98,14 +98,14 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
 
-            let mut input: DBVal = [FieldElement::zero(); 4];
-            input.copy_from_slice(side_elem.as_slice());
+            let mut input: DBVal;
+            input.clone_from_slice(side_elem.as_slice());
             let h = Poseidon_hash_4(input.clone(), self.hash_params, &SboxType::Quint);
             self.update_db_with_key_val(&h, input);
             cur_val = h;
         }
 
-        self.root = cur_val;
+        self.root = cur_val.clone();
 
         cur_val
     }
@@ -123,7 +123,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             let children = self.db.get(&k).unwrap();
             cur_node = children[d as usize];
             if need_proof {
-                let mut proof_node: ProofNode = [FieldElement::zero(); 3];
+                let mut proof_node: ProofNode = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
                 let mut j = 0;
                 for (i, c) in children.to_vec().iter().enumerate() {
                     if i != (d as usize) {
@@ -160,8 +160,8 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
         for (i, d) in path.iter().enumerate() {
             let mut p = proof[self.depth - 1 - i].clone().to_vec();
             p.insert(*d as usize, cur_val);
-            let mut input: DBVal = [FieldElement::zero(); 4];
-            input.copy_from_slice(p.as_slice());
+            let mut input: DBVal;
+            input.clone_from_slice(p.as_slice());
             cur_val = Poseidon_hash_4(input.clone(), self.hash_params, &SboxType::Quint);
         }
 
@@ -304,7 +304,8 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             let c0 = c0_1 + c0_2;
 
             // (1-b0)*(1-b1)*N1
-            let (_, _, c1_1) = cs.multiply(b0_1_b1_1.into(), N1.clone());
+            //let (_, _, c1_1) = cs.multiply(b0_1_b1_1.into(), N1.clone());
+            let c1_1 = N1 - c0_2;
             // (1-b1)*b0*N
             let (_, _, c1_2) = cs.multiply(b0_b1_1.into(), prev_hash.clone());
             // b1*N2
@@ -313,7 +314,8 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             let c1 = c1_1 + c1_2 + c1_3;
 
             // (1-b1)*N2
-            let (_, _, c2_1) = cs.multiply(b1_1.into(), N2.clone());
+            //let (_, _, c2_1) = cs.multiply(b1_1.into(), N2.clone());
+            let c2_1 = N2 - c1_3;
             // (1-b0)*b1*N
             let (_, _, c2_2) = cs.multiply(b0_1_b1.into(), prev_hash.clone());
             // b0*b1*N3
@@ -323,9 +325,10 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
 
             // b1*b0*N
             let (_, _, c3_1) = cs.multiply(b0_b1.into(), prev_hash.clone());
-            // (1 - b1*b0)*N
-            let (_, _, c3_2) = cs.multiply((Variable::One() - b0_b1), N3.clone());
-            // c3 = b1*b0*N + (1 - b1*b0)*N
+            // (1 - b1*b0)*N3
+            //let (_, _, c3_2) = cs.multiply((Variable::One() - b0_b1), N3.clone());
+            let c3_2 = N3 - c2_3;
+            // c3 = b1*b0*N + (1 - b1*b0)*N3
             let c3 = c3_1 + c3_2;
 
             let input: [LinearCombination; 4] = [c0, c1, c2, c3];

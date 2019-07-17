@@ -63,7 +63,9 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
             let prev = empty_tree_hashes[i - 1];
-            let input: [FieldElement; ARITY] = [prev.clone(); ARITY];
+            let inp: Vec<FieldElement> = (0..ARITY).map(|_| prev.clone()).collect();
+            let mut input: [FieldElement; ARITY];
+            input.clone_from_slice(inp.as_slice());
             // Hash all 8 children at once
             let new = Poseidon_hash_8(input.clone(), hash_params, &SboxType::Quint);
             let key = new.to_bytes();
@@ -98,15 +100,14 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             let mut side_elem = sidenodes.pop().unwrap().to_vec();
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
-
-            let mut input: DBVal = [FieldElement::zero(); ARITY];
-            input.copy_from_slice(side_elem.as_slice());
+            let mut input: DBVal;
+            input.clone_from_slice(side_elem.as_slice());
             let h = Poseidon_hash_8(input.clone(), self.hash_params, &SboxType::Quint);
             self.update_db_with_key_val(&h, input);
             cur_val = h;
         }
 
-        self.root = cur_val;
+        self.root = cur_val.clone();
 
         cur_val
     }
@@ -124,15 +125,17 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             let children = self.db.get(&k).unwrap();
             cur_node = children[d as usize];
             if need_proof {
-                let mut proof_node: ProofNode = [FieldElement::zero(); ARITY - 1];
+                let mut pn: Vec<FieldElement> = (0..ARITY-1).map(|_ | FieldElement::zero()).collect();
                 let mut j = 0;
                 for (i, c) in children.to_vec().iter().enumerate() {
                     if i != (d as usize) {
-                        proof_node[j] = c.clone();
+                        pn[j] = c.clone();
                         j += 1;
                     }
                 }
-                proof_vec.push(proof_node);
+                let mut proof_nodes: ProofNode;
+                proof_nodes.clone_from_slice(pn.as_slice());
+                proof_vec.push(proof_nodes);
             }
         }
 
@@ -161,8 +164,7 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         for (i, d) in path.iter().enumerate() {
             let mut p = proof[self.depth - 1 - i].clone().to_vec();
             p.insert(*d as usize, cur_val);
-            let mut input: DBVal = [FieldElement::zero(); ARITY];
-            input.copy_from_slice(p.as_slice());
+            let input: DBVal = [p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]];
             cur_val = Poseidon_hash_8(input.clone(), self.hash_params, &SboxType::Quint);
         }
 

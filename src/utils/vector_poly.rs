@@ -43,16 +43,16 @@ impl VecPoly1 {
         let l0_plus_l1 = l.0.plus(&l.1).unwrap();
         let r0_plus_r1 = r.0.plus(&r.1).unwrap();
 
-        let t1 = l0_plus_l1.inner_product(&r0_plus_r1).unwrap() - (t0 + t2);
+        let t1 = l0_plus_l1.inner_product(&r0_plus_r1).unwrap() - (&t0 + &t2);
 
         Poly2(t0, t1, t2)
     }
 
-    pub fn eval(&self, x: FieldElement) -> FieldElementVector {
+    pub fn eval(&self, x: &FieldElement) -> FieldElementVector {
         let n = self.0.len();
         let mut out = FieldElementVector::new(n);
         for i in 0..n {
-            out[i] = self.0[i] + (self.1[i] * &x);
+            out[i] = &self.0[i] + (&self.1[i] * x);
         }
         out
     }
@@ -92,24 +92,24 @@ impl VecPoly3 {
         }
     }
 
-    pub fn eval(&self, x: FieldElement) -> FieldElementVector {
+    pub fn eval(&self, x: &FieldElement) -> FieldElementVector {
         let n = self.0.len();
         let mut out = FieldElementVector::new(n);
         for i in 0..n {
-            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
+            out[i] = &self.0[i] + x * (&self.1[i] + x * (&self.2[i] + x * &self.3[i]));
         }
         out
     }
 }
 
 impl Poly2 {
-    pub fn eval(&self, x: FieldElement) -> FieldElement {
-        self.0 + x * (self.1 + x * self.2)
+    pub fn eval(&self, x: &FieldElement) -> FieldElement {
+        &self.0 + x * (&self.1 + x * &self.2)
     }
 }
 
 impl Poly6 {
-    pub fn eval(&self, x: FieldElement) -> FieldElement {
-        x * (self.t1 + x * (self.t2 + x * (self.t3 + x * (self.t4 + x * (self.t5 + x * self.t6)))))
+    pub fn eval(&self, x: &FieldElement) -> FieldElement {
+        x * (&self.t1 + x * (&self.t2 + x * (&self.t3 + x * (&self.t4 + x * (&self.t5 + x * &self.t6)))))
     }
 }

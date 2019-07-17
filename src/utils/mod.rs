@@ -31,9 +31,18 @@ pub fn gen_challenges(input: &[&G1], state: &mut Vec<u8>, n: usize) -> Vec<Field
 
     let gen = G1::generator();
     for _ in 1..n {
-        let _p = gen * r.last().unwrap();
+        let _p = &gen * r.last().unwrap();
         state.extend_from_slice(&_p.to_bytes());
         r.push(FieldElement::from_msg_hash(&state));
     }
     r
+}
+
+#[macro_export]
+macro_rules! vec_to_array {
+    ( $typ:ident, $size:expr, $vec: ident) => {{
+        let mut input: [$typ; $size];
+        input.copy_from_slice($vec.as_slice());
+        input
+    }}
 }
