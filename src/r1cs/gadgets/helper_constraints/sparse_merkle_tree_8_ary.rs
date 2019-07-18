@@ -62,12 +62,12 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         let mut empty_tree_hashes: Vec<FieldElement> = vec![];
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
-            let prev = empty_tree_hashes[i - 1];
+            let prev = &empty_tree_hashes[i - 1];
             let inp: Vec<FieldElement> = (0..ARITY).map(|_| prev.clone()).collect();
-            let mut input: [FieldElement; ARITY];
+            let mut input: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
             input.clone_from_slice(inp.as_slice());
             // Hash all 8 children at once
-            let new = Poseidon_hash_8(input.clone(), hash_params, &SboxType::Quint);
+            let new = Poseidon_hash_8(inp, hash_params, &SboxType::Quint);
             let key = new.to_bytes();
 
             db.insert(key, input);
@@ -85,7 +85,7 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         }
     }
 
-    pub fn update(&mut self, idx: FieldElement, val: FieldElement) -> FieldElement {
+    pub fn update(&mut self, idx: &FieldElement, val: FieldElement) -> FieldElement {
         // Find path to insert the new key
         let mut sidenodes_wrap = Some(Vec::<ProofNode>::new());
         self.get(idx, &mut sidenodes_wrap);
@@ -100,9 +100,9 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             let mut side_elem = sidenodes.pop().unwrap().to_vec();
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
-            let mut input: DBVal;
+            let mut input: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
             input.clone_from_slice(side_elem.as_slice());
-            let h = Poseidon_hash_8(input.clone(), self.hash_params, &SboxType::Quint);
+            let h = Poseidon_hash_8(side_elem, self.hash_params, &SboxType::Quint);
             self.update_db_with_key_val(&h, input);
             cur_val = h;
         }
@@ -113,9 +113,9 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
     }
 
     /// Get a value from tree, if `proof` is not None, populate `proof` with the merkle proof
-    pub fn get(&self, idx: FieldElement, proof: &mut Option<Vec<ProofNode>>) -> FieldElement {
-        let path = Self::leaf_index_to_path(&idx, self.depth);
-        let mut cur_node = self.root.clone();
+    pub fn get(&self, idx: &FieldElement, proof: &mut Option<Vec<ProofNode>>) -> FieldElement {
+        let path = Self::leaf_index_to_path(idx, self.depth);
+        let mut cur_node = &self.root;
 
         let need_proof = proof.is_some();
         let mut proof_vec = Vec::<ProofNode>::new();
@@ -123,7 +123,7 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         for d in path {
             let k = cur_node.to_bytes();
             let children = self.db.get(&k).unwrap();
-            cur_node = children[d as usize];
+            cur_node = &children[d as usize];
             if need_proof {
                 let mut pn: Vec<FieldElement> = (0..ARITY-1).map(|_ | FieldElement::zero()).collect();
                 let mut j = 0;
@@ -133,7 +133,7 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
                         j += 1;
                     }
                 }
-                let mut proof_nodes: ProofNode;
+                let mut proof_nodes: ProofNode = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
                 proof_nodes.clone_from_slice(pn.as_slice());
                 proof_vec.push(proof_nodes);
             }
@@ -146,26 +146,25 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             None => (),
         }
 
-        cur_node
+        cur_node.clone()
     }
 
     /// Verify a merkle proof, if `root` is None, use the current root else use given root
     pub fn verify_proof(
         &self,
-        idx: FieldElement,
-        val: FieldElement,
+        idx: &FieldElement,
+        val: &FieldElement,
         proof: &[ProofNode],
         root: Option<&FieldElement>,
     ) -> bool {
-        let mut path = Self::leaf_index_to_path(&idx, self.depth);
+        let mut path = Self::leaf_index_to_path(idx, self.depth);
         path.reverse();
         let mut cur_val = val.clone();
 
         for (i, d) in path.iter().enumerate() {
             let mut p = proof[self.depth - 1 - i].clone().to_vec();
             p.insert(*d as usize, cur_val);
-            let input: DBVal = [p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]];
-            cur_val = Poseidon_hash_8(input.clone(), self.hash_params, &SboxType::Quint);
+            cur_val = Poseidon_hash_8(p, self.hash_params, &SboxType::Quint);
         }
 
         // Check if root is equal to cur_val
@@ -240,16 +239,14 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     depth: usize,
     expected_root: &FieldElement,
-    leaf_val: AllocatedQuantity,
+    leaf_val: Variable,
     leaf_index: AllocatedQuantity,
-    mut proof_nodes: Vec<AllocatedQuantity>,
-    zero: AllocatedQuantity,
+    mut proof_nodes: Vec<Variable>,
+    zero: Variable,
     poseidon_params: &PoseidonParams,
     sbox_type: &SboxType,
 ) -> Result<(), R1CSError> {
-    let mut prev_hash = LinearCombination::from(leaf_val.variable);
-
-    let zero: LinearCombination = zero.variable.into();
+    let mut prev_hash = LinearCombination::from(leaf_val);
 
     // Initialize  constraint_leaf_index with -leaf_index.
     let mut constraint_leaf_index = vec![(leaf_index.variable, FieldElement::minus_one())];
@@ -306,17 +303,17 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // The 3 bits should represent the base 8 digit for the node in path to leaf
         // Add (4*b2 + 2*b1 + b0)*8^(i/3) to constraint_leaf_index.
         // (4*b2 + 2*b1 + b0)*8^(i/3) = 4*8^(i/3)*b2 + 2*8^(i/3)*b1 + 8^(i/3)*b0
-        constraint_leaf_index.push((b0, exp_8));
-        constraint_leaf_index.push((b1, two * exp_8));
-        constraint_leaf_index.push((b2, four * exp_8));
+        constraint_leaf_index.push((b0, exp_8.clone()));
+        constraint_leaf_index.push((b1, &two * &exp_8));
+        constraint_leaf_index.push((b2, &four * &exp_8));
 
-        let N7: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N6: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N5: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N4: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N3: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N2: LinearCombination = proof_nodes.pop().unwrap().variable.into();
-        let N1: LinearCombination = proof_nodes.pop().unwrap().variable.into();
+        let N7: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N6: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N5: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N4: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N3: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N2: LinearCombination = proof_nodes.pop().unwrap().into();
+        let N1: LinearCombination = proof_nodes.pop().unwrap().into();
 
         // Notation: b0_1 = 1 - b0, b1_1 = 1 - b1 and b2_1 = 1 - b2 and prev_hash = N
         // Pre-compute various products of all bits
@@ -434,18 +431,18 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // c7 = b0*b1*b2*N + (1-b0*b1*b2)*N7
         let c7 = c7_1 + c7_2;
 
-        let input: [LinearCombination; 8] = [c0, c1, c2, c3, c4, c5, c6, c7];
+        let input = vec![c0, c1, c2, c3, c4, c5, c6, c7];
         prev_hash = Poseidon_hash_8_constraints::<CS>(
             cs,
             input,
-            zero.clone(),
+            zero.into(),
             poseidon_params,
             sbox_type,
         )?;
 
         prev_hash = prev_hash.simplify();
 
-        exp_8 = exp_8 * eight;
+        exp_8 = &exp_8 * &eight;
     }
 
     cs.constrain(constraint_leaf_index.iter().collect());
@@ -472,29 +469,29 @@ mod tests {
 
         for i in 1..20 {
             let s = FieldElement::from(i as u64);
-            tree.update(s, s);
+            tree.update(&s, s.clone());
         }
 
         for i in 1..20 {
             let s = FieldElement::from(i as u32);
-            assert_eq!(s, tree.get(s, &mut None));
+            assert_eq!(s, tree.get(&s, &mut None));
             let mut proof_vec = Vec::<ProofNode>::new();
             let mut proof = Some(proof_vec);
-            assert_eq!(s, tree.get(s, &mut proof));
+            assert_eq!(s, tree.get(&s, &mut proof));
             proof_vec = proof.unwrap();
-            assert!(tree.verify_proof(s, s, &proof_vec, None));
-            assert!(tree.verify_proof(s, s, &proof_vec, Some(&tree.root)));
+            assert!(tree.verify_proof(&s, &s, &proof_vec, None));
+            assert!(tree.verify_proof(&s, &s, &proof_vec, Some(&tree.root)));
         }
 
         let kvs: Vec<(FieldElement, FieldElement)> = (0..20)
             .map(|_| (FieldElement::random(), FieldElement::random()))
             .collect();
         for i in 0..kvs.len() {
-            tree.update(kvs[i].0, kvs[i].1);
+            tree.update(&kvs[i].0, kvs[i].1.clone());
         }
 
         for i in 0..kvs.len() {
-            assert_eq!(kvs[i].1, tree.get(kvs[i].0, &mut None));
+            assert_eq!(kvs[i].1, tree.get(&kvs[i].0, &mut None));
         }
     }
 }

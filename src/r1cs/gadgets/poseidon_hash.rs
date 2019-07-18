@@ -109,7 +109,6 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
     let mut comms = vec![];
-    let mut statics = vec![];
 
     let input1 = inputs.remove(0);
     let input2 = inputs.remove(0);
@@ -120,15 +119,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     let (com_r, var_r) = prover.commit(input2, rands.remove(0));
     comms.push(com_r);
 
-    // Commitment to PADDING_CONST with blinding as 0
-    let (_, var) = prover.commit(FieldElement::from(PADDING_CONST), FieldElement::zero());
-    statics.push(var);
-
-    // Commit to 0 with randomness 0 for the rest of the elements of width
-    for _ in 3..width {
-        let (_, var) = prover.commit(FieldElement::zero(), FieldElement::zero());
-        statics.push(var);
-    }
+    let statics = allocate_statics_for_prover(&mut prover, 4);
 
     Poseidon_hash_2_gadget(
         &mut prover,
@@ -166,29 +157,13 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(
 ) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
-    let mut statics = vec![];
+
     let lv = verifier.commit(commitments.remove(0));
     let rv = verifier.commit(commitments.remove(0));
 
     let width = hash_params.width;
 
-    // Commitment to PADDING_CONST with blinding as 0
-    let pad_comm = commit_to_field_element(
-        &g,
-        &h,
-        &FieldElement::from(PADDING_CONST),
-        &FieldElement::zero(),
-    );
-    let v = verifier.commit(pad_comm);
-    statics.push(v);
-
-    // Commitment to 0 with blinding as 0
-    let zero_comm = commit_to_field_element(&g, &h, &FieldElement::zero(), &FieldElement::zero());
-
-    for i in 3..width {
-        let v = verifier.commit(zero_comm.clone());
-        statics.push(v);
-    }
+    let statics = allocate_statics_for_verifier(&mut verifier, 4, g, h);
 
     Poseidon_hash_2_gadget(
         &mut verifier,

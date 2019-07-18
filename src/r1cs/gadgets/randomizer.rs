@@ -73,7 +73,7 @@ pub fn get_randomized_data(
         // Next line is a temporary workaround
         let i = _i.to_bignum().w[0] as usize;
         let randomized = randomize(&new_data[i]);
-        modified_indices.insert(_i.clone(), new_data[i]);
+        modified_indices.insert(_i.clone(), new_data[i].clone());
         new_data[i] = randomized;
     }
 
@@ -85,58 +85,52 @@ pub fn get_randomized_data(
 pub fn randomizer_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     depth: usize,
-    orig_root: AllocatedQuantity, // original root is hidden since its correlating across several proofs
+    orig_root: Variable, // original root is hidden since its correlating across several proofs
     new_tree: &mut VanillaSparseMerkleTree_4,
     indices: Vec<FieldElement>, // For future: `indices` can be made hidden too
-    orig_vals: Vec<AllocatedQuantity>, // values of the original tree
-    mut orig_vals_proofs: Vec<Vec<AllocatedQuantity>>, // merkle proofs for values of the original tree
-    statics: Vec<AllocatedQuantity>,
+    orig_vals: Vec<Variable>, // values of the original tree
+    mut orig_vals_proofs: Vec<Vec<Variable>>, // merkle proofs for values of the original tree
+    statics: Vec<Variable>,
     poseidon_params: &PoseidonParams,
     sbox_type: &SboxType,
 ) -> Result<(), R1CSError> {
     assert_eq!(new_tree.depth, depth);
     assert_eq!(indices.len(), orig_vals.len());
 
-    let statics: Vec<LinearCombination> = statics.iter().map(|s| s.variable.into()).collect();
+    let statics: Vec<LinearCombination> = statics.into_iter().map(|s| s.into()).collect();
 
     // Keep a map of path -> LinearCombination for the new_tree for all nodes in paths of modified indices
     let mut new_tree_modified_nodes = HashMap::<Vec<u8>, LinearCombination>::new();
     let root_key = vec![];
-    new_tree_modified_nodes.insert(root_key.clone(), new_tree.root.into());
+    new_tree_modified_nodes.insert(root_key.clone(), new_tree.root.clone().into());
 
     for i in 0..indices.len() {
-        let idx = indices[i];
+        let idx = &indices[i];
         let orig_vals_proof = &mut orig_vals_proofs[i];
 
-        let mut path_for_update = VanillaSparseMerkleTree_4::leaf_index_to_path(&idx, depth);
+        let mut path_for_update = VanillaSparseMerkleTree_4::leaf_index_to_path(idx, depth);
         let path_for_get = path_for_update.clone(); // Path from root to leaf
         path_for_update.reverse(); // Path from leaf to root
 
         // Prove index `idx` has value `orig_val` in tree with root `orig_root`.
-        let mut cur_hash_in_orig_tree = orig_vals[i].variable.into();
+        let mut cur_hash_in_orig_tree = orig_vals[i].into();
         for pos in path_for_update {
             let mut proof: Vec<LinearCombination> = vec![];
-            proof.push(orig_vals_proof.pop().unwrap().variable.into());
-            proof.push(orig_vals_proof.pop().unwrap().variable.into());
-            proof.push(orig_vals_proof.pop().unwrap().variable.into());
+            proof.push(orig_vals_proof.pop().unwrap().into());
+            proof.push(orig_vals_proof.pop().unwrap().into());
+            proof.push(orig_vals_proof.pop().unwrap().into());
             proof.reverse();
             proof.insert(pos as usize, cur_hash_in_orig_tree);
-            let input = [
-                proof[0].clone(),
-                proof[1].clone(),
-                proof[2].clone(),
-                proof[3].clone(),
-            ];
             cur_hash_in_orig_tree = Poseidon_hash_4_constraints::<CS>(
                 cs,
-                input,
+                proof,
                 statics.clone(),
                 poseidon_params,
                 sbox_type,
             )?;
         }
 
-        cs.constrain(cur_hash_in_orig_tree - orig_root.variable);
+        cs.constrain(cur_hash_in_orig_tree - orig_root);
 
         // Get all nodes on the path and its neighbors for idx in the new tree. Thus we end up with 4*depth node for each index
         let mut cur_node = new_tree.root.clone();
@@ -151,7 +145,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
 
                 if !new_tree_modified_nodes.contains_key(&key) {
                     // As tree does not change during "get"s, only update `new_tree_modified_nodes` when key is absent
-                    new_tree_modified_nodes.insert(key, LinearCombination::from(*c));
+                    new_tree_modified_nodes.insert(key, LinearCombination::from(c.clone()));
                 }
             }
             cur_prefix.push(*pos);
@@ -160,12 +154,12 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
 
     // Update new_tree with orig_val
     for i in 0..indices.len() {
-        let idx = indices[i];
+        let idx = &indices[i];
         let orig_val = orig_vals[i];
 
-        let mut path = VanillaSparseMerkleTree_4::leaf_index_to_path(&idx, depth);
+        let mut path = VanillaSparseMerkleTree_4::leaf_index_to_path(idx, depth);
 
-        let mut orig_val_lc = LinearCombination::from(orig_val.variable);
+        let mut orig_val_lc = LinearCombination::from(orig_val);
         // Move in reverse order in path, i.e. leaf to root, updating `new_tree_modified_nodes` on nodes from leaf leading to root.
         for j in (0..depth).rev() {
             let mut nodes_at_level_j = vec![];
@@ -183,15 +177,9 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
                 new_tree_modified_nodes.insert(path.clone(), orig_val_lc);
             }
 
-            let input = [
-                nodes_at_level_j[0].clone(),
-                nodes_at_level_j[1].clone(),
-                nodes_at_level_j[2].clone(),
-                nodes_at_level_j[3].clone(),
-            ];
             orig_val_lc = Poseidon_hash_4_constraints::<CS>(
                 cs,
-                input,
+                nodes_at_level_j,
                 statics.clone(),
                 poseidon_params,
                 sbox_type,
@@ -201,7 +189,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
         }
     }
 
-    cs.constrain(new_tree_modified_nodes[&root_key].clone() - orig_root.variable);
+    cs.constrain(new_tree_modified_nodes[&root_key].clone() - orig_root);
 
     Ok(())
 }
@@ -221,7 +209,7 @@ pub fn gen_proof_for_randomizer(
     G: &G1Vector,
     H: &G1Vector,
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
-    let orig_root = orig_tree.root;
+    let orig_root = &orig_tree.root;
 
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
@@ -229,41 +217,32 @@ pub fn gen_proof_for_randomizer(
     let mut comms = vec![];
 
     let (com_orig_root, var_orig_root) = prover.commit(orig_root.clone(), FieldElement::random());
-    let orig_root_alloc_scalar = AllocatedQuantity {
-        variable: var_orig_root,
-        assignment: Some(orig_root),
-    };
     comms.push(com_orig_root);
 
-    let mut orig_val_alloc_scalars = vec![];
-    let mut proof_alloc_scalars = vec![];
+    let mut orig_val_vars = vec![];
+    let mut proof_vars = vec![];
 
     //for (i, v) in modified_indices {
     for i in 0..modified_indices.len() {
         let mut merkle_proof_vec = Vec::<ProofNode>::new();
         let mut merkle_proof = Some(merkle_proof_vec);
-        let _v = orig_tree.get(modified_indices[i], &mut merkle_proof);
+        let _v = orig_tree.get(&modified_indices[i], &mut merkle_proof);
         assert_eq!(_v, orig_vals[i]);
         let (com_orig_val, var_orig_val) = prover.commit(_v, FieldElement::random());
         comms.push(com_orig_val);
-        orig_val_alloc_scalars.push(AllocatedQuantity {
-            variable: var_orig_val,
-            assignment: Some(_v),
-        });
+        orig_val_vars.push(var_orig_val);
+
         merkle_proof_vec = merkle_proof.unwrap();
         //println!("merkle_proof_vec len {}", &merkle_proof_vec.len());
         let mut ps = vec![];
         for p in merkle_proof_vec.iter() {
             for j in p {
-                let (c, v) = prover.commit(*j, FieldElement::random());
+                let (c, v) = prover.commit(j.clone(), FieldElement::random());
                 comms.push(c);
-                ps.push(AllocatedQuantity {
-                    variable: v,
-                    assignment: Some(*j),
-                });
+                ps.push(v);
             }
         }
-        proof_alloc_scalars.push(ps);
+        proof_vars.push(ps);
     }
 
     let num_statics = 2;
@@ -273,11 +252,11 @@ pub fn gen_proof_for_randomizer(
     randomizer_gadget(
         &mut prover,
         tree_depth,
-        orig_root_alloc_scalar,
+        var_orig_root,
         new_tree,
         modified_indices.to_vec(),
-        orig_val_alloc_scalars,
-        proof_alloc_scalars,
+        orig_val_vars,
+        proof_vars,
         statics,
         &hash_params,
         sbox_type,
@@ -303,7 +282,7 @@ pub fn verify_proof_for_randomizer(
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -313,37 +292,22 @@ pub fn verify_proof_for_randomizer(
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
-    let var_orig_root = verifier.commit(commitments[0]);
-    let orig_root_alloc_scalar = AllocatedQuantity {
-        variable: var_orig_root,
-        assignment: None,
-    };
+    let var_orig_root = verifier.commit(commitments.remove(0));
 
-    let mut orig_val_alloc_scalars = vec![];
-    let mut proof_alloc_scalars = vec![];
+    let mut orig_val_vars = vec![];
+    let mut proof_vars = vec![];
 
-    let mut ctr = 1;
     for _ in 0..modified_indices.len() {
-        let var_orig_val = verifier.commit(commitments[ctr]);
-        let orig_val_alloc_scalar = AllocatedQuantity {
-            variable: var_orig_val,
-            assignment: None,
-        };
-        orig_val_alloc_scalars.push(orig_val_alloc_scalar);
-        ctr += 1;
+        let var_orig_val = verifier.commit(commitments.remove(0));
+        orig_val_vars.push(var_orig_val);
 
         let mut ps = vec![];
         for _ in 0..tree_depth * 3 {
             // Proof length = tree depth * 3
-            let var = verifier.commit(commitments[ctr]);
-            let alloc_scalar = AllocatedQuantity {
-                variable: var,
-                assignment: None,
-            };
-            ps.push(alloc_scalar);
-            ctr += 1;
+            let var = verifier.commit(commitments.remove(0));
+            ps.push(var);
         }
-        proof_alloc_scalars.push(ps);
+        proof_vars.push(ps);
     }
 
     let num_statics = 2;
@@ -353,11 +317,11 @@ pub fn verify_proof_for_randomizer(
     randomizer_gadget(
         &mut verifier,
         tree_depth,
-        orig_root_alloc_scalar,
+        var_orig_root,
         new_tree,
         modified_indices.to_vec(),
-        orig_val_alloc_scalars,
-        proof_alloc_scalars,
+        orig_val_vars,
+        proof_vars,
         statics,
         hash_params,
         sbox_type,
@@ -402,9 +366,9 @@ mod tests {
         for i in 0..data_size {
             // Next line is a temporary workaround
             let idx = FieldElement::from(i as u64);
-            orig_tree.update(idx, original_data[i]);
+            orig_tree.update(&idx, original_data[i].clone());
         }
-        let orig_root = orig_tree.root;
+        let orig_root = orig_tree.root.clone();
 
         let (modified_indices, new_data) = get_randomized_data(&original_data, &indices);
         // `new_data` is different from `original_data` only in `count_modified` values.
@@ -418,24 +382,22 @@ mod tests {
         // Create new tree different from original tree
         let mut new_tree = orig_tree.clone();
         for (i, v) in &modified_indices {
-            new_tree.update(i.clone(), randomize(v));
+            new_tree.update(i, randomize(v));
         }
-        let new_root = new_tree.root;
-        assert_ne!(orig_root, new_root);
+        assert_ne!(orig_root, new_tree.root);
 
         // Update new_tree back to old tree
         for (i, v) in &modified_indices {
-            new_tree.update(*i, *v);
+            new_tree.update(i, v.clone());
         }
         assert_eq!(orig_root, new_tree.root);
 
         // Create new tree different from original tree
         let mut new_tree_again = orig_tree.clone();
         for (i, v) in &modified_indices {
-            new_tree_again.update(i.clone(), randomize(v));
+            new_tree_again.update(i, randomize(v));
         }
-        let new_root_again = new_tree_again.root;
-        assert_ne!(orig_root, new_root_again);
+        assert_ne!(orig_root, new_tree_again.root);
 
         let sbox_type = &SboxType::Quint;
 

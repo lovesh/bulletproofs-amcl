@@ -52,11 +52,7 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
 
     let mut comms = vec![];
 
-    let (com_leaf, var_leaf) = prover.commit(leaf.clone(), rands.remove(0));
-    let leaf_alloc_scalar = AllocatedQuantity {
-        variable: var_leaf,
-        assignment: Some(leaf),
-    };
+    let (com_leaf, var_leaf) = prover.commit(leaf, rands.remove(0));
     comms.push(com_leaf);
 
     let (com_leaf_idx, var_leaf_idx) = prover.commit(leaf_index.clone(), rands.remove(0));
@@ -66,15 +62,12 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
     };
     comms.push(com_leaf_idx);
 
-    let mut proof_alloc_scalars = vec![];
+    let mut proof_vars = vec![];
     for p in merkle_proof.drain(0..) {
         for i in p.iter() {
             let (c, v) = prover.commit(i.clone(), FieldElement::random());
             comms.push(c);
-            proof_alloc_scalars.push(AllocatedQuantity {
-                variable: v,
-                assignment: Some(i.clone()),
-            });
+            proof_vars.push(v);
         }
     }
 
@@ -85,9 +78,9 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
         &mut prover,
         tree_depth,
         root,
-        leaf_alloc_scalar,
+        var_leaf,
         leaf_idx_alloc_scalar,
-        proof_alloc_scalars,
+        proof_vars,
         zero,
         &hash_params,
         sbox_type,
@@ -123,10 +116,6 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
     let var_leaf = verifier.commit(commitments.remove(0));
-    let leaf_alloc_scalar = AllocatedQuantity {
-        variable: var_leaf,
-        assignment: None,
-    };
 
     let var_leaf_idx = verifier.commit(commitments.remove(0));
     let leaf_idx_alloc_scalar = AllocatedQuantity {
@@ -134,13 +123,10 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
         assignment: None,
     };
 
-    let mut proof_alloc_scalars = vec![];
+    let mut proof_vars = vec![];
     for c in commitments.drain(0..) {
         let v = verifier.commit(c);
-        proof_alloc_scalars.push(AllocatedQuantity {
-            variable: v,
-            assignment: None,
-        });
+        proof_vars.push(v);
     }
 
     let zero = allocate_statics_for_verifier(&mut verifier, 1, g, h).remove(0);
@@ -150,9 +136,9 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
         &mut verifier,
         tree_depth,
         root,
-        leaf_alloc_scalar,
+        var_leaf,
         leaf_idx_alloc_scalar,
-        proof_alloc_scalars,
+        proof_vars,
         zero,
         hash_params,
         sbox_type,
@@ -182,16 +168,16 @@ mod tests {
 
         for i in 1..=10 {
             let s = FieldElement::from(i as u32);
-            tree.update(s, s);
+            tree.update(&s, s.clone());
         }
 
         let mut merkle_proof_vec = Vec::<ProofNode>::new();
         let mut merkle_proof = Some(merkle_proof_vec);
         let k = FieldElement::from(9u32);
-        assert_eq!(k, tree.get(k, &mut merkle_proof));
+        assert_eq!(k, tree.get(&k, &mut merkle_proof));
         merkle_proof_vec = merkle_proof.unwrap();
         //println!("{:?}", &merkle_proof_vec);
-        assert!(tree.verify_proof(k, k, &merkle_proof_vec, Some(&tree.root)));
+        assert!(tree.verify_proof(&k, &k, &merkle_proof_vec, Some(&tree.root)));
 
         let mut rng = rand::thread_rng();
 
