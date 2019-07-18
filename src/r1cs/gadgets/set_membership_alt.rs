@@ -65,7 +65,7 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
     for i in 0..items.len() {
         // TODO: Possible to save reallocation of elements of `vector` in `bit`? If circuit variables for vector are passed, then yes.
         let (bit_var, item_var, o1) =
-            cs.allocate_multiplier(vector[i].assignment.map(|bit| (bit, items[i].into())))?;
+            cs.allocate_multiplier(vector[i].assignment.as_ref().map(|bit| (bit.clone(), items[i].into())))?;
         constrain_lc_with_scalar::<CS>(cs, item_var.into(), &items[i].into());
 
         let (_, _, o2) = cs.multiply(bit_var.into(), value.variable.into());
@@ -121,7 +121,7 @@ pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(
             variable: var,
             assignment: Some(_b),
         };
-        bit_gadget(&mut prover, quantity)?;
+        bit_gadget(&mut prover, &quantity)?;
         comms.push(com);
         bit_allocs.push(quantity);
     }
@@ -131,7 +131,7 @@ pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(
 
     let _value = FieldElement::from(value);
     let (com_value, var_value) = prover.commit(
-        _value,
+        _value.clone(),
         randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
     );
     let quantity_value = AllocatedQuantity {
@@ -154,7 +154,7 @@ pub fn gen_proof_of_set_membership_alt<R: RngCore + CryptoRng>(
 pub fn verify_proof_of_set_membership_alt(
     set: &[u64],
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -170,19 +170,19 @@ pub fn verify_proof_of_set_membership_alt(
     let mut bit_allocs = vec![];
 
     for i in 0..set_length {
-        let var = verifier.commit(commitments[i]);
+        let var = verifier.commit(commitments.remove(0));
         bit_vars.push(var.clone());
         let quantity = AllocatedQuantity {
             variable: var,
             assignment: None,
         };
-        bit_gadget(&mut verifier, quantity)?;
+        bit_gadget(&mut verifier, &quantity)?;
         bit_allocs.push(quantity);
     }
 
     vector_sum_constraints(&mut verifier, bit_vars, 1)?;
 
-    let var_val = verifier.commit(commitments[set_length]);
+    let var_val = verifier.commit(commitments.remove(0));
     let quantity_value = AllocatedQuantity {
         variable: var_val,
         assignment: None,

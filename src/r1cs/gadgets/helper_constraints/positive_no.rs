@@ -16,7 +16,7 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
     for i in 0..n {
         // Create low-level variables and add them to constraints
 
-        let (a, b, o) = cs.allocate_multiplier(v.assignment.map(|q| {
+        let (a, b, o) = cs.allocate_multiplier(v.assignment.as_ref().map(|q| {
             if (q.shift_right(i)).is_odd() {
                 (FieldElement::zero(), FieldElement::one())
             } else {
@@ -30,8 +30,8 @@ pub fn positive_no_gadget<CS: ConstraintSystem>(
         // Enforce that a = 1 - b, so they both are 1 or 0.
         cs.constrain(a + (b - FieldElement::one()));
 
-        constraint_v.push((b, exp_2));
-        exp_2 = exp_2 + exp_2;
+        constraint_v.push((b, exp_2.clone()));
+        exp_2 = &exp_2 + &exp_2;
     }
 
     // Enforce that -v + Sum(b_i * 2^i, i = 0..n-1) = 0 => Sum(b_i * 2^i, i = 0..n-1) = v

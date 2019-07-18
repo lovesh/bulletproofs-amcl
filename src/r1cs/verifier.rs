@@ -178,7 +178,7 @@ impl<'a> Verifier<'a> {
                         wV[*i] -= &exp_z * coeff;
                     }
                     Variable::One() => {
-                        wc -= exp_z * coeff;
+                        wc -= &exp_z * coeff;
                     }
                 }
             }
@@ -358,7 +358,7 @@ impl<'a> Verifier<'a> {
 
         let u_for_g = iter::repeat(FieldElement::one())
             .take(n1)
-            .chain(iter::repeat(u).take(n2 + pad));
+            .chain(iter::repeat(u.clone()).take(n2 + pad));
         let u_for_h = u_for_g.clone();
 
         // define parameters for P check
@@ -394,26 +394,36 @@ impl<'a> Verifier<'a> {
 
         // group the T_scalars and T_points together
         // T_scalars = [rx, rx^3, rx^4, rx^5, rx^6]
-        let mut T_scalars = vec![&r * &x, &r * &x_cube];
-        T_scalars.push(T_scalars[T_scalars.len() - 1] * &x); // rx^4
-        T_scalars.push(T_scalars[T_scalars.len() - 1] * &x); // rx^5
-        T_scalars.push(T_scalars[T_scalars.len() - 1] * &x); // rx^6
+        let rx = &r * &x;
+        let rx_cube = &r * &x_cube;
+        let mut T_scalars: Vec<&FieldElement> = vec![&rx, &rx_cube];
+        let rx_4 = T_scalars[T_scalars.len() - 1] * &x;
+        T_scalars.push(&rx_4); // rx^4
+        let rx_5 = T_scalars[T_scalars.len() - 1] * &x;
+        T_scalars.push(&rx_5); // rx^5
+        let rx_6 = T_scalars[T_scalars.len() - 1] * &x;
+        T_scalars.push(&rx_6); // rx^6
 
         let T_points = [&proof.T_1, &proof.T_3, &proof.T_4, &proof.T_5, &proof.T_6];
 
-        let mut arg1 = vec![x, x_sqr, x_cube, u * x, u * x_sqr, u * x_cube];
-        arg1.extend(wV.scaled_by(&r_x_sqr));
+        let ux = &u * &x;
+        let ux_sqr = &u * &x_sqr;
+        let ux_cube = &u * &x_cube;
+        let mut arg1 = vec![&x, &x_sqr, &x_cube, &ux, &ux_sqr, &ux_cube];
+        let _wV_r_x_sqr = wV.scaled_by(&r_x_sqr);
+        let mut wV_r_x_sqr: Vec<&FieldElement> = _wV_r_x_sqr.iter().map(|f| f).collect();
+        arg1.append(&mut wV_r_x_sqr);
         arg1.append(&mut T_scalars);
 
-        // w * (proof.t_x - a * b) + r * (x_sqr * (wc + delta) - proof.t_x)
-        arg1.push(w * (proof.t_x - (a * b)) + r * ((x_sqr * (wc + delta)) - proof.t_x));
+        let w = w * (&proof.t_x - a * b) + &r * (&x_sqr * (wc + delta) - &proof.t_x);
+        arg1.push(&w);
 
-        // -proof.e_blinding - r * proof.t_x_blinding
-        arg1.push((proof.e_blinding + r * proof.t_x_blinding).negation());
-        arg1.append(&mut g_scalars);
-        arg1.append(&mut h_scalars);
-        arg1.append(&mut u_sq);
-        arg1.append(&mut u_inv_sq);
+        let p = (&proof.e_blinding + &r * &proof.t_x_blinding).negation();
+        arg1.push(&p);
+        arg1.extend(&g_scalars);
+        arg1.extend(&h_scalars);
+        arg1.extend(&u_sq);
+        arg1.extend(&u_inv_sq);
 
         let mut arg2: Vec<&G1> = vec![
             &proof.A_I1, &proof.A_O1, &proof.S1, &proof.A_I2, &proof.A_O2, &proof.S2,
@@ -421,7 +431,7 @@ impl<'a> Verifier<'a> {
 
         arg2.extend(&self.V);
         arg2.extend(&T_points);
-        arg2.extend(&[*g, *h]);
+        arg2.extend(&[g, h]);
         arg2.extend(&G.as_slice()[0..padded_n]);
         arg2.extend(&H.as_slice()[0..padded_n]);
         arg2.extend(proof.ipp_proof.L.as_slice());
@@ -430,7 +440,6 @@ impl<'a> Verifier<'a> {
         /*let res = G1Vector::from(arg2)
             .inner_product_var_time(&FieldElementVector::from(arg1))
             .unwrap();*/
-        let arg1: Vec<&FieldElement> = arg1.iter().map(|f| f).collect();
         let res = G1Vector::inner_product_var_time_with_ref_vecs(arg2, arg1).unwrap();
         if !res.is_identity() {
             return Err(R1CSError::VerificationError);

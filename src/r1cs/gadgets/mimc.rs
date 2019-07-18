@@ -11,8 +11,8 @@ use rand::{CryptoRng, RngCore};
 use super::helper_constraints::mimc::{mimc, mimc_gadget};
 
 pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
-    inputs: [FieldElement; 2],
-    randomness: Option<[FieldElement; 2]>,
+    mut inputs: Vec<FieldElement>,
+    randomness: Option<Vec<FieldElement>>,
     expected_output: &FieldElement,
     constants: &[FieldElement],
     mimc_rounds: usize,
@@ -23,30 +23,32 @@ pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
     G: &G1Vector,
     H: &G1Vector,
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    assert_eq!(inputs.len(), 2);
     check_for_randomness_or_rng!(randomness, rng)?;
 
-    let rands: [FieldElement; 2] = randomness.unwrap_or_else(|| {
+    let mut rands = randomness.unwrap_or_else(|| {
         let r = rng.unwrap();
-        [
+        vec![
             FieldElement::random_using_rng(r),
             FieldElement::random_using_rng(r),
         ]
     });
+    assert_eq!(rands.len(), 2);
 
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
-    let (com_l, var_l) = prover.commit(inputs[0], rands[0]);
-    let (com_r, var_r) = prover.commit(inputs[1], rands[1]);
+    let (com_l, var_l) = prover.commit(inputs[0].clone(), rands.remove(0));
+    let (com_r, var_r) = prover.commit(inputs[1].clone(), rands.remove(0));
 
     let left_alloc_scalar = AllocatedQuantity {
         variable: var_l,
-        assignment: Some(inputs[0]),
+        assignment: Some(inputs.remove(0)),
     };
 
     let right_alloc_scalar = AllocatedQuantity {
         variable: var_r,
-        assignment: Some(inputs[1]),
+        assignment: Some(inputs.remove(0)),
     };
 
     mimc_gadget(
@@ -74,7 +76,7 @@ pub fn verify_knowledge_of_preimage_of_mimc(
     constants: &[FieldElement],
     mimc_rounds: usize,
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -84,8 +86,8 @@ pub fn verify_knowledge_of_preimage_of_mimc(
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
-    let var_l = verifier.commit(commitments[0]);
-    let var_r = verifier.commit(commitments[1]);
+    let var_l = verifier.commit(commitments.remove(0));
+    let var_r = verifier.commit(commitments.remove(0));
 
     let left_alloc_scalar = AllocatedQuantity {
         variable: var_l,
@@ -141,7 +143,7 @@ mod tests {
 
         let start = Instant::now();
         let (proof, commitments) = gen_proof_of_knowledge_of_preimage_of_mimc(
-            [xl, xr],
+            vec![xl, xr],
             None,
             &expected_output,
             &constants,

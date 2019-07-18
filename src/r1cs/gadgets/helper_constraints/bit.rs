@@ -6,11 +6,11 @@ use amcl_wrapper::field_elem::FieldElement;
 // Ensure `v` is a bit, hence 0 or 1
 pub fn bit_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
-    v: AllocatedQuantity,
+    v: &AllocatedQuantity,
 ) -> Result<(), R1CSError> {
     // TODO: Possible to save reallocation of `v` in `bit`?
     let (a, b, o) =
-        cs.allocate_multiplier(v.assignment.map(|bit| ((FieldElement::one() - bit), bit)))?;
+        cs.allocate_multiplier(v.assignment.as_ref().map(|bit| ((FieldElement::one() - bit), bit.clone())))?;
 
     // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b + (-v) = 0

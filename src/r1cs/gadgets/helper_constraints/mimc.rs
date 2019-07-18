@@ -19,9 +19,9 @@ pub fn mimc(
     let mut xr = xr.clone();
 
     for i in 0..mimc_rounds {
-        let tmp1 = xl + constants[i];
-        let mut tmp2 = (tmp1 * tmp1) * tmp1;
-        tmp2 += xr;
+        let tmp1 = &xl + &constants[i];
+        let mut tmp2 = tmp1.square() * &tmp1;
+        tmp2 += &xr;
         xr = xl;
         xl = tmp2;
     }
@@ -62,7 +62,7 @@ pub fn enforce_mimc_2_inputs<CS: ConstraintSystem>(
         // xL, xR := xR + (xL + Ci)^3, xL
 
         let const_lc: LinearCombination =
-            vec![(Variable::One(), mimc_constants[j])].iter().collect();
+            vec![(Variable::One(), mimc_constants[j].clone())].iter().collect();
 
         let left_plus_const: LinearCombination = left_v.clone() + const_lc;
 

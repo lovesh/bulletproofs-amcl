@@ -26,9 +26,15 @@ pub fn difference_gadget<CS: ConstraintSystem>(
     }
     let mut result = Vec::<Variable>::new();
     for i in 0..new.len() {
-        let diff = original[i].variable - new[i];
+        let diff = original[i].variable - new[i].clone();
         let val_diff = cs.evaluate_lc(&diff);
-        let val_diff_inv = val_diff.map(|l| l.inverse());
+        let (val_diff, val_diff_inv) = match val_diff {
+            Some(l) => {
+                let inv = l.inverse();
+                (Some(l), Some(inv))
+            },
+            None => (None, None)
+        };
 
         // diff * diff_inv = 1_or_0 depending on diff being non-zero or zero
         let (var_diff, _) = cs.allocate_single(val_diff)?;
@@ -67,11 +73,11 @@ pub fn gen_proof_for_difference(
     let mut allocs = vec![];
 
     for i in 0..original_vals.len() {
-        let (com, var) = prover.commit(original_vals[i], FieldElement::random());
+        let (com, var) = prover.commit(original_vals[i].clone(), FieldElement::random());
         comms.push(com);
         allocs.push(AllocatedQuantity {
             variable: var,
-            assignment: Some(original_vals[i]),
+            assignment: Some(original_vals[i].clone()),
         });
     }
 
@@ -91,7 +97,7 @@ pub fn verify_proof_for_difference(
     new_vals: &[FieldElement],
     count_different: u64,
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -103,8 +109,8 @@ pub fn verify_proof_for_difference(
 
     let mut allocs = vec![];
 
-    for i in 0..new_vals.len() {
-        let var = verifier.commit(commitments[i]);
+    for com in commitments.drain(0..) {
+        let var = verifier.commit(com);
         let alloc = AllocatedQuantity {
             variable: var,
             assignment: None,

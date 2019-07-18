@@ -83,28 +83,26 @@ impl IPP {
             L_0.extend(b_R.hadamard_product(&H_factors_L).unwrap());
             L_0.push(c_L);
 
-            let mut L_1 = G1Vector::new(0);
-            L_1.append(&mut G_R);
-            L_1.append(&mut H_L);
-            L_1.push(Q.clone());
+            let mut L_1 = vec![];
+            L_1.extend(G_R.iter());
+            L_1.extend(H_L.iter());
+            L_1.push(&Q);
 
-            let L = G1Vector::from(L_1)
-                .multi_scalar_mul_var_time(&L_0.into())
-                .unwrap();
+            let L_0: Vec<&FieldElement> = L_0.iter().map(|f| f).collect();
+            let L = G1Vector::inner_product_var_time_with_ref_vecs(L_1, L_0).unwrap();
 
             let mut R_0: Vec<FieldElement> = vec![];
             R_0.extend(a_R.hadamard_product(&G_factors_L).unwrap());
             R_0.extend(b_L.hadamard_product(&H_factors_R).unwrap());
             R_0.push(c_R);
 
-            let mut R_1 = G1Vector::new(0);
-            R_1.append(&mut G_L);
-            R_1.append(&mut H_R);
-            R_1.push(Q.clone());
+            let mut R_1 = vec![];
+            R_1.extend(G_L.iter());
+            R_1.extend(H_R.iter());
+            R_1.push(&Q);
 
-            let R = G1Vector::from(R_1)
-                .multi_scalar_mul_var_time(&R_0.into())
-                .unwrap();
+            let R_0: Vec<&FieldElement> = R_0.iter().map(|f| f).collect();
+            let R = G1Vector::inner_product_var_time_with_ref_vecs(R_1, R_0).unwrap();
 
             transcript.commit_point(b"L", &L);
             transcript.commit_point(b"R", &R);
@@ -148,31 +146,27 @@ impl IPP {
             let c_L = a_L.inner_product(&b_R).unwrap();
             let c_R = a_R.inner_product(&b_L).unwrap();
 
-            let mut L_1 = G1Vector::new(0);
-            L_1.append(&mut G_R);
-            L_1.append(&mut H_L);
-            L_1.push(Q.clone());
-            let mut L_0 = FieldElementVector::new(0);
-            L_0.append(&mut a_L.clone());
-            L_0.append(&mut b_R.clone());
-            L_0.push(c_L);
+            let mut L_1 = vec![];
+            L_1.extend(G_R.iter());
+            L_1.extend(H_L.iter());
+            L_1.push(&Q);
+            let mut L_0 = vec![];
+            L_0.extend(a_L.iter());
+            L_0.extend(b_R.iter());
+            L_0.push(&c_L);
 
-            let L = G1Vector::from(L_1)
-                .multi_scalar_mul_var_time(&L_0.into())
-                .unwrap();
+            let L = G1Vector::inner_product_var_time_with_ref_vecs(L_1, L_0).unwrap();
 
-            let mut R_1 = G1Vector::new(0);
-            R_1.append(&mut G_L);
-            R_1.append(&mut H_R);
-            R_1.push(Q.clone());
-            let mut R_0 = FieldElementVector::new(0);
-            R_0.append(&mut a_R.clone());
-            R_0.append(&mut b_L.clone());
-            R_0.push(c_R);
+            let mut R_1 = vec![];
+            R_1.extend(G_L.iter());
+            R_1.extend(H_R.iter());
+            R_1.push(&Q);
+            let mut R_0 = vec![];
+            R_0.extend(a_R.iter());
+            R_0.extend(b_L.iter());
+            R_0.push(&c_R);
 
-            let R = G1Vector::from(R_1)
-                .multi_scalar_mul_var_time(&R_0.into())
-                .unwrap();
+            let R = G1Vector::inner_product_var_time_with_ref_vecs(R_1, R_0).unwrap();
 
             transcript.commit_point(b"L", &L);
             transcript.commit_point(b"R", &R);
@@ -333,12 +327,12 @@ mod tests {
         let H: G1Vector = get_generators("h", n).into();
         let Q = G1::from_msg_hash("Q".as_bytes());
 
-        let a: FieldElementVector = vec![1, 2, 3, 4]
+        let mut a: FieldElementVector = vec![1, 2, 3, 4]
             .iter()
             .map(|i| FieldElement::from(*i as u8))
             .collect::<Vec<FieldElement>>()
             .into();
-        let b: FieldElementVector = vec![5, 6, 7, 8]
+        let mut b: FieldElementVector = vec![5, 6, 7, 8]
             .iter()
             .map(|i| FieldElement::from(*i as u8))
             .collect::<Vec<FieldElement>>()
@@ -353,22 +347,24 @@ mod tests {
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
 
-        let b_prime: Vec<FieldElement> = b
+        let mut b_prime: Vec<FieldElement> = b
             .iter()
             .zip(H_factors.iter())
             .map(|(bi, yi)| bi * yi)
             .collect();
         let c = a.inner_product(&b).unwrap();
-        let mut _1 = vec![];
-        _1.extend(a.iter());
-        _1.extend(b_prime.iter());
+
+        let mut _1 = FieldElementVector::new(0);
+        _1.append(&mut a);
+        _1.append(&mut b_prime.into());
         _1.push(c);
-        let mut _2 = vec![];
-        _2.extend(G.iter());
-        _2.extend(H.iter());
-        _2.push(Q);
+
+        let mut _2 = G1Vector::new(0);
+        _2.append(&mut G.clone());
+        _2.append(&mut H.clone());
+        _2.push(Q.clone());
         let P = G1Vector::from(_2)
-            .multi_scalar_mul_var_time(&_1.into())
+            .multi_scalar_mul_var_time(&_1)
             .unwrap();
 
         let mut new_trans1 = Transcript::new(b"innerproduct");

@@ -58,20 +58,18 @@ pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(
     let mut prover_transcript = Transcript::new(transcript_label);
 
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
-    let value = FieldElement::from(value);
     let (com_value, var_value) = prover.commit(
         value.clone(),
         randomness.unwrap_or_else(|| FieldElement::random_using_rng(rng.unwrap())),
     );
     let alloc_scal = AllocatedQuantity {
         variable: var_value,
-        assignment: Some(value),
+        assignment: Some(value.clone()),
     };
     comms.push(com_value);
 
     for i in 0..set_length {
-        let elem = FieldElement::from(set[i]);
-        let diff = elem - value;
+        let diff = &set[i] - &value;
 
         // Take difference of set element and value, `set[i] - value`
         let (com_diff, var_diff) = prover.commit(diff.clone(), FieldElement::random());
@@ -93,7 +91,7 @@ pub fn gen_proof_of_set_membership<R: RngCore + CryptoRng>(
 pub fn verify_proof_of_set_membership(
     set: &[FieldElement],
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -107,14 +105,14 @@ pub fn verify_proof_of_set_membership(
 
     let mut diff_vars: Vec<AllocatedQuantity> = vec![];
 
-    let var_val = verifier.commit(commitments[0]);
+    let var_val = verifier.commit(commitments.remove(0));
     let alloc_scal = AllocatedQuantity {
         variable: var_val,
         assignment: None,
     };
 
     for i in 1..set_length + 1 {
-        let var_diff = verifier.commit(commitments[i]);
+        let var_diff = verifier.commit(commitments.remove(0));
         let alloc_scal_diff = AllocatedQuantity {
             variable: var_diff,
             assignment: None,

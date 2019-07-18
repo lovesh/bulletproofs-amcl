@@ -46,7 +46,7 @@ pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(
     };
     comms.push(com_val_inv);
 
-    is_nonzero_gadget(&mut prover, alloc_scal, alloc_scal_inv)?;
+    is_nonzero_gadget(&mut prover, alloc_scal.variable, alloc_scal_inv.variable)?;
 
     let proof = prover.prove(G, H)?;
 
@@ -55,7 +55,7 @@ pub fn gen_proof_of_non_zero_val<R: RngCore + CryptoRng>(
 
 pub fn verify_proof_of_non_zero_val(
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -65,19 +65,19 @@ pub fn verify_proof_of_non_zero_val(
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
-    let var_val = verifier.commit(commitments[0]);
+    let var_val = verifier.commit(commitments.remove(0));
     let alloc_scal = AllocatedQuantity {
         variable: var_val,
         assignment: None,
     };
 
-    let var_val_inv = verifier.commit(commitments[1]);
+    let var_val_inv = verifier.commit(commitments.remove(0));
     let alloc_scal_inv = AllocatedQuantity {
         variable: var_val_inv,
         assignment: None,
     };
 
-    is_nonzero_gadget(&mut verifier, alloc_scal, alloc_scal_inv)?;
+    is_nonzero_gadget(&mut verifier, alloc_scal.variable, alloc_scal_inv.variable)?;
 
     verifier.verify(&proof, &g, &h, &G, &H)
 }

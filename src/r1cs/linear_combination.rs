@@ -121,6 +121,19 @@ impl Mul<LinearCombination> for FieldElement {
     }
 }
 
+impl Mul<LinearCombination> for &FieldElement {
+    type Output = LinearCombination;
+
+    fn mul(self, other: LinearCombination) -> Self::Output {
+        let out_terms = other
+            .terms
+            .into_iter()
+            .map(|(var, scalar)| (var, scalar * self))
+            .collect();
+        LinearCombination { terms: out_terms }
+    }
+}
+
 impl Neg for LinearCombination {
     type Output = Self;
 

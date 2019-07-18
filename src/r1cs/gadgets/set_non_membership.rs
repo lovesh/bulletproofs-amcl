@@ -27,7 +27,7 @@ pub fn set_non_membership_gadget<CS: ConstraintSystem>(
         // Since `diff_vars[i]` is `set[i] - v`, `diff_vars[i]` + `v` should be `set[i]`
         constrain_lc_with_scalar::<CS>(cs, diff_vars[i].variable + v.variable, &set[i]);
         // Ensure `set[i] - v` is non-zero
-        is_nonzero_gadget(cs, diff_vars[i], diff_inv_vars[i])?;
+        is_nonzero_gadget(cs, diff_vars[i].variable, diff_inv_vars[i].variable)?;
     }
 
     Ok(())
@@ -64,13 +64,12 @@ pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(
     );
     let alloc_scal = AllocatedQuantity {
         variable: var_value,
-        assignment: Some(value),
+        assignment: Some(value.clone()),
     };
     comms.push(com_value);
 
     for i in 0..set_length {
-        let elem = FieldElement::from(set[i]);
-        let diff = elem - value;
+        let diff = &set[i] - &value;
         let diff_inv = diff.inverse();
 
         // Take difference of set element and value, `set[i] - value`
@@ -102,7 +101,7 @@ pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(
 pub fn verify_proof_of_set_non_membership(
     set: &[FieldElement],
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -117,21 +116,21 @@ pub fn verify_proof_of_set_non_membership(
     let mut diff_vars: Vec<AllocatedQuantity> = vec![];
     let mut diff_inv_vars: Vec<AllocatedQuantity> = vec![];
 
-    let var_val = verifier.commit(commitments[0]);
+    let var_val = verifier.commit(commitments.remove(0));
     let alloc_scal = AllocatedQuantity {
         variable: var_val,
         assignment: None,
     };
 
     for i in 1..set_length + 1 {
-        let var_diff = verifier.commit(commitments[2 * i - 1]);
+        let var_diff = verifier.commit(commitments.remove(0));
         let alloc_scal_diff = AllocatedQuantity {
             variable: var_diff,
             assignment: None,
         };
         diff_vars.push(alloc_scal_diff);
 
-        let var_diff_inv = verifier.commit(commitments[2 * i]);
+        let var_diff_inv = verifier.commit(commitments.remove(0));
         let alloc_scal_diff_inv = AllocatedQuantity {
             variable: var_diff_inv,
             assignment: None,

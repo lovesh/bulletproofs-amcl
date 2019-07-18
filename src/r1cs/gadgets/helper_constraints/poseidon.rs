@@ -135,14 +135,8 @@ impl SboxType {
         // Ensure `inp_plus_const` is not zero
         is_nonzero_gadget(
             cs,
-            AllocatedQuantity {
-                variable: var_l,
-                assignment: val_l,
-            },
-            AllocatedQuantity {
-                variable: var_r,
-                assignment: val_r,
-            },
+            var_l,
+            var_r,
         )?;
 
         // Constrain product of ``inp_plus_const` and its inverse to be 1.
@@ -181,7 +175,7 @@ pub fn Poseidon_permutation(
         // linear layer
         for i in 0..width {
             for j in 0..width {
-                current_state_temp[i] += &current_state[j] * params.MDS_matrix[j][i];
+                current_state_temp[i] += &current_state[j] * &params.MDS_matrix[j][i];
             }
         }
 
@@ -262,7 +256,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
         let width = sbox_outs.len();
         for i in 0..width {
             for j in 0..width {
-                next_inputs[i] += (matrix_2[j][i] * sbox_outs[j].clone());
+                next_inputs[i] += (&matrix_2[j][i] * sbox_outs[j].clone());
             }
         }
     }
@@ -282,7 +276,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
         // Substitution (S-box) layer
         for i in 0..width {
-            let round_key = params.round_keys[round_keys_offset];
+            let round_key = params.round_keys[round_keys_offset].clone();
             sbox_outputs[i] = sbox_type
                 .synthesize_sbox(cs, input_vars[i].clone(), round_key)?
                 .into();
@@ -309,7 +303,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
         // Substitution (S-box) layer
         for i in 0..width {
-            let round_key = params.round_keys[round_keys_offset];
+            let round_key = params.round_keys[round_keys_offset].clone();
 
             // apply Sbox to only 1 element of the state.
             // Here the last one is chosen but the choice is arbitrary.
@@ -349,7 +343,7 @@ pub fn Poseidon_permutation_constraints<'a, CS: ConstraintSystem>(
 
         // Substitution (S-box) layer
         for i in 0..width {
-            let round_key = params.round_keys[round_keys_offset];
+            let round_key = params.round_keys[round_keys_offset].clone();
             sbox_outputs[i] = sbox_type
                 .synthesize_sbox(cs, input_vars[i].clone(), round_key)?
                 .into();
@@ -420,7 +414,8 @@ pub fn Poseidon_hash_2(
     ];
 
     // Never take the first output
-    Poseidon_permutation(&input, params, sbox)[1]
+    let out = Poseidon_permutation(&input, params, sbox).remove(1);
+    out
 }
 
 pub fn Poseidon_hash_2_constraints<'a, CS: ConstraintSystem>(
@@ -450,19 +445,18 @@ pub fn Poseidon_hash_2_constraints<'a, CS: ConstraintSystem>(
 
 pub fn Poseidon_hash_2_gadget<'a, CS: ConstraintSystem>(
     cs: &mut CS,
-    xl: AllocatedQuantity,
-    xr: AllocatedQuantity,
-    statics: Vec<AllocatedQuantity>,
+    xl: Variable,
+    xr: Variable,
+    statics: Vec<Variable>,
     params: &'a PoseidonParams,
     sbox_type: &SboxType,
     output: &FieldElement,
 ) -> Result<(), R1CSError> {
-    let statics: Vec<LinearCombination> = statics.iter().map(|s| s.variable.into()).collect();
     let hash = Poseidon_hash_2_constraints::<CS>(
         cs,
-        xl.variable.into(),
-        xr.variable.into(),
-        statics,
+        xl.into(),
+        xr.into(),
+        statics.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
         params,
         sbox_type,
     )?;
@@ -473,72 +467,57 @@ pub fn Poseidon_hash_2_gadget<'a, CS: ConstraintSystem>(
 }
 
 pub fn Poseidon_hash_4(
-    inputs: [FieldElement; 4],
+    mut inputs: Vec<FieldElement>,
     params: &PoseidonParams,
     sbox: &SboxType,
 ) -> FieldElement {
     // Only 4 inputs to the permutation are set to the input of this hash function,
     // one is set to the padding constant and one is set to 0. Always keep the 1st input as 0
-
-    let input = vec![
-        FieldElement::from(ZERO_CONST),
-        inputs[0],
-        inputs[1],
-        inputs[2],
-        inputs[3],
-        FieldElement::from(PADDING_CONST),
-    ];
-
+    assert_eq!(inputs.len(), 4);
+    let mut input = vec![FieldElement::from(ZERO_CONST)];
+    input.append(&mut inputs);
+    input.push(FieldElement::from(PADDING_CONST));
     // Never take the first output
-    Poseidon_permutation(&input, params, sbox)[1]
+    let out = Poseidon_permutation(&input, params, sbox).remove(1);
+    out
 }
 
 pub fn Poseidon_hash_4_constraints<'a, CS: ConstraintSystem>(
     cs: &mut CS,
-    input: [LinearCombination; 4],
-    statics: Vec<LinearCombination>,
+    mut inputs: Vec<LinearCombination>,
+    mut statics: Vec<LinearCombination>,
     params: &'a PoseidonParams,
     sbox_type: &SboxType,
 ) -> Result<LinearCombination, R1CSError> {
     let width = params.width;
     // Only 4 inputs to the permutation are set to the input of this hash function.
+    assert_eq!(inputs.len(), 4);
     assert_eq!(statics.len(), width - 4);
 
     // Always keep the 1st input as 0
-    let mut inputs = vec![statics[0].to_owned()];
-    inputs.push(input[0].clone());
-    inputs.push(input[1].clone());
-    inputs.push(input[2].clone());
-    inputs.push(input[3].clone());
+    let mut input = vec![statics.remove(0)];
+    input.append(&mut inputs);
 
     // statics correspond to committed variables with values as PADDING_CONST and 0s and randomness as 0
-    for i in 1..statics.len() {
-        inputs.push(statics[i].to_owned());
-    }
-    let permutation_output = Poseidon_permutation_constraints::<CS>(cs, inputs, params, sbox_type)?;
+    input.append(&mut statics);
+    let permutation_output = Poseidon_permutation_constraints::<CS>(cs, input, params, sbox_type)?;
     Ok(permutation_output[1].to_owned())
 }
 
 pub fn Poseidon_hash_4_gadget<'a, CS: ConstraintSystem>(
     cs: &mut CS,
-    input: Vec<AllocatedQuantity>,
-    statics: Vec<AllocatedQuantity>,
+    input: Vec<Variable>,
+    statics: Vec<Variable>,
     params: &'a PoseidonParams,
     sbox_type: &SboxType,
     output: &FieldElement,
 ) -> Result<(), R1CSError> {
-    let statics: Vec<LinearCombination> = statics.iter().map(|s| s.variable.into()).collect();
     assert_eq!(input.len(), 4);
-    let mut input_arr: [LinearCombination; 4] = [
-        LinearCombination::default(),
-        LinearCombination::default(),
-        LinearCombination::default(),
-        LinearCombination::default(),
-    ];
-    for i in 0..input.len() {
-        input_arr[i] = input[i].variable.into();
-    }
-    let hash = Poseidon_hash_4_constraints::<CS>(cs, input_arr, statics, params, sbox_type)?;
+
+    let hash = Poseidon_hash_4_constraints::<CS>(cs,
+                                                 input.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
+                                                 statics.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
+                                                 params, sbox_type)?;
 
     constrain_lc_with_scalar::<CS>(cs, hash, output);
 
@@ -548,48 +527,33 @@ pub fn Poseidon_hash_4_gadget<'a, CS: ConstraintSystem>(
 /// Only 8 inputs to the permutation are set to the input of this hash function,
 /// one is set to 0. Always keep the 1st input as 0
 pub fn Poseidon_hash_8(
-    inputs: [FieldElement; 8],
+    mut inputs: Vec<FieldElement>,
     params: &PoseidonParams,
     sbox: &SboxType,
 ) -> FieldElement {
-    let input = vec![
-        FieldElement::from(ZERO_CONST),
-        inputs[0],
-        inputs[1],
-        inputs[2],
-        inputs[3],
-        inputs[4],
-        inputs[5],
-        inputs[6],
-        inputs[7],
-    ];
+    assert_eq!(inputs.len(), 8);
+    let mut input = vec![FieldElement::from(ZERO_CONST)];
+    input.append(&mut inputs);
 
     // Never take the first output
-    Poseidon_permutation(&input, params, sbox)[1]
+    let out = Poseidon_permutation(&input, params, sbox).remove(1);
+    out
 }
 
 pub fn Poseidon_hash_8_constraints<'a, CS: ConstraintSystem>(
     cs: &mut CS,
-    input: [LinearCombination; 8],
+    mut input: Vec<LinearCombination>,
     zero: LinearCombination,
     params: &'a PoseidonParams,
     sbox_type: &SboxType,
 ) -> Result<LinearCombination, R1CSError> {
+    assert_eq!(input.len(), 8);
     let width = params.width;
     // zero corresponds to committed variable with value as ZERO_CONST and randomness as 0
 
     // Always keep the 1st input as 0
     let mut inputs = vec![zero];
-    inputs.push(input[0].clone());
-    inputs.push(input[1].clone());
-    inputs.push(input[2].clone());
-    inputs.push(input[3].clone());
-    inputs.push(input[4].clone());
-    inputs.push(input[5].clone());
-    inputs.push(input[6].clone());
-    inputs.push(input[7].clone());
-
-    // zero corresponds to committed variable with value as ZERO_CONST and randomness as 0
+    inputs.append(&mut input);
 
     let permutation_output = Poseidon_permutation_constraints::<CS>(cs, inputs, params, sbox_type)?;
     Ok(permutation_output[1].to_owned())
@@ -597,25 +561,17 @@ pub fn Poseidon_hash_8_constraints<'a, CS: ConstraintSystem>(
 
 pub fn Poseidon_hash_8_gadget<'a, CS: ConstraintSystem>(
     cs: &mut CS,
-    input: Vec<AllocatedQuantity>,
-    zero: AllocatedQuantity,
+    input: Vec<Variable>,
+    zero: Variable,
     params: &'a PoseidonParams,
     sbox_type: &SboxType,
     output: &FieldElement,
 ) -> Result<(), R1CSError> {
     assert_eq!(input.len(), 8);
-    let input_arr: [LinearCombination; 8] = [
-        input[0].variable.into(),
-        input[1].variable.into(),
-        input[2].variable.into(),
-        input[3].variable.into(),
-        input[4].variable.into(),
-        input[5].variable.into(),
-        input[6].variable.into(),
-        input[7].variable.into(),
-    ];
     let hash =
-        Poseidon_hash_8_constraints::<CS>(cs, input_arr, zero.variable.into(), params, sbox_type)?;
+        Poseidon_hash_8_constraints::<CS>(cs,
+                                          input.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
+                                          zero.into(), params, sbox_type)?;
 
     constrain_lc_with_scalar::<CS>(cs, hash, output);
 

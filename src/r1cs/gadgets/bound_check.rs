@@ -109,7 +109,7 @@ pub fn verify_proof_of_bounded_num(
     upper: u64,
     max_bits_in_val: usize,
     proof: R1CSProof,
-    commitments: Vec<G1>,
+    mut commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -119,19 +119,19 @@ pub fn verify_proof_of_bounded_num(
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
 
-    let var_v = verifier.commit(commitments[0]);
+    let var_v = verifier.commit(commitments.remove(0));
     let quantity_v = AllocatedQuantity {
         variable: var_v,
         assignment: None,
     };
 
-    let var_a = verifier.commit(commitments[1]);
+    let var_a = verifier.commit(commitments.remove(0));
     let quantity_a = AllocatedQuantity {
         variable: var_a,
         assignment: None,
     };
 
-    let var_b = verifier.commit(commitments[2]);
+    let var_b = verifier.commit(commitments.remove(0));
     let quantity_b = AllocatedQuantity {
         variable: var_b,
         assignment: None,
