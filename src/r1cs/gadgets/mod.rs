@@ -2,7 +2,7 @@ extern crate merlin;
 extern crate rand;
 
 pub mod bound_check;
-pub mod difference;
+pub mod hamming_distance;
 mod helper_constraints;
 pub mod mimc;
 pub mod non_zero;

@@ -1,5 +1,6 @@
 use super::helper_constraints::constrain_lc_with_scalar;
-/// Check in how many elements are 2 ordered sets different
+/// Check in how many elements are 2 ordered sets different.
+/// Checks that Hamming distance is equal to some public value.
 use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
@@ -13,7 +14,7 @@ use super::helper_constraints::vector_sum::vector_sum_constraints;
 
 use std::time::{Duration, Instant};
 
-pub fn difference_gadget<CS: ConstraintSystem>(
+pub fn hamming_distance_gadget<CS: ConstraintSystem>(
     cs: &mut CS,
     original: Vec<AllocatedQuantity>,
     new: &[FieldElement],
@@ -54,7 +55,7 @@ pub fn difference_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
-pub fn gen_proof_for_difference(
+pub fn gen_proof_for_hamming_distance(
     original_vals: &[FieldElement],
     new_vals: &[FieldElement],
     count_different: u64,
@@ -82,7 +83,7 @@ pub fn gen_proof_for_difference(
     }
 
     let start = Instant::now();
-    difference_gadget(&mut prover, allocs, new_vals, count_different)?;
+    hamming_distance_gadget(&mut prover, allocs, new_vals, count_different)?;
     println!(
         "No of multipliers is {} and constraints is {}",
         &prover.num_multipliers(),
@@ -93,7 +94,7 @@ pub fn gen_proof_for_difference(
     Ok((proof, comms))
 }
 
-pub fn verify_proof_for_difference(
+pub fn verify_proof_for_hamming_distance(
     new_vals: &[FieldElement],
     count_different: u64,
     proof: R1CSProof,
@@ -119,7 +120,7 @@ pub fn verify_proof_for_difference(
     }
 
     let start = Instant::now();
-    difference_gadget(&mut verifier, allocs, new_vals, count_different)?;
+    hamming_distance_gadget(&mut verifier, allocs, new_vals, count_different)?;
     verifier.verify(&proof, &g, &h, &G, &H)?;
 
     println!("Verification time is {:?}", start.elapsed());
@@ -134,7 +135,7 @@ mod tests {
     use amcl_wrapper::field_elem::FieldElementVector;
 
     #[test]
-    fn test_set_difference() {
+    fn test_hamming_distance() {
         let data_size = 150;
         let count_modified = 5;
         let original_data = FieldElementVector::random(data_size);
@@ -160,7 +161,7 @@ mod tests {
         let label = b"Difference";
 
         let (proof, commitments) = {
-            gen_proof_for_difference(
+            gen_proof_for_hamming_distance(
                 &original_data.as_slice(),
                 &new_data.as_slice(),
                 count_modified as u64,
@@ -173,7 +174,7 @@ mod tests {
             .unwrap()
         };
 
-        verify_proof_for_difference(
+        verify_proof_for_hamming_distance(
             &new_data.as_slice(),
             count_modified as u64,
             proof,
