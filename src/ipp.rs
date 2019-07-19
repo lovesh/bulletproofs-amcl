@@ -6,7 +6,7 @@ use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use core::iter;
 use merlin::Transcript;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct InnerProductArgumentProof {
     pub L: G1Vector,
