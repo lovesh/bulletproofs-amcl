@@ -6,6 +6,7 @@ use merlin::Transcript;
 
 use super::super::helper_constraints::constrain_lc_with_scalar;
 use super::super::helper_constraints::non_zero::is_nonzero_gadget;
+use crate::r1cs::gadgets::poseidon_constants::{MDS_ENTRIES, ROUND_CONSTS};
 
 // Poseidon is described here https://eprint.iacr.org/2019/458
 #[derive(Clone, Debug)]
@@ -43,15 +44,42 @@ impl PoseidonParams {
 
     // TODO: Write logic to generate correct round keys.
     fn gen_round_keys(width: usize, total_rounds: usize) -> Vec<FieldElement> {
-        let cap = (total_rounds + 1) * width;
-        (0..cap).map(|_| FieldElement::random()).collect::<Vec<_>>()
+        let cap = total_rounds * width;
+        //(0..cap).map(|_| FieldElement::random()).collect::<Vec<_>>()
         //vec![FieldElement::one(); cap]
+        if ROUND_CONSTS.len() < cap {
+            panic!("Not enough round constants, need {}, found {}", cap, ROUND_CONSTS.len());
+        }
+        let mut rc = vec![];
+        for i in 0..cap {
+            // TODO: Remove unwrap, handle error
+            let mut c = ROUND_CONSTS[i].to_string();
+            c.replace_range(..2, "");
+            rc.push(FieldElement::from_hex(c).unwrap());
+        }
+        rc
     }
 
     // TODO: Write logic to generate correct MDS matrix.
     fn gen_MDS_matrix(width: usize) -> Vec<Vec<FieldElement>> {
-        (0..width).map(|_| (0..width).map(|_| FieldElement::random()).collect::<Vec<_>>()).collect::<Vec<Vec<_>>>()
+        //(0..width).map(|_| (0..width).map(|_| FieldElement::random()).collect::<Vec<_>>()).collect::<Vec<Vec<_>>>()
         //vec![vec![FieldElement::one(); width]; width]
+        if MDS_ENTRIES.len() != width {
+            panic!("Incorrect width, only width {} is supported now", width);
+        }
+        let mut mds: Vec<Vec<FieldElement>> = vec![vec![FieldElement::zero(); width]; width];
+        for i in 0..width {
+            if MDS_ENTRIES[i].len() != width {
+                panic!("Incorrect width, only width {} is supported now", width);
+            }
+            for j in 0..width {
+                // TODO: Remove unwrap, handle error
+                let mut c = MDS_ENTRIES[i][j].to_string();
+                c.replace_range(..2, "");
+                mds[i][j] = FieldElement::from_hex(c).unwrap();
+            }
+        }
+        mds
     }
 }
 
@@ -66,7 +94,7 @@ impl SboxType {
     fn apply_sbox(&self, elem: &FieldElement) -> FieldElement {
         match self {
             SboxType::Cube => {
-                // elem^3. When squaring, don't use `elem * elem` but `elem.square()`
+                // elem^3. When squaring, don't use `elem * elem` but `elem.square()` since its faster
                 let sqr = elem.square();
                 sqr * elem
             }
@@ -408,9 +436,9 @@ pub fn Poseidon_hash_2(
         FieldElement::from(ZERO_CONST),
         xl,
         xr,
-        FieldElement::from(PADDING_CONST),
+        /*FieldElement::from(PADDING_CONST),
         FieldElement::from(ZERO_CONST),
-        FieldElement::from(ZERO_CONST),
+        FieldElement::from(ZERO_CONST),*/
     ];
 
     // Never take the first output
@@ -476,7 +504,7 @@ pub fn Poseidon_hash_4(
     assert_eq!(inputs.len(), 4);
     let mut input = vec![FieldElement::from(ZERO_CONST)];
     input.append(&mut inputs);
-    input.push(FieldElement::from(PADDING_CONST));
+    //input.push(FieldElement::from(PADDING_CONST));
     // Never take the first output
     let out = Poseidon_permutation(&input, params, sbox).remove(1);
     out
