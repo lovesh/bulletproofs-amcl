@@ -6,7 +6,8 @@ use merlin::Transcript;
 
 use super::super::helper_constraints::constrain_lc_with_scalar;
 use super::super::helper_constraints::non_zero::is_nonzero_gadget;
-use crate::r1cs::gadgets::poseidon_constants::{MDS_ENTRIES, ROUND_CONSTS};
+use crate::r1cs::gadgets::poseidon_constants::*;
+use std::any::Any;
 
 // Poseidon is described here https://eprint.iacr.org/2019/458
 #[derive(Clone, Debug)]
@@ -29,6 +30,9 @@ impl PoseidonParams {
         full_rounds_end: usize,
         partial_rounds: usize,
     ) -> PoseidonParams {
+        if width != 3 && width != 5 && width != 9 {
+            panic!("Only width of 3, 5 or 9 are supported")
+        }
         let total_rounds = full_rounds_beginning + partial_rounds + full_rounds_end;
         let round_keys = Self::gen_round_keys(width, total_rounds);
         let matrix_2 = Self::gen_MDS_matrix(width);
@@ -47,6 +51,12 @@ impl PoseidonParams {
         let cap = total_rounds * width;
         //(0..cap).map(|_| FieldElement::random()).collect::<Vec<_>>()
         //vec![FieldElement::one(); cap]
+        let ROUND_CONSTS = match width {
+            3 => ROUND_CONSTS_W_3.to_vec(),
+            5 => ROUND_CONSTS_W_5.to_vec(),
+            9 => ROUND_CONSTS_W_9.to_vec(),
+            _ => panic!("Unsupported width {}", width)
+        };
         if ROUND_CONSTS.len() < cap {
             panic!("Not enough round constants, need {}, found {}", cap, ROUND_CONSTS.len());
         }
@@ -64,6 +74,13 @@ impl PoseidonParams {
     fn gen_MDS_matrix(width: usize) -> Vec<Vec<FieldElement>> {
         //(0..width).map(|_| (0..width).map(|_| FieldElement::random()).collect::<Vec<_>>()).collect::<Vec<Vec<_>>>()
         //vec![vec![FieldElement::one(); width]; width]
+
+        let MDS_ENTRIES = match width {
+            3 => MDS_ENTRIES_W_3.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
+            5 => MDS_ENTRIES_W_5.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
+            9 => MDS_ENTRIES_W_9.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
+            _ => panic!("Unsupported width {}", width)
+        };
         if MDS_ENTRIES.len() != width {
             panic!("Incorrect width, only width {} is supported now", width);
         }

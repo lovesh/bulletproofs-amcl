@@ -566,8 +566,19 @@ mod tests {
     #[test]
     fn test_poseidon_hash_2() {
         let width = 3;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
 //        check_hash_2(&hash_params, &SboxType::Cube);
@@ -601,12 +612,23 @@ mod tests {
     #[test]
     fn test_poseidon_hash_8() {
         let width = 9;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 59);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 59);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 59);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 59);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-        check_hash_8(&hash_params, &SboxType::Cube);
-        check_hash_8(&hash_params, &SboxType::Inverse);
+//        check_hash_8(&hash_params, &SboxType::Cube);
+//        check_hash_8(&hash_params, &SboxType::Inverse);
         check_hash_8(&hash_params, &SboxType::Quint);
     }
 }
