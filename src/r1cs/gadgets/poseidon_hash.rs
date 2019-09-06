@@ -18,10 +18,7 @@ use amcl_wrapper::commitment::commit_to_field_element;
 
 /// Statics are needed to use permutation as a hash function
 /// Allocate padding constant and zeroes for Prover
-pub fn allocate_statics_for_prover(
-    prover: &mut Prover,
-    num_statics: usize,
-) -> Vec<Variable> {
+pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> Vec<Variable> {
     let mut statics = vec![];
     let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
     statics.push(var);
@@ -581,8 +578,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-//        check_hash_2(&hash_params, &SboxType::Cube);
-//        check_hash_2(&hash_params, &SboxType::Inverse);
+        //        check_hash_2(&hash_params, &SboxType::Cube);
+        //        check_hash_2(&hash_params, &SboxType::Inverse);
         check_hash_2(&hash_params, &SboxType::Quint);
     }
 
@@ -604,8 +601,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-//        check_hash_4(&hash_params, &SboxType::Cube);
-//        check_hash_4(&hash_params, &SboxType::Inverse);
+        //        check_hash_4(&hash_params, &SboxType::Cube);
+        //        check_hash_4(&hash_params, &SboxType::Inverse);
         check_hash_4(&hash_params, &SboxType::Quint);
     }
 
@@ -627,8 +624,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-//        check_hash_8(&hash_params, &SboxType::Cube);
-//        check_hash_8(&hash_params, &SboxType::Inverse);
+        //        check_hash_8(&hash_params, &SboxType::Cube);
+        //        check_hash_8(&hash_params, &SboxType::Inverse);
         check_hash_8(&hash_params, &SboxType::Quint);
     }
 }

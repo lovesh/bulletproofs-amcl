@@ -12,7 +12,7 @@ use amcl_wrapper::group_elem_g1::G1;
 use super::poseidon::{
     PoseidonParams, Poseidon_hash_8, Poseidon_hash_8_constraints, SboxType, PADDING_CONST,
 };
-use super::{constrain_lc_with_scalar, get_byte_size, get_bit_count};
+use super::{constrain_lc_with_scalar, get_bit_count, get_byte_size};
 use crate::r1cs::gadgets::helper_constraints::poseidon::ZERO_CONST;
 
 const ARITY: usize = 8;
@@ -64,7 +64,16 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
         for i in 1..=depth {
             let prev = &empty_tree_hashes[i - 1];
             let inp: Vec<FieldElement> = (0..ARITY).map(|_| prev.clone()).collect();
-            let mut input: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+            let mut input: DBVal = [
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+            ];
             input.clone_from_slice(inp.as_slice());
             // Hash all 8 children at once
             let new = Poseidon_hash_8(inp, hash_params, &SboxType::Quint);
@@ -100,7 +109,16 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             let mut side_elem = sidenodes.pop().unwrap().to_vec();
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
-            let mut input: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+            let mut input: DBVal = [
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+            ];
             input.clone_from_slice(side_elem.as_slice());
             let h = Poseidon_hash_8(side_elem, self.hash_params, &SboxType::Quint);
             self.update_db_with_key_val(&h, input);
@@ -125,7 +143,8 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
             let children = self.db.get(&k).unwrap();
             cur_node = &children[d as usize];
             if need_proof {
-                let mut pn: Vec<FieldElement> = (0..ARITY-1).map(|_ | FieldElement::zero()).collect();
+                let mut pn: Vec<FieldElement> =
+                    (0..ARITY - 1).map(|_| FieldElement::zero()).collect();
                 let mut j = 0;
                 for (i, c) in children.to_vec().iter().enumerate() {
                     if i != (d as usize) {
@@ -133,7 +152,15 @@ impl<'a> VanillaSparseMerkleTree_8<'a> {
                         j += 1;
                     }
                 }
-                let mut proof_nodes: ProofNode = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+                let mut proof_nodes: ProofNode = [
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                ];
                 proof_nodes.clone_from_slice(pn.as_slice());
                 proof_vec.push(proof_nodes);
             }
@@ -270,7 +297,7 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         // Check each bit is actually a bit, .i.e. 0 or 1
         let (bit0, bit1, bit2) = match &leaf_index_octets {
             Some(l) => {
-                let octet = l[i/3];
+                let octet = l[i / 3];
                 let b0 = (octet >> 0) & 1;
                 let b0_1 = (1 - b0);
                 let b1 = (octet >> 1) & 1;
@@ -280,12 +307,10 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
                 (
                     Some((FieldElement::from(b0), FieldElement::from(b0_1))),
                     Some((FieldElement::from(b1), FieldElement::from(b1_1))),
-                    Some((FieldElement::from(b2), FieldElement::from(b2_1)))
+                    Some((FieldElement::from(b2), FieldElement::from(b2_1))),
                 )
-            },
-            None => {
-                (None, None, None)
             }
+            None => (None, None, None),
         };
 
         let (b0, b0_1, o) = cs.allocate_multiplier(bit0)?;
@@ -381,7 +406,7 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let c3 = c3_1 + c3_3 + c3_4;
 
         // (1-b2)*N4
-//        let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
+        //        let (_, _, c4_1) = cs.multiply(b2_1.into(), N4.clone());
         // XXX: Cant c4_1 be N4 - c3_4?
         let c4_1 = N4 - c3_4;
 
@@ -432,13 +457,8 @@ pub fn vanilla_merkle_merkle_tree_8_verif_gadget<CS: ConstraintSystem>(
         let c7 = c7_1 + c7_2;
 
         let input = vec![c0, c1, c2, c3, c4, c5, c6, c7];
-        prev_hash = Poseidon_hash_8_constraints::<CS>(
-            cs,
-            input,
-            zero.into(),
-            poseidon_params,
-            sbox_type,
-        )?;
+        prev_hash =
+            Poseidon_hash_8_constraints::<CS>(cs, input, zero.into(), poseidon_params, sbox_type)?;
 
         prev_hash = prev_hash.simplify();
 

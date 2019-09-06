@@ -55,10 +55,14 @@ impl PoseidonParams {
             3 => ROUND_CONSTS_W_3.to_vec(),
             5 => ROUND_CONSTS_W_5.to_vec(),
             9 => ROUND_CONSTS_W_9.to_vec(),
-            _ => panic!("Unsupported width {}", width)
+            _ => panic!("Unsupported width {}", width),
         };
         if ROUND_CONSTS.len() < cap {
-            panic!("Not enough round constants, need {}, found {}", cap, ROUND_CONSTS.len());
+            panic!(
+                "Not enough round constants, need {}, found {}",
+                cap,
+                ROUND_CONSTS.len()
+            );
         }
         let mut rc = vec![];
         for i in 0..cap {
@@ -76,10 +80,22 @@ impl PoseidonParams {
         //vec![vec![FieldElement::one(); width]; width]
 
         let MDS_ENTRIES = match width {
-            3 => MDS_ENTRIES_W_3.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
-            5 => MDS_ENTRIES_W_5.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
-            9 => MDS_ENTRIES_W_9.to_vec().iter().map(|v| v.to_vec()).collect::<Vec<Vec<_>>>(),
-            _ => panic!("Unsupported width {}", width)
+            3 => MDS_ENTRIES_W_3
+                .to_vec()
+                .iter()
+                .map(|v| v.to_vec())
+                .collect::<Vec<Vec<_>>>(),
+            5 => MDS_ENTRIES_W_5
+                .to_vec()
+                .iter()
+                .map(|v| v.to_vec())
+                .collect::<Vec<Vec<_>>>(),
+            9 => MDS_ENTRIES_W_9
+                .to_vec()
+                .iter()
+                .map(|v| v.to_vec())
+                .collect::<Vec<Vec<_>>>(),
+            _ => panic!("Unsupported width {}", width),
         };
         if MDS_ENTRIES.len() != width {
             panic!("Incorrect width, only width {} is supported now", width);
@@ -178,11 +194,7 @@ impl SboxType {
         let (var_r, var_o) = cs.allocate_single(val_r)?;
 
         // Ensure `inp_plus_const` is not zero
-        is_nonzero_gadget(
-            cs,
-            var_l,
-            var_r,
-        )?;
+        is_nonzero_gadget(cs, var_l, var_r)?;
 
         // Constrain product of ``inp_plus_const` and its inverse to be 1.
         constrain_lc_with_scalar::<CS>(cs, var_o.unwrap().into(), &FieldElement::one());
@@ -501,7 +513,10 @@ pub fn Poseidon_hash_2_gadget<'a, CS: ConstraintSystem>(
         cs,
         xl.into(),
         xr.into(),
-        statics.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
+        statics
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<LinearCombination>>(),
         params,
         sbox_type,
     )?;
@@ -559,10 +574,19 @@ pub fn Poseidon_hash_4_gadget<'a, CS: ConstraintSystem>(
 ) -> Result<(), R1CSError> {
     assert_eq!(input.len(), 4);
 
-    let hash = Poseidon_hash_4_constraints::<CS>(cs,
-                                                 input.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
-                                                 statics.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
-                                                 params, sbox_type)?;
+    let hash = Poseidon_hash_4_constraints::<CS>(
+        cs,
+        input
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<LinearCombination>>(),
+        statics
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<LinearCombination>>(),
+        params,
+        sbox_type,
+    )?;
 
     constrain_lc_with_scalar::<CS>(cs, hash, output);
 
@@ -613,10 +637,16 @@ pub fn Poseidon_hash_8_gadget<'a, CS: ConstraintSystem>(
     output: &FieldElement,
 ) -> Result<(), R1CSError> {
     assert_eq!(input.len(), 8);
-    let hash =
-        Poseidon_hash_8_constraints::<CS>(cs,
-                                          input.into_iter().map(|s|s.into()).collect::<Vec<LinearCombination>>(),
-                                          zero.into(), params, sbox_type)?;
+    let hash = Poseidon_hash_8_constraints::<CS>(
+        cs,
+        input
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<LinearCombination>>(),
+        zero.into(),
+        params,
+        sbox_type,
+    )?;
 
     constrain_lc_with_scalar::<CS>(cs, hash, output);
 

@@ -33,8 +33,8 @@ pub fn hamming_distance_gadget<CS: ConstraintSystem>(
             Some(l) => {
                 let inv = l.inverse();
                 (Some(l), Some(inv))
-            },
-            None => (None, None)
+            }
+            None => (None, None),
         };
 
         // diff * diff_inv = 1_or_0 depending on diff being non-zero or zero

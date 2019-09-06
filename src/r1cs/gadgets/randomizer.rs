@@ -88,7 +88,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
     orig_root: Variable, // original root is hidden since its correlating across several proofs
     new_tree: &mut VanillaSparseMerkleTree_4,
     indices: Vec<FieldElement>, // For future: `indices` can be made hidden too
-    orig_vals: Vec<Variable>, // values of the original tree
+    orig_vals: Vec<Variable>,   // values of the original tree
     mut orig_vals_proofs: Vec<Vec<Variable>>, // merkle proofs for values of the original tree
     statics: Vec<Variable>,
     poseidon_params: &PoseidonParams,

@@ -110,6 +110,7 @@ impl Poly2 {
 
 impl Poly6 {
     pub fn eval(&self, x: &FieldElement) -> FieldElement {
-        x * (&self.t1 + x * (&self.t2 + x * (&self.t3 + x * (&self.t4 + x * (&self.t5 + x * &self.t6)))))
+        x * (&self.t1
+            + x * (&self.t2 + x * (&self.t3 + x * (&self.t4 + x * (&self.t5 + x * &self.t6)))))
     }
 }

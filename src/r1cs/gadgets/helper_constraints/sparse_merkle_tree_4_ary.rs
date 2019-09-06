@@ -63,7 +63,12 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             let prev = &empty_tree_hashes[i - 1];
             let input: Vec<FieldElement> = (0..4).map(|_| prev.clone()).collect();
             // Hash all 4 children at once
-            let mut val: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+            let mut val: DBVal = [
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+            ];
             val.clone_from_slice(input.as_slice());
             let new = Poseidon_hash_4(input, hash_params, &SboxType::Quint);
             let key = new.to_bytes();
@@ -100,7 +105,12 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
 
-            let mut db_val: DBVal = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+            let mut db_val: DBVal = [
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+                FieldElement::zero(),
+            ];
             db_val.clone_from_slice(side_elem.as_slice());
             let h = Poseidon_hash_4(side_elem, self.hash_params, &SboxType::Quint);
             self.update_db_with_key_val(&h, db_val);
@@ -125,7 +135,11 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             let children = self.db.get(&k).unwrap();
             cur_node = &children[d as usize];
             if need_proof {
-                let mut proof_node: ProofNode = [FieldElement::zero(), FieldElement::zero(), FieldElement::zero()];
+                let mut proof_node: ProofNode = [
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                    FieldElement::zero(),
+                ];
                 let mut j = 0;
                 for (i, c) in children.to_vec().iter().enumerate() {
                     if i != (d as usize) {
@@ -245,7 +259,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     let two = FieldElement::from(2u64);
     let four = FieldElement::from(4u64);
 
-    let leaf_index_bytes= allocated_leaf_index_to_bytes(leaf_index);
+    let leaf_index_bytes = allocated_leaf_index_to_bytes(leaf_index);
 
     let leaf_index_byte_size = get_byte_size(depth, 4);
     // Each leaf index can take upto leaf_index_byte_size bytes so for each byte
@@ -331,7 +345,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
             // c3 = b1*b0*N + (1 - b1*b0)*N3
             let c3 = c3_1 + c3_2;
 
-            let input= vec![c0, c1, c2, c3];
+            let input = vec![c0, c1, c2, c3];
             prev_hash = Poseidon_hash_4_constraints::<CS>(
                 cs,
                 input,

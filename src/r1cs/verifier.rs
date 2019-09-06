@@ -426,7 +426,12 @@ impl<'a> Verifier<'a> {
         arg1.extend(&u_inv_sq);
 
         let mut arg2: Vec<&G1> = vec![
-            &proof.A_I1, &proof.A_O1, &proof.S1, &proof.A_I2, &proof.A_O2, &proof.S2,
+            &proof.A_I1,
+            &proof.A_O1,
+            &proof.S1,
+            &proof.A_I2,
+            &proof.A_O2,
+            &proof.S2,
         ];
 
         arg2.extend(&self.V);
@@ -438,8 +443,8 @@ impl<'a> Verifier<'a> {
         arg2.extend(proof.ipp_proof.R.as_slice());
 
         /*let res = G1Vector::from(arg2)
-            .inner_product_var_time(&FieldElementVector::from(arg1))
-            .unwrap();*/
+        .inner_product_var_time(&FieldElementVector::from(arg1))
+        .unwrap();*/
         let res = G1Vector::inner_product_var_time_with_ref_vecs(arg2, arg1).unwrap();
         if !res.is_identity() {
             return Err(R1CSError::VerificationError);

@@ -210,7 +210,7 @@ mod tests {
                 &G,
                 &H,
             )
-                .unwrap();
+            .unwrap();
 
             verify_leaf_inclusion_4_ary_merkle_tree(
                 &tree.root,
@@ -225,7 +225,7 @@ mod tests {
                 &G,
                 &H,
             )
-                .unwrap();
+            .unwrap();
         }
     }
 }

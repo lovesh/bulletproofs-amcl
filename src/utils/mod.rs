@@ -44,5 +44,5 @@ macro_rules! vec_to_array {
         let mut input: [$typ; $size];
         input.copy_from_slice($vec.as_slice());
         input
-    }}
+    }};
 }

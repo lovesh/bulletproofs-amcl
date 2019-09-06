@@ -363,9 +363,7 @@ mod tests {
         _2.append(&mut G.clone());
         _2.append(&mut H.clone());
         _2.push(Q.clone());
-        let P = G1Vector::from(_2)
-            .multi_scalar_mul_var_time(&_1)
-            .unwrap();
+        let P = G1Vector::from(_2).multi_scalar_mul_var_time(&_1).unwrap();
 
         let mut new_trans1 = Transcript::new(b"innerproduct");
         IPP::verify_ipp(
