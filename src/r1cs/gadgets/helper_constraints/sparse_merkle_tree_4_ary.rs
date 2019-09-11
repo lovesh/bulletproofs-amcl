@@ -373,9 +373,20 @@ mod tests {
 
     #[test]
     fn test_vanilla_sparse_merkle_tree_4() {
-        let width = 6;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+        let width = 5;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 17;

@@ -578,8 +578,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-        //        check_hash_2(&hash_params, &SboxType::Cube);
-        //        check_hash_2(&hash_params, &SboxType::Inverse);
+        check_hash_2(&hash_params, &SboxType::Cube);
+        check_hash_2(&hash_params, &SboxType::Inverse);
         check_hash_2(&hash_params, &SboxType::Quint);
     }
 
@@ -601,8 +601,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-        //        check_hash_4(&hash_params, &SboxType::Cube);
-        //        check_hash_4(&hash_params, &SboxType::Inverse);
+        check_hash_4(&hash_params, &SboxType::Cube);
+        check_hash_4(&hash_params, &SboxType::Inverse);
         check_hash_4(&hash_params, &SboxType::Quint);
     }
 
@@ -624,8 +624,8 @@ mod tests {
 
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
-        //        check_hash_8(&hash_params, &SboxType::Cube);
-        //        check_hash_8(&hash_params, &SboxType::Inverse);
+        check_hash_8(&hash_params, &SboxType::Cube);
+        check_hash_8(&hash_params, &SboxType::Inverse);
         check_hash_8(&hash_params, &SboxType::Quint);
     }
 }
