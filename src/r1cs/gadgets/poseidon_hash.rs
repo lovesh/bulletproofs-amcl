@@ -18,10 +18,7 @@ use amcl_wrapper::commitment::commit_to_field_element;
 
 /// Statics are needed to use permutation as a hash function
 /// Allocate padding constant and zeroes for Prover
-pub fn allocate_statics_for_prover(
-    prover: &mut Prover,
-    num_statics: usize,
-) -> Vec<Variable> {
+pub fn allocate_statics_for_prover(prover: &mut Prover, num_statics: usize) -> Vec<Variable> {
     let mut statics = vec![];
     let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
     statics.push(var);
@@ -119,7 +116,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     let (com_r, var_r) = prover.commit(input2, rands.remove(0));
     comms.push(com_r);
 
-    let statics = allocate_statics_for_prover(&mut prover, 4);
+    let statics = allocate_statics_for_prover(&mut prover, 1);
 
     Poseidon_hash_2_gadget(
         &mut prover,
@@ -163,7 +160,7 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(
 
     let width = hash_params.width;
 
-    let statics = allocate_statics_for_verifier(&mut verifier, 4, g, h);
+    let statics = allocate_statics_for_verifier(&mut verifier, 1, g, h);
 
     Poseidon_hash_2_gadget(
         &mut verifier,
@@ -221,7 +218,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
         vars.push(var);
     }
 
-    let num_statics = 2;
+    let num_statics = 1;
     let statics = allocate_statics_for_prover(&mut prover, num_statics);
 
     Poseidon_hash_4_gadget(
@@ -266,7 +263,7 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_4(
         allocs.push(var);
     }
 
-    let num_statics = 2;
+    let num_statics = 1;
     let statics = allocate_statics_for_verifier(&mut verifier, num_statics, g, h);
 
     Poseidon_hash_4_gadget(
@@ -398,8 +395,8 @@ mod tests {
     fn check_hash_2(hash_params: &PoseidonParams, sbox_type: &SboxType) {
         let mut rng = rand::thread_rng();
 
-        let G: G1Vector = get_generators("G", 2048).into();
-        let H: G1Vector = get_generators("H", 2048).into();
+        let G: G1Vector = get_generators("G", 1024).into();
+        let H: G1Vector = get_generators("H", 1024).into();
         let g = G1::from_msg_hash("g".as_bytes());
         let h = G1::from_msg_hash("h".as_bytes());
 
@@ -565,9 +562,20 @@ mod tests {
 
     #[test]
     fn test_poseidon_hash_2() {
-        let width = 6;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+        let width = 3;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 55);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 55);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 55);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 55);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         check_hash_2(&hash_params, &SboxType::Cube);
@@ -577,9 +585,20 @@ mod tests {
 
     #[test]
     fn test_poseidon_hash_4() {
-        let width = 6;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+        let width = 5;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         check_hash_4(&hash_params, &SboxType::Cube);
@@ -590,8 +609,19 @@ mod tests {
     #[test]
     fn test_poseidon_hash_8() {
         let width = 9;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 57);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 57);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 57);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 57);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         check_hash_8(&hash_params, &SboxType::Cube);

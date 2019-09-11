@@ -9,8 +9,11 @@ pub fn bit_gadget<CS: ConstraintSystem>(
     v: &AllocatedQuantity,
 ) -> Result<(), R1CSError> {
     // TODO: Possible to save reallocation of `v` in `bit`?
-    let (a, b, o) =
-        cs.allocate_multiplier(v.assignment.as_ref().map(|bit| ((FieldElement::one() - bit), bit.clone())))?;
+    let (a, b, o) = cs.allocate_multiplier(
+        v.assignment
+            .as_ref()
+            .map(|bit| ((FieldElement::one() - bit), bit.clone())),
+    )?;
 
     // Might not be necessary if above TODO is addressed
     // Variable b is same as v so b + (-v) = 0

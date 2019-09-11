@@ -6,6 +6,7 @@ pub mod hamming_distance;
 mod helper_constraints;
 pub mod mimc;
 pub mod non_zero;
+pub mod poseidon_constants;
 pub mod poseidon_hash;
 pub mod randomizer;
 pub mod set_membership;

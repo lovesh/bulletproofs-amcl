@@ -64,8 +64,12 @@ pub fn vector_product_gadget<CS: ConstraintSystem>(
 
     for i in 0..items.len() {
         // TODO: Possible to save reallocation of elements of `vector` in `bit`? If circuit variables for vector are passed, then yes.
-        let (bit_var, item_var, o1) =
-            cs.allocate_multiplier(vector[i].assignment.as_ref().map(|bit| (bit.clone(), items[i].into())))?;
+        let (bit_var, item_var, o1) = cs.allocate_multiplier(
+            vector[i]
+                .assignment
+                .as_ref()
+                .map(|bit| (bit.clone(), items[i].into())),
+        )?;
         constrain_lc_with_scalar::<CS>(cs, item_var.into(), &items[i].into());
 
         let (_, _, o2) = cs.multiply(bit_var.into(), value.variable.into());

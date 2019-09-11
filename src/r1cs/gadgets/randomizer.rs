@@ -88,7 +88,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
     orig_root: Variable, // original root is hidden since its correlating across several proofs
     new_tree: &mut VanillaSparseMerkleTree_4,
     indices: Vec<FieldElement>, // For future: `indices` can be made hidden too
-    orig_vals: Vec<Variable>, // values of the original tree
+    orig_vals: Vec<Variable>,   // values of the original tree
     mut orig_vals_proofs: Vec<Vec<Variable>>, // merkle proofs for values of the original tree
     statics: Vec<Variable>,
     poseidon_params: &PoseidonParams,
@@ -245,7 +245,7 @@ pub fn gen_proof_for_randomizer(
         proof_vars.push(ps);
     }
 
-    let num_statics = 2;
+    let num_statics = 1;
     let statics = allocate_statics_for_prover(&mut prover, num_statics);
 
     let start = Instant::now();
@@ -310,7 +310,7 @@ pub fn verify_proof_for_randomizer(
         proof_vars.push(ps);
     }
 
-    let num_statics = 2;
+    let num_statics = 1;
     let statics = allocate_statics_for_verifier(&mut verifier, num_statics, g, h);
 
     let start = Instant::now();
@@ -341,10 +341,20 @@ mod tests {
 
     #[test]
     fn test_randomizer() {
-        let width = 6;
-        let (full_b, full_e) = (4, 4);
-        //
-        let partial_rounds = 57;
+        let width = 5;
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 8;
