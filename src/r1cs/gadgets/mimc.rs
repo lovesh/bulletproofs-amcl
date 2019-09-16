@@ -3,27 +3,21 @@ use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use merlin::Transcript;
 use rand::{CryptoRng, RngCore};
 
 use super::helper_constraints::mimc::{mimc, mimc_gadget};
 
-pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
+pub fn prove_mimc_preimage<R: RngCore + CryptoRng>(
     mut inputs: Vec<FieldElement>,
     randomness: Option<Vec<FieldElement>>,
     expected_output: &FieldElement,
     constants: &[FieldElement],
     mimc_rounds: usize,
     rng: Option<&mut R>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
-) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
-    assert_eq!(inputs.len(), 2);
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let mut rands = randomness.unwrap_or_else(|| {
@@ -33,10 +27,8 @@ pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
             FieldElement::random_using_rng(r),
         ]
     });
-    assert_eq!(rands.len(), 2);
 
-    let mut prover_transcript = Transcript::new(transcript_label);
-    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+    check_for_input_and_randomness_length!(inputs, rands, 2)?;
 
     let (com_l, var_l) = prover.commit(inputs[0].clone(), rands.remove(0));
     let (com_r, var_r) = prover.commit(inputs[1].clone(), rands.remove(0));
@@ -52,7 +44,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
     };
 
     mimc_gadget(
-        &mut prover,
+        prover,
         left_alloc_scalar,
         right_alloc_scalar,
         mimc_rounds,
@@ -60,32 +52,16 @@ pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
         &expected_output,
     )?;
 
-    println!(
-        "For MiMC rounds {}, no of multipliers is {}, no of constraints is {}",
-        &mimc_rounds,
-        &prover.num_multipliers(),
-        &prover.num_constraints()
-    );
-    let proof = prover.prove(&G, &H).unwrap();
-
-    Ok((proof, vec![com_l, com_r]))
+    Ok(vec![com_l, com_r])
 }
 
-pub fn verify_knowledge_of_preimage_of_mimc(
+pub fn verify_mimc_preimage(
     expected_output: &FieldElement,
     constants: &[FieldElement],
     mimc_rounds: usize,
-    proof: R1CSProof,
     mut commitments: Vec<G1>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
+    verifier: &mut Verifier,
 ) -> Result<(), R1CSError> {
-    let mut verifier_transcript = Transcript::new(transcript_label);
-    let mut verifier = Verifier::new(&mut verifier_transcript);
-
     let var_l = verifier.commit(commitments.remove(0));
     let var_r = verifier.commit(commitments.remove(0));
 
@@ -100,7 +76,7 @@ pub fn verify_knowledge_of_preimage_of_mimc(
     };
 
     mimc_gadget(
-        &mut verifier,
+        verifier,
         left_alloc_scalar,
         right_alloc_scalar,
         mimc_rounds,
@@ -108,7 +84,69 @@ pub fn verify_knowledge_of_preimage_of_mimc(
         &expected_output,
     )?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)?;
+    Ok(())
+}
+
+pub fn gen_proof_of_knowledge_of_preimage_of_mimc<R: RngCore + CryptoRng>(
+    inputs: Vec<FieldElement>,
+    randomness: Option<Vec<FieldElement>>,
+    expected_output: &FieldElement,
+    constants: &[FieldElement],
+    mimc_rounds: usize,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    let mut prover_transcript = Transcript::new(transcript_label);
+    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+
+    let comms = prove_mimc_preimage(
+        inputs,
+        randomness,
+        expected_output,
+        constants,
+        mimc_rounds,
+        rng,
+        &mut prover,
+    )?;
+
+    println!(
+        "For MiMC rounds {}, no of multipliers is {}, no of constraints is {}",
+        &mimc_rounds,
+        &prover.num_multipliers(),
+        &prover.num_constraints()
+    );
+    let proof = prover.prove(G, H)?;
+
+    Ok((proof, comms))
+}
+
+pub fn verify_knowledge_of_preimage_of_mimc(
+    expected_output: &FieldElement,
+    constants: &[FieldElement],
+    mimc_rounds: usize,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
+    let mut verifier_transcript = Transcript::new(transcript_label);
+    let mut verifier = Verifier::new(&mut verifier_transcript);
+
+    verify_mimc_preimage(
+        expected_output,
+        constants,
+        mimc_rounds,
+        commitments,
+        &mut verifier,
+    )?;
+    verifier.verify(&proof, g, h, G, H)?;
 
     Ok(())
 }
@@ -117,6 +155,7 @@ pub fn verify_knowledge_of_preimage_of_mimc(
 mod tests {
     use super::*;
     use crate::utils::get_generators;
+    use amcl_wrapper::group_elem::GroupElement;
     use rand::rngs::OsRng;
     use rand::Rng;
     use std::time::{Duration, Instant};

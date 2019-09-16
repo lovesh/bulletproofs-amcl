@@ -1,9 +1,8 @@
 use crate::errors::R1CSError;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::r1cs::ConstraintSystem;
 use amcl_wrapper::field_elem::FieldElement;
 
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 
 /// Enforces that the quantity of v is in the range [0, 2^n).
 pub fn positive_no_gadget<CS: ConstraintSystem>(

@@ -4,7 +4,6 @@ use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use merlin::Transcript;
 use rand::{CryptoRng, RngCore};
@@ -33,25 +32,16 @@ pub fn set_non_membership_gadget<CS: ConstraintSystem>(
     Ok(())
 }
 
-/// Prove that difference between each set element and value is non-zero, hence value does not equal any set element.
-pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(
+pub fn prove_set_non_membership<R: RngCore + CryptoRng>(
     value: FieldElement,
     randomness: Option<FieldElement>,
     set: &[FieldElement],
     rng: Option<&mut R>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
-) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let set_length = set.len();
-
-    let mut prover_transcript = Transcript::new(transcript_label);
-
-    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
     let mut comms = vec![];
     let mut diff_vars: Vec<AllocatedQuantity> = vec![];
@@ -91,26 +81,16 @@ pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(
         comms.push(com_diff_inv);
     }
 
-    set_non_membership_gadget(&mut prover, alloc_scal, diff_vars, diff_inv_vars, &set)?;
+    set_non_membership_gadget(prover, alloc_scal, diff_vars, diff_inv_vars, &set)?;
 
-    let proof = prover.prove(&G, &H)?;
-
-    Ok((proof, comms))
+    Ok(comms)
 }
 
-pub fn verify_proof_of_set_non_membership(
+pub fn verify_set_non_membership(
     set: &[FieldElement],
-    proof: R1CSProof,
     mut commitments: Vec<G1>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
+    verifier: &mut Verifier,
 ) -> Result<(), R1CSError> {
-    let mut verifier_transcript = Transcript::new(transcript_label);
-    let mut verifier = Verifier::new(&mut verifier_transcript);
-
     let set_length = set.len();
 
     let mut diff_vars: Vec<AllocatedQuantity> = vec![];
@@ -122,7 +102,7 @@ pub fn verify_proof_of_set_non_membership(
         assignment: None,
     };
 
-    for i in 1..set_length + 1 {
+    for _ in 1..set_length + 1 {
         let var_diff = verifier.commit(commitments.remove(0));
         let alloc_scal_diff = AllocatedQuantity {
             variable: var_diff,
@@ -138,15 +118,56 @@ pub fn verify_proof_of_set_non_membership(
         diff_inv_vars.push(alloc_scal_diff_inv);
     }
 
-    set_non_membership_gadget(&mut verifier, alloc_scal, diff_vars, diff_inv_vars, &set)?;
+    set_non_membership_gadget(verifier, alloc_scal, diff_vars, diff_inv_vars, &set)?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)
+    Ok(())
+}
+
+/// Prove that difference between each set element and value is non-zero, hence value does not equal any set element.
+pub fn gen_proof_of_set_non_membership<R: RngCore + CryptoRng>(
+    value: FieldElement,
+    randomness: Option<FieldElement>,
+    set: &[FieldElement],
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    let mut prover_transcript = Transcript::new(transcript_label);
+    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+
+    let comms = prove_set_non_membership(value, randomness, set, rng, &mut prover)?;
+
+    let proof = prover.prove(G, H)?;
+
+    Ok((proof, comms))
+}
+
+pub fn verify_proof_of_set_non_membership(
+    set: &[FieldElement],
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
+    let mut verifier_transcript = Transcript::new(transcript_label);
+    let mut verifier = Verifier::new(&mut verifier_transcript);
+
+    verify_set_non_membership(set, commitments, &mut verifier)?;
+
+    verifier.verify(&proof, g, h, G, H)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::get_generators;
+    use amcl_wrapper::group_elem::GroupElement;
 
     #[test]
     fn test_set_non_membership() {

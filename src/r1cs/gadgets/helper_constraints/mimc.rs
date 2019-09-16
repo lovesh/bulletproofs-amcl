@@ -1,12 +1,12 @@
 use crate::errors::R1CSError;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
 use amcl_wrapper::field_elem::FieldElement;
 
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 
-use super::super::helper_constraints::constrain_lc_with_scalar;
+use crate::r1cs::gadgets::helper_constraints::constrain_lc_with_scalar;
 
+// For each round: xl = (xl + constants[i])^3 + xr, xr = xl. Output is xl of last round
 pub fn mimc(
     xl: &FieldElement,
     xr: &FieldElement,
@@ -25,7 +25,6 @@ pub fn mimc(
         xr = xl;
         xl = tmp2;
     }
-
     xl
 }
 

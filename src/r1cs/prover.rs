@@ -1,4 +1,4 @@
-use amcl_wrapper::field_elem::{multiply_row_vector_with_matrix, FieldElement, FieldElementVector};
+use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 
@@ -17,7 +17,7 @@ use amcl_wrapper::commitment::{commit_to_field_element, commit_to_field_element_
 use core::iter;
 use core::mem;
 
-/// A [`ConstraintSystem`] implementation for use by the prover.
+/// A `ConstraintSystem` implementation for use by the prover.
 ///
 /// The prover commits high-level variables and their blinding factors `(v, v_blinding)`,
 /// allocates low-level variables and creates constraints in terms of these
@@ -69,10 +69,10 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// # Inputs
     ///
     /// The `transcript` parameter is a Merlin proof transcript.  The
-    /// `ProverCS` holds onto the `&mut Transcript` until it consumes
-    /// itself during [`ProverCS::prove`], releasing its borrow of the
+    /// `Prover` holds onto the `&mut Transcript` until it consumes
+    /// itself during `Prover::prove`, releasing its borrow of the
     /// transcript.  This ensures that the transcript cannot be
-    /// altered except by the `ProverCS` before proving is complete.
+    /// altered except by the `Prover` before proving is complete.
     ///
     /// # Returns
     ///
@@ -105,13 +105,13 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// blinding factor) makes it possible to reference pre-existing
     /// commitments in the constraint system.  All external variables
     /// must be passed up-front, so that challenges produced by
-    /// [`ConstraintSystem::challenge_scalar`] are bound to the
+    /// `ConstraintSystem::challenge_scalar` are bound to the
     /// external variables.
     ///
     /// # Returns
     ///
     /// Returns a pair of a Pedersen commitment (as a GroupElement point),
-    /// and a [`Variable`] corresponding to it, which can be used to form constraints.
+    /// and a `Variable` corresponding to it, which can be used to form constraints.
     pub fn commit(&mut self, v: FieldElement, v_blinding: FieldElement) -> (G1, Variable) {
         let i = self.v.len();
 
@@ -134,7 +134,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     /// ```text
     /// (wL, wR, wO, wV)
     /// ```
-    /// where `w{L,R,O}` is \\( z \cdot z^Q \cdot W_{L,R,O} \\).
+    /// where `w{L,R,O}` is `z.z^Q.W{L,R,O}`.
     fn flattened_constraints(
         &self,
         z: &FieldElement,
@@ -180,6 +180,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     }
 
     // This is used only for debugging
+    #[cfg(test)]
     fn get_weight_matrices(
         &self,
     ) -> (
@@ -226,6 +227,7 @@ impl<'a, 'b> Prover<'a, 'b> {
     }
 
     // This is used only for debugging
+    #[cfg(test)]
     fn flattened_constraints_elaborated(
         &self,
         z: &FieldElement,
@@ -235,6 +237,8 @@ impl<'a, 'b> Prover<'a, 'b> {
         FieldElementVector,
         FieldElementVector,
     ) {
+        use amcl_wrapper::field_elem::multiply_row_vector_with_matrix;
+
         let (WL, WR, WO, WV) = self.get_weight_matrices();
 
         /*println!("Left Weight matrix");
@@ -554,7 +558,6 @@ impl<'a, 'b> Prover<'a, 'b> {
             .collect::<Vec<_>>()
             .into();
 
-        //let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = IPP::create_ipp(
             self.transcript,
             &Q,
@@ -582,7 +585,6 @@ impl<'a, 'b> Prover<'a, 'b> {
             t_x_blinding,
             e_blinding,
             ipp_proof,
-            //P
         })
     }
 

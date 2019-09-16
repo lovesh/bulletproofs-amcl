@@ -1,9 +1,6 @@
 use crate::errors::R1CSError;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
 use amcl_wrapper::field_elem::FieldElement;
-
-use crate::r1cs::linear_combination::AllocatedQuantity;
-use merlin::Transcript;
 
 /// if x == 0 then y = 0 else y = 1
 /// if x != 0 then inv = x^-1 else inv = 0

@@ -3,7 +3,6 @@ use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use merlin::Transcript;
 use rand::{CryptoRng, RngCore};
@@ -72,20 +71,15 @@ pub fn allocate_statics_for_verifier(
     statics
 }
 
-pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
+pub fn prove_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     mut inputs: Vec<FieldElement>,
     randomness: Option<Vec<FieldElement>>,
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
     rng: Option<&mut R>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
-) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
-    assert_eq!(inputs.len(), 2);
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
 
     let mut rands = randomness.unwrap_or_else(|| {
@@ -95,15 +89,7 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
             FieldElement::random_using_rng(r),
         ]
     });
-    assert_eq!(rands.len(), 2);
-
-    let width = hash_params.width;
-    let total_rounds = hash_params.full_rounds_beginning
-        + hash_params.partial_rounds
-        + hash_params.full_rounds_end;
-
-    let mut prover_transcript = Transcript::new(transcript_label);
-    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+    check_for_input_and_randomness_length!(inputs, rands, 2)?;
 
     let mut comms = vec![];
 
@@ -116,10 +102,10 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
     let (com_r, var_r) = prover.commit(input2, rands.remove(0));
     comms.push(com_r);
 
-    let statics = allocate_statics_for_prover(&mut prover, 1);
+    let statics = allocate_statics_for_prover(prover, 1);
 
     Poseidon_hash_2_gadget(
-        &mut prover,
+        prover,
         var_l,
         var_r,
         statics,
@@ -128,42 +114,27 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
         &expected_output,
     )?;
 
-    println!(
-        "For Poseidon hash rounds {}, sbox type {:?}, no of multipliers is {}, no of constraints is {}",
-        total_rounds,
-        sbox_type,
-        &prover.num_multipliers(),
-        &prover.num_constraints()
-    );
-
-    let proof = prover.prove(&G, &H).unwrap();
-    Ok((proof, comms))
+    Ok(comms)
 }
 
 pub fn verify_knowledge_of_preimage_of_Poseidon_2(
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
-    proof: R1CSProof,
     mut commitments: Vec<G1>,
-    transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
+    verifier: &mut Verifier,
 ) -> Result<(), R1CSError> {
-    let mut verifier_transcript = Transcript::new(transcript_label);
-    let mut verifier = Verifier::new(&mut verifier_transcript);
-
     let lv = verifier.commit(commitments.remove(0));
     let rv = verifier.commit(commitments.remove(0));
 
     let width = hash_params.width;
 
-    let statics = allocate_statics_for_verifier(&mut verifier, 1, g, h);
+    let statics = allocate_statics_for_verifier(verifier, 1, g, h);
 
     Poseidon_hash_2_gadget(
-        &mut verifier,
+        verifier,
         lv,
         rv,
         statics,
@@ -171,13 +142,11 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_2(
         sbox_type,
         &expected_output,
     )?;
-
-    verifier.verify(&proof, &g, &h, &G, &H)?;
     Ok(())
 }
 
-pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
-    mut inputs: Vec<FieldElement>,
+pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_2<R: RngCore + CryptoRng>(
+    inputs: Vec<FieldElement>,
     randomness: Option<Vec<FieldElement>>,
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
@@ -189,15 +158,72 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
     G: &G1Vector,
     H: &G1Vector,
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
-    assert_eq!(inputs.len(), 4);
-    check_for_randomness_or_rng!(randomness, rng)?;
+    let mut prover_transcript = Transcript::new(transcript_label);
+    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
+    let width = hash_params.width;
     let total_rounds = hash_params.full_rounds_beginning
         + hash_params.partial_rounds
         + hash_params.full_rounds_end;
 
-    let mut prover_transcript = Transcript::new(transcript_label);
-    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+    let comms = prove_knowledge_of_preimage_of_Poseidon_2(
+        inputs,
+        randomness,
+        expected_output,
+        hash_params,
+        sbox_type,
+        rng,
+        &mut prover,
+    )?;
+    println!(
+        "For Poseidon hash rounds {}, sbox type {:?}, no of multipliers is {}, no of constraints is {}",
+        total_rounds,
+        sbox_type,
+        &prover.num_multipliers(),
+        &prover.num_constraints()
+    );
+
+    let proof = prover.prove(G, H)?;
+    Ok((proof, comms))
+}
+
+pub fn verify_proof_of_knowledge_of_preimage_of_Poseidon_2(
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
+    let mut verifier_transcript = Transcript::new(transcript_label);
+    let mut verifier = Verifier::new(&mut verifier_transcript);
+
+    verify_knowledge_of_preimage_of_Poseidon_2(
+        expected_output,
+        hash_params,
+        sbox_type,
+        commitments,
+        g,
+        h,
+        &mut verifier,
+    )?;
+    verifier.verify(&proof, g, h, G, H)
+}
+
+pub fn prove_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
+    mut inputs: Vec<FieldElement>,
+    randomness: Option<Vec<FieldElement>>,
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
+    check_for_randomness_or_rng!(randomness, rng)?;
 
     let mut comms = vec![];
     let mut vars = vec![];
@@ -212,17 +238,19 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
         ]
     });
 
-    for i in 0..4 {
+    check_for_input_and_randomness_length!(inputs, rands, 4)?;
+
+    for _ in 0..4 {
         let (com, var) = prover.commit(inputs.remove(0), rands.remove(0));
         comms.push(com);
         vars.push(var);
     }
 
     let num_statics = 1;
-    let statics = allocate_statics_for_prover(&mut prover, num_statics);
+    let statics = allocate_statics_for_prover(prover, num_statics);
 
     Poseidon_hash_4_gadget(
-        &mut prover,
+        prover,
         vars,
         statics,
         &hash_params,
@@ -230,32 +258,18 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
         &expected_output,
     )?;
 
-    println!(
-        "For Poseidon hash rounds {}, sbox type {:?}, no of multipliers is {}, no of constraints is {}",
-        total_rounds,
-        sbox_type,
-        &prover.num_multipliers(),
-        &prover.num_constraints()
-    );
-
-    let proof = prover.prove(&G, &H).unwrap();
-    Ok((proof, comms))
+    Ok(comms)
 }
 
 pub fn verify_knowledge_of_preimage_of_Poseidon_4(
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
-    proof: R1CSProof,
     mut commitments: Vec<G1>,
-    transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
+    verifier: &mut Verifier,
 ) -> Result<(), R1CSError> {
-    let mut verifier_transcript = Transcript::new(transcript_label);
-    let mut verifier = Verifier::new(&mut verifier_transcript);
     let mut allocs = vec![];
 
     for _ in 0..4 {
@@ -264,10 +278,10 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_4(
     }
 
     let num_statics = 1;
-    let statics = allocate_statics_for_verifier(&mut verifier, num_statics, g, h);
+    let statics = allocate_statics_for_verifier(verifier, num_statics, g, h);
 
     Poseidon_hash_4_gadget(
-        &mut verifier,
+        verifier,
         allocs,
         statics,
         &hash_params,
@@ -275,12 +289,11 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_4(
         &expected_output,
     )?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)?;
     Ok(())
 }
 
-pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
-    mut inputs: Vec<FieldElement>,
+pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_4<R: RngCore + CryptoRng>(
+    inputs: Vec<FieldElement>,
     randomness: Option<Vec<FieldElement>>,
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
@@ -292,15 +305,73 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
     G: &G1Vector,
     H: &G1Vector,
 ) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
-    assert_eq!(inputs.len(), 8);
-    check_for_randomness_or_rng!(randomness, rng)?;
-
     let total_rounds = hash_params.full_rounds_beginning
         + hash_params.partial_rounds
         + hash_params.full_rounds_end;
 
     let mut prover_transcript = Transcript::new(transcript_label);
     let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+
+    let comms = prove_knowledge_of_preimage_of_Poseidon_4(
+        inputs,
+        randomness,
+        expected_output,
+        hash_params,
+        sbox_type,
+        rng,
+        &mut prover,
+    )?;
+
+    println!(
+        "For Poseidon hash rounds {}, sbox type {:?}, no of multipliers is {}, no of constraints is {}",
+        total_rounds,
+        sbox_type,
+        &prover.num_multipliers(),
+        &prover.num_constraints()
+    );
+
+    let proof = prover.prove(G, H)?;
+    Ok((proof, comms))
+}
+
+pub fn verify_proof_of_knowledge_of_preimage_of_Poseidon_4(
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
+    let mut verifier_transcript = Transcript::new(transcript_label);
+    let mut verifier = Verifier::new(&mut verifier_transcript);
+
+    verify_knowledge_of_preimage_of_Poseidon_4(
+        expected_output,
+        hash_params,
+        sbox_type,
+        commitments,
+        g,
+        h,
+        &mut verifier,
+    )?;
+
+    verifier.verify(&proof, g, h, G, H)
+}
+
+pub fn prove_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
+    mut inputs: Vec<FieldElement>,
+    randomness: Option<Vec<FieldElement>>,
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
+    check_for_randomness_or_rng!(randomness, rng)?;
 
     let mut comms = vec![];
     let mut vars = vec![];
@@ -319,6 +390,8 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
         ]
     });
 
+    check_for_input_and_randomness_length!(inputs, rands, 8)?;
+
     for _ in 0..8 {
         let (com, var) = prover.commit(inputs.remove(0), rands.remove(0));
         comms.push(com);
@@ -326,13 +399,63 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
     }
 
     let (_, var) = prover.commit(FieldElement::from(ZERO_CONST), FieldElement::zero());
-    Poseidon_hash_8_gadget(
-        &mut prover,
-        vars,
-        var,
-        &hash_params,
+    Poseidon_hash_8_gadget(prover, vars, var, &hash_params, sbox_type, &expected_output)?;
+
+    Ok(comms)
+}
+
+pub fn verify_knowledge_of_preimage_of_Poseidon_8(
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    mut commitments: Vec<G1>,
+    g: &G1,
+    h: &G1,
+    verifier: &mut Verifier,
+) -> Result<(), R1CSError> {
+    let mut vars = vec![];
+
+    for _ in 0..8 {
+        let var = verifier.commit(commitments.remove(0));
+        vars.push(var);
+    }
+
+    let zero_comm =
+        commit_to_field_element(g, h, &FieldElement::from(ZERO_CONST), &FieldElement::zero());
+    let v = verifier.commit(zero_comm.clone());
+
+    Poseidon_hash_8_gadget(verifier, vars, v, &hash_params, sbox_type, &expected_output)?;
+    Ok(())
+}
+
+pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
+    inputs: Vec<FieldElement>,
+    randomness: Option<Vec<FieldElement>>,
+    expected_output: &FieldElement,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    let total_rounds = hash_params.full_rounds_beginning
+        + hash_params.partial_rounds
+        + hash_params.full_rounds_end;
+
+    let mut prover_transcript = Transcript::new(transcript_label);
+    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+
+    let comms = prove_knowledge_of_preimage_of_Poseidon_8(
+        inputs,
+        randomness,
+        expected_output,
+        hash_params,
         sbox_type,
-        &expected_output,
+        rng,
+        &mut prover,
     )?;
 
     println!(
@@ -343,16 +466,16 @@ pub fn gen_proof_of_knowledge_of_preimage_of_Poseidon_8<R: RngCore + CryptoRng>(
         &prover.num_constraints()
     );
 
-    let proof = prover.prove(&G, &H).unwrap();
+    let proof = prover.prove(G, H)?;
     Ok((proof, comms))
 }
 
-pub fn verify_knowledge_of_preimage_of_Poseidon_8(
+pub fn verify_proof_of_knowledge_of_preimage_of_Poseidon_8(
     expected_output: &FieldElement,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
     proof: R1CSProof,
-    mut commitments: Vec<G1>,
+    commitments: Vec<G1>,
     transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
@@ -361,34 +484,25 @@ pub fn verify_knowledge_of_preimage_of_Poseidon_8(
 ) -> Result<(), R1CSError> {
     let mut verifier_transcript = Transcript::new(transcript_label);
     let mut verifier = Verifier::new(&mut verifier_transcript);
-    let mut vars = vec![];
 
-    for i in 0..8 {
-        let var = verifier.commit(commitments.remove(0));
-        vars.push(var);
-    }
-
-    let zero_comm =
-        commit_to_field_element(g, h, &FieldElement::from(ZERO_CONST), &FieldElement::zero());
-    let v = verifier.commit(zero_comm.clone());
-
-    Poseidon_hash_8_gadget(
-        &mut verifier,
-        vars,
-        v,
-        &hash_params,
+    verify_knowledge_of_preimage_of_Poseidon_8(
+        expected_output,
+        hash_params,
         sbox_type,
-        &expected_output,
+        commitments,
+        g,
+        h,
+        &mut verifier,
     )?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)?;
-    Ok(())
+    verifier.verify(&proof, g, h, G, H)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::get_generators;
+    use amcl_wrapper::group_elem::GroupElement;
     use rand::rngs::OsRng;
     use rand::Rng;
 
@@ -428,7 +542,7 @@ mod tests {
         );
 
         let start = Instant::now();
-        verify_knowledge_of_preimage_of_Poseidon_2(
+        verify_proof_of_knowledge_of_preimage_of_Poseidon_2(
             &expected_output,
             &hash_params,
             sbox_type,
@@ -484,7 +598,7 @@ mod tests {
         );
 
         let start = Instant::now();
-        verify_knowledge_of_preimage_of_Poseidon_4(
+        verify_proof_of_knowledge_of_preimage_of_Poseidon_4(
             &expected_output,
             &hash_params,
             sbox_type,
@@ -544,7 +658,7 @@ mod tests {
         );
 
         let start = Instant::now();
-        verify_knowledge_of_preimage_of_Poseidon_8(
+        verify_proof_of_knowledge_of_preimage_of_Poseidon_8(
             &expected_output,
             &hash_params,
             sbox_type,

@@ -25,8 +25,8 @@ pub struct AllocatedQuantity {
 }
 
 /// Represents a linear combination of
-/// [`Variables`](::r1cs::Variable).  Each term is represented by a
-/// `(Variable, Scalar)` pair.
+/// `Variables`.  Each term is represented by a
+/// `(Variable, FieldElement)` pair.
 #[derive(Clone, Debug)]
 pub struct LinearCombination {
     pub terms: Vec<(Variable, FieldElement)>,

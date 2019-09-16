@@ -1,16 +1,13 @@
 extern crate merlin;
 use bulletproofs_amcl as bulletproofs;
 
-use bulletproofs::errors::R1CSError;
-use bulletproofs::r1cs::{
-    ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier,
-};
+use bulletproofs::r1cs::{ConstraintSystem, LinearCombination, Prover, Variable, Verifier};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use amcl_wrapper::field_elem::FieldElement;
-    use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
+    use amcl_wrapper::group_elem::GroupElement;
     use amcl_wrapper::group_elem_g1::{G1Vector, G1};
     use bulletproofs::utils::get_generators;
     use merlin::Transcript;

@@ -1,6 +1,6 @@
 use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
+use crate::r1cs::{ConstraintSystem, LinearCombination};
 use amcl_wrapper::field_elem::FieldElement;
 
 // Ensure `v` is a bit, hence 0 or 1

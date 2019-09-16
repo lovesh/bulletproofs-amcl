@@ -19,15 +19,15 @@ pub struct IPP {}
 impl IPP {
     /// Create an inner-product proof.
     ///
-    /// The proof is created with respect to the bases \\(G\\), \\(H'\\),
-    /// where \\(H'\_i = H\_i \cdot \texttt{Hprime\\_factors}\_i\\).
+    /// The proof is created with respect to the bases G', H',
+    /// where G'_i = G_i.G_factors_i and H'_i = H_i.H_factors_i.
     ///
-    /// The `verifier` is passed in as a parameter so that the
+    /// The `transcript` is passed in as a parameter so that the
     /// challenges depend on the *entire* transcript (including parent
     /// protocols).
     ///
     /// The lengths of the vectors must all be the same, and must all be
-    /// either 0 or a power of 2.
+    /// power of 2.
     pub fn create_ipp(
         transcript: &mut Transcript,
         Q: &G1,
@@ -50,9 +50,6 @@ impl IPP {
         assert_eq!(G_factors.len(), n);
         assert_eq!(H_factors.len(), n);
 
-        // Create slices G, H, a, b backed by their respective
-        // vectors.  This lets us reslice as we compress the lengths
-        // of the vectors in the main loop below.
         let mut G = G_vec.clone();
         let mut H = H_vec.clone();
         let mut a = a_vec.clone();
@@ -64,14 +61,12 @@ impl IPP {
         let mut L_vec = G1Vector::with_capacity(lg_n);
         let mut R_vec = G1Vector::with_capacity(lg_n);
 
-        // If it's the first iteration, unroll the Hprime = H*y_inv scalar mults
-        // into multiscalar muls, for performance.
         if n != 1 {
             n = n / 2;
             let (mut a_L, a_R) = a.split_at(n);
             let (mut b_L, b_R) = b.split_at(n);
-            let (mut G_L, mut G_R) = G.split_at(n);
-            let (mut H_L, mut H_R) = H.split_at(n);
+            let (mut G_L, G_R) = G.split_at(n);
+            let (mut H_L, H_R) = H.split_at(n);
             let (G_factors_L, G_factors_R) = G_factors.split_at(n);
             let (H_factors_L, H_factors_R) = H_factors.split_at(n);
 
@@ -140,8 +135,8 @@ impl IPP {
             n = n / 2;
             let (mut a_L, a_R) = a.split_at(n);
             let (mut b_L, b_R) = b.split_at(n);
-            let (mut G_L, mut G_R) = G.split_at(n);
-            let (mut H_L, mut H_R) = H.split_at(n);
+            let (mut G_L, G_R) = G.split_at(n);
+            let (mut H_L, H_R) = H.split_at(n);
 
             let c_L = a_L.inner_product(&b_R).unwrap();
             let c_R = a_R.inner_product(&b_L).unwrap();
@@ -155,6 +150,7 @@ impl IPP {
             L_0.extend(b_R.iter());
             L_0.push(&c_L);
 
+            // Inner product of L_1, L_0
             let L = G1Vector::inner_product_var_time_with_ref_vecs(L_1, L_0).unwrap();
 
             let mut R_1 = vec![];
@@ -166,6 +162,7 @@ impl IPP {
             R_0.extend(b_L.iter());
             R_0.push(&c_R);
 
+            // Inner product of R_1, R_0
             let R = G1Vector::inner_product_var_time_with_ref_vecs(R_1, R_0).unwrap();
 
             transcript.commit_point(b"L", &L);
@@ -332,7 +329,7 @@ mod tests {
             .map(|i| FieldElement::from(*i as u8))
             .collect::<Vec<FieldElement>>()
             .into();
-        let mut b: FieldElementVector = vec![5, 6, 7, 8]
+        let b: FieldElementVector = vec![5, 6, 7, 8]
             .iter()
             .map(|i| FieldElement::from(*i as u8))
             .collect::<Vec<FieldElement>>()
@@ -347,7 +344,7 @@ mod tests {
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
 
-        let mut b_prime: Vec<FieldElement> = b
+        let b_prime: Vec<FieldElement> = b
             .iter()
             .zip(H_factors.iter())
             .map(|(bi, yi)| bi * yi)

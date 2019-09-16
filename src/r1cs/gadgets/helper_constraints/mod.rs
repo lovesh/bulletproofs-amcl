@@ -1,8 +1,5 @@
-extern crate merlin;
-extern crate rand;
-
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
+use crate::r1cs::{ConstraintSystem, LinearCombination};
 use amcl_wrapper::constants::MODBYTES;
 use amcl_wrapper::field_elem::FieldElement;
 

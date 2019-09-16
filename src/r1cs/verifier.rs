@@ -30,7 +30,7 @@ pub struct Verifier<'a> {
     /// Records the number of low-level variables allocated in the
     /// constraint system.
     ///
-    /// Because the `VerifierCS` only keeps the constraints
+    /// Because the `Verifier` only keeps the constraints
     /// themselves, it doesn't record the assignments (they're all
     /// `Missing`), so the `num_vars` isn't kept implicitly in the
     /// variable assignments.
@@ -66,20 +66,20 @@ impl<'a> Verifier<'a> {
     ///
     /// The `bp_gens` and `pc_gens` are generators for Bulletproofs
     /// and for the Pedersen commitments, respectively.  The
-    /// [`BulletproofGens`] should have `gens_capacity` greater than
+    /// `BulletproofGens` should have `gens_capacity` greater than
     /// the number of multiplication constraints that will eventually
     /// be added into the constraint system.
     ///
     /// The `transcript` parameter is a Merlin proof transcript.  The
-    /// `VerifierCS` holds onto the `&mut Transcript` until it consumes
-    /// itself during [`VerifierCS::verify`], releasing its borrow of the
+    /// `Verifier` holds onto the `&mut Transcript` until it consumes
+    /// itself during `Verifier::verify`, releasing its borrow of the
     /// transcript.  This ensures that the transcript cannot be
-    /// altered except by the `VerifierCS` before proving is complete.
+    /// altered except by the `Verifier` before proving is complete.
     ///
     /// The `commitments` parameter is a list of Pedersen commitments
     /// to the external variables for the constraint system.  All
     /// external variables must be passed up-front, so that challenges
-    /// produced by [`ConstraintSystem::challenge_scalar`] are bound
+    /// produced by `ConstraintSystem::challenge_scalar` are bound
     /// to the external variables.
     ///
     /// # Returns
@@ -88,7 +88,7 @@ impl<'a> Verifier<'a> {
     ///
     /// The first element is the newly constructed constraint system.
     ///
-    /// The second element is a list of [`Variable`]s corresponding to
+    /// The second element is a list of `Variable` corresponding to
     /// the external inputs, which can be used to form constraints.
     pub fn new(transcript: &'a mut Transcript) -> Self {
         transcript.r1cs_domain_sep();
@@ -110,13 +110,13 @@ impl<'a> Verifier<'a> {
     /// The `commitment` parameter is a Pedersen commitment
     /// to the external variable for the constraint system.  All
     /// external variables must be passed up-front, so that challenges
-    /// produced by [`ConstraintSystem::challenge_scalar`] are bound
+    /// produced by `ConstraintSystem::challenge_scalar` are bound
     /// to the external variables.
     ///
     /// # Returns
     ///
-    /// Returns a pair of a Pedersen commitment (as a compressed Ristretto point),
-    /// and a [`Variable`] corresponding to it, which can be used to form constraints.
+    /// Returns a pair of a Pedersen commitment and a `Variable`,
+    /// corresponding to it, which can be used to form constraints.
     pub fn commit(&mut self, commitment: G1) -> Variable {
         let i = self.V.len();
 
@@ -137,9 +137,9 @@ impl<'a> Verifier<'a> {
     /// ```text
     /// (wL, wR, wO, wV, wc)
     /// ```
-    /// where `w{L,R,O}` is \\( z \cdot z^Q \cdot W_{L,R,O} \\).
+    /// where `w{L,R,O}` is `z.z^Q.W{L,R,O}`
     ///
-    /// This has the same logic as `ProverCS::flattened_constraints()`
+    /// This has the same logic as `Prover::flattened_constraints()`
     /// but also computes the constant terms (which the prover skips
     /// because they're not needed to construct the proof).
     fn flattened_constraints(
@@ -188,6 +188,7 @@ impl<'a> Verifier<'a> {
         (wL, wR, wO, wV, wc)
     }
 
+    #[cfg(test)]
     fn get_weight_matrices(
         &self,
     ) -> (
@@ -258,7 +259,7 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    /// Consume this `VerifierCS` and attempt to verify the supplied `proof`.
+    /// Consume this `Verifier` and attempt to verify the supplied `proof`.
     pub fn verify(
         mut self,
         proof: &R1CSProof,
@@ -335,20 +336,18 @@ impl<'a> Verifier<'a> {
 
         let y_inv = y.inverse();
         let y_inv_vec = FieldElementVector::new_vandermonde_vector(&y_inv, padded_n);
-        /*let mut yneg_wR = wR.hadamard_product(&y_inv_vec).unwrap();
-        yneg_wR.append(&mut FieldElementVector::new(pad));*/
-        let yneg_wR = wR
+        let y_inv_wR = wR
             .into_iter()
             .zip(y_inv_vec.iter())
             .map(|(wRi, exp_y_inv)| wRi * exp_y_inv)
             .chain(iter::repeat(FieldElement::zero()).take(pad))
             .collect::<Vec<FieldElement>>();
 
-        let delta = FieldElementVector::from(&yneg_wR.as_slice()[0..n])
+        let delta = FieldElementVector::from(&y_inv_wR.as_slice()[0..n])
             .inner_product(&wL)
             .unwrap();
         // Get IPP variables
-        let (mut u_sq, mut u_inv_sq, s) = IPP::verification_scalars(
+        let (u_sq, u_inv_sq, s) = IPP::verification_scalars(
             &proof.ipp_proof.L,
             &proof.ipp_proof.R,
             padded_n,
@@ -362,14 +361,14 @@ impl<'a> Verifier<'a> {
         let u_for_h = u_for_g.clone();
 
         // define parameters for P check
-        let mut g_scalars: Vec<FieldElement> = yneg_wR
+        let g_scalars: Vec<FieldElement> = y_inv_wR
             .iter()
             .zip(u_for_g)
             .zip(s.iter().take(padded_n))
             .map(|((yneg_wRi, u_or_1), s_i)| u_or_1 * (&x * yneg_wRi - a * s_i))
             .collect();
 
-        let mut h_scalars: Vec<FieldElement> = y_inv_vec
+        let h_scalars: Vec<FieldElement> = y_inv_vec
             .iter()
             .zip(u_for_h)
             .zip(s.iter().rev().take(padded_n))

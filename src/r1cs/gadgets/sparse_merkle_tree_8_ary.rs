@@ -3,7 +3,6 @@ use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};
 use merlin::Transcript;
 use std::time::{Duration, Instant};
@@ -16,29 +15,23 @@ use crate::r1cs::gadgets::poseidon_hash::{
 
 use super::helper_constraints::poseidon::{PoseidonParams, SboxType};
 use super::helper_constraints::sparse_merkle_tree_8_ary::{
-    vanilla_merkle_merkle_tree_8_verif_gadget, DBVal, ProofNode, VanillaSparseMerkleTree_8,
+    vanilla_merkle_merkle_tree_8_verif_gadget, DBVal_8_ary, ProofNode_8_ary,
+    VanillaSparseMerkleTree_8,
 };
 
-pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
+pub fn prove_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
     leaf: FieldElement,
     leaf_index: FieldElement,
     randomness: Option<Vec<FieldElement>>,
-    mut merkle_proof: Vec<ProofNode>,
+    mut merkle_proof: Vec<ProofNode_8_ary>,
     root: &FieldElement,
     tree_depth: usize,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
     rng: Option<&mut R>,
-    transcript_label: &'static [u8],
-    g: &G1,
-    h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
-) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    prover: &mut Prover,
+) -> Result<Vec<G1>, R1CSError> {
     check_for_randomness_or_rng!(randomness, rng)?;
-
-    let mut prover_transcript = Transcript::new(transcript_label);
-    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
 
     // Randomness is only provided for leaf value and leaf index
     let mut rands = randomness.unwrap_or_else(|| {
@@ -48,7 +41,12 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
             FieldElement::random_using_rng(r),
         ]
     });
-    assert_eq!(rands.len(), 2);
+
+    if rands.len() != 2 {
+        return Err(R1CSError::GadgetError {
+            description: String::from("Provided randomness should have size 2"),
+        });
+    }
 
     let mut comms = vec![];
 
@@ -71,11 +69,10 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
         }
     }
 
-    let zero = allocate_statics_for_prover(&mut prover, 1).remove(0);
+    let zero = allocate_statics_for_prover(prover, 1).remove(0);
 
-    let start = Instant::now();
     vanilla_merkle_merkle_tree_8_verif_gadget(
-        &mut prover,
+        prover,
         tree_depth,
         root,
         var_leaf,
@@ -86,17 +83,7 @@ pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
         sbox_type,
     )?;
 
-    let total_rounds = hash_params.full_rounds_beginning
-        + hash_params.partial_rounds
-        + hash_params.full_rounds_end;
-    println!("For 8-ary tree of height {} (has 2^{} leaves) and Poseidon rounds {}, no of multipliers is {} and constraints is {}", tree_depth, tree_depth*3, total_rounds, &prover.num_multipliers(), &prover.num_constraints());
-
-    let proof = prover.prove(G, H).unwrap();
-    let end = start.elapsed();
-
-    println!("Proving time is {:?}", end);
-
-    Ok((proof, comms))
+    Ok(comms)
 }
 
 pub fn verify_leaf_inclusion_8_ary_merkle_tree(
@@ -104,17 +91,11 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
     tree_depth: usize,
     hash_params: &PoseidonParams,
     sbox_type: &SboxType,
-    proof: R1CSProof,
     mut commitments: Vec<G1>,
-    transcript_label: &'static [u8],
     g: &G1,
     h: &G1,
-    G: &G1Vector,
-    H: &G1Vector,
+    verifier: &mut Verifier,
 ) -> Result<(), R1CSError> {
-    let mut verifier_transcript = Transcript::new(transcript_label);
-    let mut verifier = Verifier::new(&mut verifier_transcript);
-
     let var_leaf = verifier.commit(commitments.remove(0));
 
     let var_leaf_idx = verifier.commit(commitments.remove(0));
@@ -129,11 +110,10 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
         proof_vars.push(v);
     }
 
-    let zero = allocate_statics_for_verifier(&mut verifier, 1, g, h).remove(0);
+    let zero = allocate_statics_for_verifier(verifier, 1, g, h).remove(0);
 
-    let start = Instant::now();
     vanilla_merkle_merkle_tree_8_verif_gadget(
-        &mut verifier,
+        verifier,
         tree_depth,
         root,
         var_leaf,
@@ -144,7 +124,82 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
         sbox_type,
     )?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)?;
+    Ok(())
+}
+
+pub fn gen_proof_of_leaf_inclusion_8_ary_merkle_tree<R: RngCore + CryptoRng>(
+    leaf: FieldElement,
+    leaf_index: FieldElement,
+    randomness: Option<Vec<FieldElement>>,
+    merkle_proof: Vec<ProofNode_8_ary>,
+    root: &FieldElement,
+    tree_depth: usize,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    rng: Option<&mut R>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(R1CSProof, Vec<G1>), R1CSError> {
+    let mut prover_transcript = Transcript::new(transcript_label);
+    let mut prover = Prover::new(&g, &h, &mut prover_transcript);
+
+    let start = Instant::now();
+    let comms = prove_leaf_inclusion_8_ary_merkle_tree(
+        leaf,
+        leaf_index,
+        randomness,
+        merkle_proof,
+        root,
+        tree_depth,
+        hash_params,
+        sbox_type,
+        rng,
+        &mut prover,
+    )?;
+    let total_rounds = hash_params.full_rounds_beginning
+        + hash_params.partial_rounds
+        + hash_params.full_rounds_end;
+    println!("For 8-ary tree of height {} (has 2^{} leaves) and Poseidon rounds {}, no of multipliers is {} and constraints is {}", tree_depth, tree_depth*3, total_rounds, &prover.num_multipliers(), &prover.num_constraints());
+
+    let proof = prover.prove(G, H)?;
+    let end = start.elapsed();
+
+    println!("Proving time is {:?}", end);
+
+    Ok((proof, comms))
+}
+
+pub fn verify_proof_of_leaf_inclusion_8_ary_merkle_tree(
+    root: &FieldElement,
+    tree_depth: usize,
+    hash_params: &PoseidonParams,
+    sbox_type: &SboxType,
+    proof: R1CSProof,
+    commitments: Vec<G1>,
+    transcript_label: &'static [u8],
+    g: &G1,
+    h: &G1,
+    G: &G1Vector,
+    H: &G1Vector,
+) -> Result<(), R1CSError> {
+    let mut verifier_transcript = Transcript::new(transcript_label);
+    let mut verifier = Verifier::new(&mut verifier_transcript);
+
+    let start = Instant::now();
+    verify_leaf_inclusion_8_ary_merkle_tree(
+        root,
+        tree_depth,
+        hash_params,
+        sbox_type,
+        commitments,
+        g,
+        h,
+        &mut verifier,
+    )?;
+    verifier.verify(&proof, g, h, G, H)?;
     let end = start.elapsed();
 
     println!("Verification time is {:?}", end);
@@ -155,28 +210,42 @@ pub fn verify_leaf_inclusion_8_ary_merkle_tree(
 mod tests {
     use super::*;
     use crate::utils::get_generators;
+    use crate::utils::hash_db::InMemoryHashDb;
+    use amcl_wrapper::group_elem::GroupElement;
 
     #[test]
     fn test_VSMT_8_Verif() {
         let width = 9;
-        let (full_b, full_e) = (4, 4);
-        let partial_rounds = 57;
+
+        let mut db = InMemoryHashDb::<DBVal_8_ary>::new();
+
+        #[cfg(feature = "bls381")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "bn254")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "secp256k1")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
+        #[cfg(feature = "ed25519")]
+        let (full_b, full_e, partial_rounds) = (4, 4, 56);
+
         let total_rounds = full_b + partial_rounds + full_e;
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
         let tree_depth = 8;
-        let mut tree = VanillaSparseMerkleTree_8::new(&hash_params, tree_depth);
+        let mut tree = VanillaSparseMerkleTree_8::new(&hash_params, tree_depth, &mut db);
 
         for i in 1..=10 {
             let s = FieldElement::from(i as u32);
-            tree.update(&s, s.clone());
+            tree.update(&s, s.clone(), &mut db).unwrap();
         }
 
-        let mut merkle_proof_vec = Vec::<ProofNode>::new();
+        let mut merkle_proof_vec = Vec::<ProofNode_8_ary>::new();
         let mut merkle_proof = Some(merkle_proof_vec);
         let k = FieldElement::from(9u32);
-        assert_eq!(k, tree.get(&k, &mut merkle_proof));
+        assert_eq!(k, tree.get(&k, &mut merkle_proof, &db).unwrap());
         merkle_proof_vec = merkle_proof.unwrap();
-        //println!("{:?}", &merkle_proof_vec);
         assert!(tree.verify_proof(&k, &k, &merkle_proof_vec, Some(&tree.root)));
 
         let mut rng = rand::thread_rng();
@@ -210,7 +279,7 @@ mod tests {
         )
         .unwrap();
 
-        verify_leaf_inclusion_8_ary_merkle_tree(
+        verify_proof_of_leaf_inclusion_8_ary_merkle_tree(
             &tree.root,
             tree.depth,
             &hash_params,

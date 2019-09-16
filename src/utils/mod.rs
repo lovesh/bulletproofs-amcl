@@ -1,5 +1,6 @@
 extern crate rand;
 
+pub mod hash_db;
 pub mod vector_poly;
 
 use rand::rngs::EntropyRng;
@@ -13,7 +14,6 @@ use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::types::{BigNum, DoubleBigNum};
 
 pub fn get_generators(prefix: &str, n: usize) -> Vec<G1> {
-    //let prefix = String::from(s);
     let mut gens: Vec<G1> = Vec::with_capacity(n);
     for i in 1..n + 1 {
         let s: String = prefix.to_string() + &i.to_string();

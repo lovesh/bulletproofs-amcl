@@ -19,7 +19,8 @@ use super::helper_constraints::poseidon::{
     PoseidonParams, Poseidon_hash_4, Poseidon_hash_4_constraints, SboxType, PADDING_CONST,
 };
 use super::helper_constraints::sparse_merkle_tree_4_ary::{
-    vanilla_merkle_merkle_tree_4_verif_gadget, DBVal, ProofNode, VanillaSparseMerkleTree_4,
+    vanilla_merkle_merkle_tree_4_verif_gadget, DBVal_4_ary, ProofNode_4_ary,
+    VanillaSparseMerkleTree_4,
 };
 
 use crate::errors::R1CSError;
@@ -28,6 +29,7 @@ use crate::r1cs::gadgets::poseidon_hash::{
 };
 use crate::r1cs::linear_combination::AllocatedQuantity;
 use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::utils::hash_db::HashDb;
 
 /// Hash to get a new number. For other variations a keyed permutation should be used.
 pub fn randomize(x: &FieldElement) -> FieldElement {
@@ -87,6 +89,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
     depth: usize,
     orig_root: Variable, // original root is hidden since its correlating across several proofs
     new_tree: &mut VanillaSparseMerkleTree_4,
+    new_db: &mut HashDb<DBVal_4_ary>,
     indices: Vec<FieldElement>, // For future: `indices` can be made hidden too
     orig_vals: Vec<Variable>,   // values of the original tree
     mut orig_vals_proofs: Vec<Vec<Variable>>, // merkle proofs for values of the original tree
@@ -137,7 +140,7 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
         let mut cur_prefix: Vec<u8> = vec![];
 
         for pos in path_for_get.iter() {
-            let children = new_tree.db.get(&cur_node.to_bytes()).unwrap().to_vec();
+            let children = new_db.get(&cur_node.to_bytes()).unwrap().to_vec();
             cur_node = children[*pos as usize].clone();
             for (k, c) in children.iter().enumerate() {
                 let mut key = cur_prefix.clone();
@@ -197,7 +200,9 @@ pub fn randomizer_gadget<CS: ConstraintSystem>(
 /// XXX ORIGINAL TREE AS ARGUMENT SEEMS ODD. BETTER PASS THE PROOF.
 pub fn gen_proof_for_randomizer(
     orig_tree: &VanillaSparseMerkleTree_4,
+    orig_db: &HashDb<DBVal_4_ary>,
     new_tree: &mut VanillaSparseMerkleTree_4,
+    new_db: &mut HashDb<DBVal_4_ary>,
     modified_indices: &[FieldElement],
     orig_vals: &[FieldElement],
     tree_depth: usize,
@@ -224,9 +229,9 @@ pub fn gen_proof_for_randomizer(
 
     //for (i, v) in modified_indices {
     for i in 0..modified_indices.len() {
-        let mut merkle_proof_vec = Vec::<ProofNode>::new();
+        let mut merkle_proof_vec = Vec::<ProofNode_4_ary>::new();
         let mut merkle_proof = Some(merkle_proof_vec);
-        let _v = orig_tree.get(&modified_indices[i], &mut merkle_proof);
+        let _v = orig_tree.get(&modified_indices[i], &mut merkle_proof, orig_db)?;
         assert_eq!(_v, orig_vals[i]);
         let (com_orig_val, var_orig_val) = prover.commit(_v, FieldElement::random());
         comms.push(com_orig_val);
@@ -254,6 +259,7 @@ pub fn gen_proof_for_randomizer(
         tree_depth,
         var_orig_root,
         new_tree,
+        new_db,
         modified_indices.to_vec(),
         orig_val_vars,
         proof_vars,
@@ -277,6 +283,7 @@ pub fn gen_proof_for_randomizer(
 
 pub fn verify_proof_for_randomizer(
     new_tree: &mut VanillaSparseMerkleTree_4,
+    new_db: &mut HashDb<DBVal_4_ary>,
     modified_indices: &[FieldElement], // For future: `modified_indices` can be made hidden too
     tree_depth: usize,
     hash_params: &PoseidonParams,
@@ -319,6 +326,7 @@ pub fn verify_proof_for_randomizer(
         tree_depth,
         var_orig_root,
         new_tree,
+        new_db,
         modified_indices.to_vec(),
         orig_val_vars,
         proof_vars,
@@ -327,7 +335,7 @@ pub fn verify_proof_for_randomizer(
         sbox_type,
     )?;
 
-    verifier.verify(&proof, &g, &h, &G, &H)?;
+    verifier.verify(&proof, g, h, G, H)?;
     let end = start.elapsed();
 
     println!("Verification time is {:?}", end);
@@ -338,10 +346,13 @@ pub fn verify_proof_for_randomizer(
 mod tests {
     use super::*;
     use crate::utils::get_generators;
+    use crate::utils::hash_db::InMemoryHashDb;
 
     #[test]
     fn test_randomizer() {
         let width = 5;
+
+        let mut orig_db = InMemoryHashDb::<DBVal_4_ary>::new();
 
         #[cfg(feature = "bls381")]
         let (full_b, full_e, partial_rounds) = (4, 4, 56);
@@ -372,11 +383,13 @@ mod tests {
             println!("Will modify {} entries", indices.len());
         }
 
-        let mut orig_tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
+        let mut orig_tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth, &mut orig_db);
         for i in 0..data_size {
             // Next line is a temporary workaround
             let idx = FieldElement::from(i as u64);
-            orig_tree.update(&idx, original_data[i].clone());
+            orig_tree
+                .update(&idx, original_data[i].clone(), &mut orig_db)
+                .unwrap();
         }
         let orig_root = orig_tree.root.clone();
 
@@ -391,21 +404,25 @@ mod tests {
 
         // Create new tree different from original tree
         let mut new_tree = orig_tree.clone();
+        let mut new_db = orig_db.clone();
         for (i, v) in &modified_indices {
-            new_tree.update(i, randomize(v));
+            new_tree.update(i, randomize(v), &mut new_db).unwrap();
         }
         assert_ne!(orig_root, new_tree.root);
 
         // Update new_tree back to old tree
         for (i, v) in &modified_indices {
-            new_tree.update(i, v.clone());
+            new_tree.update(i, v.clone(), &mut new_db).unwrap();
         }
         assert_eq!(orig_root, new_tree.root);
 
         // Create new tree different from original tree
         let mut new_tree_again = orig_tree.clone();
+        let mut new_db_again = orig_db.clone();
         for (i, v) in &modified_indices {
-            new_tree_again.update(i, randomize(v));
+            new_tree_again
+                .update(i, randomize(v), &mut new_db_again)
+                .unwrap();
         }
         assert_ne!(orig_root, new_tree_again.root);
 
@@ -429,9 +446,12 @@ mod tests {
 
         let (proof, commitments) = {
             let mut new_tree_clone = new_tree_again.clone();
+            let mut new_db_clone = new_db_again.clone();
             gen_proof_for_randomizer(
                 &orig_tree,
+                &orig_db,
                 &mut new_tree_clone,
+                &mut new_db_clone,
                 &idxs,
                 &orig_vals,
                 tree_depth,
@@ -448,8 +468,10 @@ mod tests {
 
         {
             let mut new_tree_clone = new_tree_again.clone();
+            let mut new_db_clone = new_db_again.clone();
             verify_proof_for_randomizer(
                 &mut new_tree_clone,
+                &mut new_db_clone,
                 &idxs,
                 tree_depth,
                 &hash_params,

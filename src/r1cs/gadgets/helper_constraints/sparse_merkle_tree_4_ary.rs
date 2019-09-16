@@ -1,22 +1,21 @@
 use std::collections::HashMap;
 
-use amcl_wrapper::constants::{MODBYTES, NLEN};
+use amcl_wrapper::constants::MODBYTES;
 
 use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
 use amcl_wrapper::field_elem::FieldElement;
-use amcl_wrapper::group_elem::GroupElement;
-use amcl_wrapper::group_elem_g1::G1;
 
 use super::poseidon::{
     PoseidonParams, Poseidon_hash_4, Poseidon_hash_4_constraints, SboxType, PADDING_CONST,
 };
 use super::{constrain_lc_with_scalar, get_byte_size};
 use crate::r1cs::gadgets::helper_constraints::allocated_leaf_index_to_bytes;
+use crate::utils::hash_db::HashDb;
 
-pub type DBVal = [FieldElement; 4];
-pub type ProofNode = [FieldElement; 3];
+pub type DBVal_4_ary = [FieldElement; 4];
+pub type ProofNode_4_ary = [FieldElement; 3];
 
 /// Get a base 4 representation of the given `scalar`. Only return `num_digits` of the representation
 pub fn get_base_4_repr(scalar: &FieldElement, num_digits: usize) -> Vec<u8> {
@@ -48,22 +47,23 @@ pub fn get_base_4_repr(scalar: &FieldElement, num_digits: usize) -> Vec<u8> {
 #[derive(Clone, Debug)]
 pub struct VanillaSparseMerkleTree_4<'a> {
     pub depth: usize,
-    empty_tree_hashes: Vec<FieldElement>,
-    pub db: HashMap<Vec<u8>, DBVal>,
     hash_params: &'a PoseidonParams,
     pub root: FieldElement,
 }
 
 impl<'a> VanillaSparseMerkleTree_4<'a> {
-    pub fn new(hash_params: &'a PoseidonParams, depth: usize) -> VanillaSparseMerkleTree_4<'a> {
-        let mut db = HashMap::new();
+    pub fn new(
+        hash_params: &'a PoseidonParams,
+        depth: usize,
+        hash_db: &mut HashDb<DBVal_4_ary>,
+    ) -> VanillaSparseMerkleTree_4<'a> {
         let mut empty_tree_hashes: Vec<FieldElement> = vec![];
         empty_tree_hashes.push(FieldElement::zero());
         for i in 1..=depth {
             let prev = &empty_tree_hashes[i - 1];
             let input: Vec<FieldElement> = (0..4).map(|_| prev.clone()).collect();
             // Hash all 4 children at once
-            let mut val: DBVal = [
+            let mut val: DBVal_4_ary = [
                 FieldElement::zero(),
                 FieldElement::zero(),
                 FieldElement::zero(),
@@ -73,7 +73,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             let new = Poseidon_hash_4(input, hash_params, &SboxType::Quint);
             let key = new.to_bytes();
 
-            db.insert(key, val);
+            hash_db.insert(key, val);
             empty_tree_hashes.push(new);
         }
 
@@ -81,17 +81,20 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
 
         VanillaSparseMerkleTree_4 {
             depth,
-            empty_tree_hashes,
-            db,
             hash_params,
             root,
         }
     }
 
-    pub fn update(&mut self, idx: &FieldElement, val: FieldElement) -> FieldElement {
+    pub fn update(
+        &mut self,
+        idx: &FieldElement,
+        val: FieldElement,
+        hash_db: &mut HashDb<DBVal_4_ary>,
+    ) -> Result<FieldElement, R1CSError> {
         // Find path to insert the new key
-        let mut sidenodes_wrap = Some(Vec::<ProofNode>::new());
-        self.get(&idx, &mut sidenodes_wrap);
+        let mut sidenodes_wrap = Some(Vec::<ProofNode_4_ary>::new());
+        self.get(&idx, &mut sidenodes_wrap, hash_db)?;
         let mut sidenodes = sidenodes_wrap.unwrap();
 
         // Convert leaf index to base 4
@@ -105,7 +108,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             // Insert the value at the position determined by the base 4 digit
             side_elem.insert(d as usize, cur_val);
 
-            let mut db_val: DBVal = [
+            let mut db_val: DBVal_4_ary = [
                 FieldElement::zero(),
                 FieldElement::zero(),
                 FieldElement::zero(),
@@ -113,29 +116,35 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             ];
             db_val.clone_from_slice(side_elem.as_slice());
             let h = Poseidon_hash_4(side_elem, self.hash_params, &SboxType::Quint);
-            self.update_db_with_key_val(&h, db_val);
+            Self::update_db_with_key_val(&h, db_val, hash_db);
             cur_val = h;
         }
 
         self.root = cur_val.clone();
 
-        cur_val
+        Ok(cur_val)
     }
 
     /// Get a value from tree, if `proof` is not None, populate `proof` with the merkle proof
-    pub fn get(&self, idx: &FieldElement, proof: &mut Option<Vec<ProofNode>>) -> FieldElement {
+    pub fn get(
+        &self,
+        idx: &FieldElement,
+        proof: &mut Option<Vec<ProofNode_4_ary>>,
+        hash_db: &HashDb<DBVal_4_ary>,
+    ) -> Result<FieldElement, R1CSError> {
         let path = Self::leaf_index_to_path(idx, self.depth);
         let mut cur_node = &self.root;
 
         let need_proof = proof.is_some();
-        let mut proof_vec = Vec::<ProofNode>::new();
+        let mut proof_vec = Vec::<ProofNode_4_ary>::new();
 
+        let mut children;
         for d in path {
             let k = cur_node.to_bytes();
-            let children = self.db.get(&k).unwrap();
+            children = hash_db.get(&k)?;
             cur_node = &children[d as usize];
             if need_proof {
-                let mut proof_node: ProofNode = [
+                let mut proof_node: ProofNode_4_ary = [
                     FieldElement::zero(),
                     FieldElement::zero(),
                     FieldElement::zero(),
@@ -158,7 +167,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
             None => (),
         }
 
-        cur_node.clone()
+        Ok(cur_node.clone())
     }
 
     /// Verify a merkle proof, if `root` is None, use the current root else use given root
@@ -166,7 +175,7 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
         &self,
         idx: &FieldElement,
         val: &FieldElement,
-        proof: &[ProofNode],
+        proof: &[ProofNode_4_ary],
         root: Option<&FieldElement>,
     ) -> bool {
         let mut path = Self::leaf_index_to_path(&idx, self.depth);
@@ -190,8 +199,12 @@ impl<'a> VanillaSparseMerkleTree_4<'a> {
         get_base_4_repr(idx, depth).to_vec()
     }
 
-    fn update_db_with_key_val(&mut self, key: &FieldElement, val: DBVal) {
-        self.db.insert(key.to_bytes(), val);
+    fn update_db_with_key_val(
+        key: &FieldElement,
+        val: DBVal_4_ary,
+        hash_db: &mut HashDb<DBVal_4_ary>,
+    ) {
+        hash_db.insert(key.to_bytes(), val);
     }
 }
 
@@ -245,7 +258,7 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
     leaf_val: Variable,
     leaf_index: AllocatedQuantity,
     mut proof_nodes: Vec<Variable>,
-    mut statics: Vec<Variable>,
+    statics: Vec<Variable>,
     poseidon_params: &PoseidonParams,
     sbox_type: &SboxType,
 ) -> Result<(), R1CSError> {
@@ -370,10 +383,13 @@ pub fn vanilla_merkle_merkle_tree_4_verif_gadget<CS: ConstraintSystem>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::hash_db::InMemoryHashDb;
 
     #[test]
     fn test_vanilla_sparse_merkle_tree_4() {
         let width = 5;
+
+        let mut db = InMemoryHashDb::<DBVal_4_ary>::new();
 
         #[cfg(feature = "bls381")]
         let (full_b, full_e, partial_rounds) = (4, 4, 56);
@@ -390,19 +406,19 @@ mod tests {
         let hash_params = PoseidonParams::new(width, full_b, full_e, partial_rounds);
 
         let tree_depth = 17;
-        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth);
+        let mut tree = VanillaSparseMerkleTree_4::new(&hash_params, tree_depth, &mut db);
 
         for i in 1..10 {
             let s = FieldElement::from(i as u64);
-            tree.update(&s, s.clone());
+            tree.update(&s, s.clone(), &mut db).unwrap();
         }
 
         for i in 1..10 {
             let s = FieldElement::from(i as u32);
-            assert_eq!(s, tree.get(&s, &mut None));
-            let mut proof_vec = Vec::<ProofNode>::new();
+            assert_eq!(s, tree.get(&s, &mut None, &db).unwrap());
+            let mut proof_vec = Vec::<ProofNode_4_ary>::new();
             let mut proof = Some(proof_vec);
-            assert_eq!(s, tree.get(&s, &mut proof));
+            assert_eq!(s, tree.get(&s, &mut proof, &db).unwrap());
             proof_vec = proof.unwrap();
             assert!(tree.verify_proof(&s, &s, &proof_vec, None));
             assert!(tree.verify_proof(&s, &s, &proof_vec, Some(&tree.root)));
@@ -412,11 +428,11 @@ mod tests {
             .map(|_| (FieldElement::random(), FieldElement::random()))
             .collect();
         for i in 0..kvs.len() {
-            tree.update(&kvs[i].0, kvs[i].1.clone());
+            tree.update(&kvs[i].0, kvs[i].1.clone(), &mut db).unwrap();
         }
 
         for i in 0..kvs.len() {
-            assert_eq!(kvs[i].1, tree.get(&kvs[i].0, &mut None));
+            assert_eq!(kvs[i].1, tree.get(&kvs[i].0, &mut None, &db).unwrap());
         }
     }
 }

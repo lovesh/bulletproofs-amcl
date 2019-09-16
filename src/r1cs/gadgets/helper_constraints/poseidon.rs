@@ -1,13 +1,11 @@
 use crate::errors::R1CSError;
 use crate::r1cs::linear_combination::AllocatedQuantity;
-use crate::r1cs::{ConstraintSystem, LinearCombination, Prover, R1CSProof, Variable, Verifier};
+use crate::r1cs::{ConstraintSystem, LinearCombination, Variable};
 use amcl_wrapper::field_elem::FieldElement;
-use merlin::Transcript;
 
 use super::super::helper_constraints::constrain_lc_with_scalar;
 use super::super::helper_constraints::non_zero::is_nonzero_gadget;
 use crate::r1cs::gadgets::poseidon_constants::*;
-use std::any::Any;
 
 // Poseidon is described here https://eprint.iacr.org/2019/458
 #[derive(Clone, Debug)]
@@ -46,7 +44,6 @@ impl PoseidonParams {
         }
     }
 
-    // TODO: Write logic to generate correct round keys.
     fn gen_round_keys(width: usize, total_rounds: usize) -> Vec<FieldElement> {
         let cap = total_rounds * width;
         //(0..cap).map(|_| FieldElement::random()).collect::<Vec<_>>()
@@ -74,7 +71,6 @@ impl PoseidonParams {
         rc
     }
 
-    // TODO: Write logic to generate correct MDS matrix.
     fn gen_MDS_matrix(width: usize) -> Vec<Vec<FieldElement>> {
         //(0..width).map(|_| (0..width).map(|_| FieldElement::random()).collect::<Vec<_>>()).collect::<Vec<Vec<_>>>()
         //vec![vec![FieldElement::one(); width]; width]
@@ -461,14 +457,7 @@ pub fn Poseidon_hash_2(
     // Only 2 inputs to the permutation are set to the input of this hash function,
     // one is set to the padding constant and rest are 0. Always keep the 1st input as 0
 
-    let input = vec![
-        FieldElement::from(ZERO_CONST),
-        xl,
-        xr,
-        /*FieldElement::from(PADDING_CONST),
-        FieldElement::from(ZERO_CONST),
-        FieldElement::from(ZERO_CONST),*/
-    ];
+    let input = vec![FieldElement::from(ZERO_CONST), xl, xr];
 
     // Never take the first output
     let out = Poseidon_permutation(&input, params, sbox).remove(1);
