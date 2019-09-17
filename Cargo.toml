@@ -20,6 +20,7 @@ default-features = false
 features = ["bls381"]
 
 [features]
+default = ["bls381"]
 bls381 = ["amcl_wrapper/bls381"]
 bn254 = ["amcl_wrapper/bn254"]
 secp256k1 = ["amcl_wrapper/secp256k1"]
