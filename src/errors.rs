@@ -1,3 +1,7 @@
+/*
+    SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
 /// Represents an error during the proving or verifying of a constraint system.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum R1CSError {

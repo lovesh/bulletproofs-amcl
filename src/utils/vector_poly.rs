@@ -1,3 +1,7 @@
+/*
+    SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
 use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 
 /// Represents a degree-1 vector polynomial. `A + B*X`.

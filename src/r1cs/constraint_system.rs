@@ -1,3 +1,7 @@
+/*
+    SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
 //! Definition of the constraint system trait.
 
 use crate::errors::R1CSError;

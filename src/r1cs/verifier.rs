@@ -1,3 +1,7 @@
+/*
+    SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
 use amcl_wrapper::field_elem::{FieldElement, FieldElementVector};
 use amcl_wrapper::group_elem::{GroupElement, GroupElementVector};
 use amcl_wrapper::group_elem_g1::{G1Vector, G1};

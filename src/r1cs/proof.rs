@@ -1,3 +1,7 @@
+/*
+    SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
 //! Definition of the proof struct.
 
 use crate::ipp::InnerProductArgumentProof;
