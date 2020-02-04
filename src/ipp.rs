@@ -323,11 +323,6 @@ mod tests {
 
     #[test]
     fn test_ipp() {
-        let n = 4;
-        let G: G1Vector = get_generators("g", n).into();
-        let H: G1Vector = get_generators("h", n).into();
-        let Q = G1::from_msg_hash("Q".as_bytes());
-
         let mut a: FieldElementVector = vec![1, 2, 3, 4]
             .iter()
             .map(|i| FieldElement::from(*i as u8))
@@ -339,6 +334,13 @@ mod tests {
             .collect::<Vec<FieldElement>>()
             .into();
 
+        // Size of a and b is power of 2, i.e. 4, so n = 4
+        let n = 4;
+
+        let G: G1Vector = get_generators("g", n).into();
+        let H: G1Vector = get_generators("h", n).into();
+        let Q = G1::from_msg_hash("Q".as_bytes());
+
         let G_factors: FieldElementVector = vec![FieldElement::one(); n].into();
 
         // y_inv is (the inverse of) a random challenge
@@ -348,6 +350,7 @@ mod tests {
         let mut new_trans = Transcript::new(b"innerproduct");
         let ipp_proof = IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
 
+        // The prover will also send a pedersen commitment to the vectors a and b as P
         let b_prime: Vec<FieldElement> = b
             .iter()
             .zip(H_factors.iter())
@@ -364,6 +367,8 @@ mod tests {
         _2.append(&mut G.clone());
         _2.append(&mut H.clone());
         _2.push(Q.clone());
+
+        // P = G^a * H^{b*y^i} * Q^c where i is in [0, n)
         let P = G1Vector::from(_2).multi_scalar_mul_var_time(&_1).unwrap();
 
         let mut new_trans1 = Transcript::new(b"innerproduct");
@@ -382,5 +387,104 @@ mod tests {
             &ipp_proof.R,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_ipp_non_power_of_2() {
+        // vectors of size 5
+        let orig_a = vec![1, 2, 3, 4, 9];
+        let orig_b = vec![5, 6, 7, 8, 10];
+
+        // Size of a and b is not a power of 2, so pad both a and b with 0s such that their length
+        // is power of 2. i.e. 8, so n = 8
+
+        let mut padded_a = orig_a.clone();
+        padded_a.append(&mut vec![0, 0, 0]);
+        let mut padded_b = orig_b.clone();
+        padded_b.append(&mut vec![0, 0, 0]);
+        let n = 8;
+
+        let G: G1Vector = get_generators("g", n).into();
+        let H: G1Vector = get_generators("h", n).into();
+        let Q = G1::from_msg_hash("Q".as_bytes());
+
+        let mut a: FieldElementVector = padded_a
+            .iter()
+            .map(|i| FieldElement::from(*i as u8))
+            .collect::<Vec<FieldElement>>()
+            .into();
+        let b: FieldElementVector = padded_b
+            .iter()
+            .map(|i| FieldElement::from(*i as u8))
+            .collect::<Vec<FieldElement>>()
+            .into();
+
+        let G_factors: FieldElementVector = vec![FieldElement::one(); n].into();
+
+        // y_inv is (the inverse of) a random challenge
+        let y_inv = FieldElement::random();
+        let H_factors = FieldElementVector::new_vandermonde_vector(&y_inv, n);
+
+        let mut new_trans = Transcript::new(b"innerproduct");
+        let ipp_proof = IPP::create_ipp(&mut new_trans, &Q, &G_factors, &H_factors, &G, &H, &a, &b);
+
+        // The prover will also send a pedersen commitment to the vectors orig_a and orig_b as P. Since the
+        // verifier knows the size of orig_a and orig_b and he knows that they are not a power of 2, he knows
+        // that he has to pad them with 0s. But since the commitment contains the elements of the
+        // vectors as exponents or as terms of inner-product, the 0-padding does not change the
+        // commitment created from non-padded vectors. Hence build P from non-padded vectors
+
+        // Hadamard product of b and H_factors
+        let b_prime: Vec<FieldElement> = orig_b
+            .iter()
+            .zip(H_factors.iter())
+            .map(|(bi, yi)| &FieldElement::from(*bi) * yi)
+            .collect();
+
+        // XXX: Too many clonings, production code should not have it.
+
+        // c=<orig_a, orig_b>
+        let mut orig_a_vec: FieldElementVector = orig_a
+            .iter()
+            .map(|i| FieldElement::from(*i as u8))
+            .collect::<Vec<FieldElement>>().into();
+        let mut orig_b_vec: FieldElementVector = orig_b
+            .iter()
+            .map(|i| FieldElement::from(*i as u8))
+            .collect::<Vec<FieldElement>>().into();
+        let c = orig_a_vec.inner_product(&orig_b_vec).unwrap();
+
+        let mut _1 = FieldElementVector::new(0);
+        _1.append(&mut orig_a_vec);
+        _1.append(&mut b_prime.into());
+        _1.push(c);
+
+        let mut truncated_G = get_generators("g", orig_a.len()).into();
+        let mut truncated_H = get_generators("h", orig_b.len()).into();
+
+        let mut _2 = G1Vector::new(0);
+        _2.append(&mut truncated_G);
+        _2.append(&mut truncated_H);
+        _2.push(Q.clone());
+
+        // P = G^a * H^{b*y^i} * Q^c where i is in [0, n)
+        let P = G1Vector::from(_2).multi_scalar_mul_var_time(&_1).unwrap();
+
+        let mut new_trans1 = Transcript::new(b"innerproduct");
+        IPP::verify_ipp(
+            n,
+            &mut new_trans1,
+            &G_factors,
+            &H_factors,
+            &P,
+            &Q,
+            &G,
+            &H,
+            &ipp_proof.a,
+            &ipp_proof.b,
+            &ipp_proof.L,
+            &ipp_proof.R,
+        )
+            .unwrap();
     }
 }
